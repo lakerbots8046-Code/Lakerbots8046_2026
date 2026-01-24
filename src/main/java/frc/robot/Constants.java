@@ -1,0 +1,131 @@
+package frc.robot;
+import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
+import edu.wpi.first.apriltag.AprilTagFieldLayout;
+import edu.wpi.first.apriltag.AprilTagFields;
+import edu.wpi.first.math.Matrix;
+import edu.wpi.first.math.VecBuilder;
+import edu.wpi.first.math.geometry.Rotation3d;
+import edu.wpi.first.math.geometry.Transform3d;
+import edu.wpi.first.math.geometry.Translation3d;
+import edu.wpi.first.math.numbers.N1;
+import edu.wpi.first.math.numbers.N3;
+import edu.wpi.first.math.util.Units;
+
+public class Constants {
+    
+    public static class OperatorConstants {
+        public static final int kDriverControllerPort = 0;
+    }
+
+    public static boolean isLazerConnected;
+
+    public static final double wheelBase = 22.75;
+    public static final double trackWidth = 20.75;
+    public static final SwerveDriveKinematics swerveKinematics = new SwerveDriveKinematics(
+            new Translation2d(wheelBase / 2.0, trackWidth / 2.0),
+            new Translation2d(wheelBase / 2.0, -trackWidth / 2.0),
+            new Translation2d(-wheelBase / 2.0, trackWidth / 2.0),
+            new Translation2d(-wheelBase / 2.0, -trackWidth / 2.0));
+    
+    
+
+    public class FlapHookConstants{
+        public static final double hookflapOpen = 0; // all x 9 for new gear ratio
+        public static final double hookPrepare = -70; //-6.5
+        public static final double hookLatch = -143; //-143     -16
+        public static final double flapCollect = -45; //-5
+    }
+
+
+    public class TagConstants{
+        //x and area of tag
+        public static final Double[] tagTranslation = {-7.0,0.0};
+        public static final Double[] tagPoseSecondLeg  = {-9.0, 0.0};
+        public static final Double[] tagePoseAlgea = {-16.0, 0.0};
+    }
+
+    public static class Vision {
+        // Camera names - Updated for back-mounted cameras
+        public static final String kCameraNameBL = "CAM_BL"; // Back Left camera
+        public static final String kCameraNameBR = "CAM_BR"; // Back Right camera
+        
+        // Camera stream URLs for dashboard viewing (Elastic, etc.)
+        // Using IP address to match NetworkTables client connection (10.80.46.2:5810)
+        public static final String kCameraStreamBL = "http://10.80.46.2:1184/stream.mjpg";
+        public static final String kCameraStreamBR = "http://10.80.46.2:1182/stream.mjpg";
+        
+        // Transform from robot center to Back Left camera
+        // Measured position: X=-9.704571", Y=+10.8977515" (left), Z=8.264031"
+        // Rotation: Roll=0°, Pitch=65.405233° (tilted up), Yaw=170° (facing back-left)
+        public static final Transform3d kRobotToCamBL =
+                new Transform3d(
+                        new Translation3d(
+                                Units.inchesToMeters(-9.704571), // Backward (negative X)
+                                Units.inchesToMeters(10.8977515), // Left (positive Y)
+                                Units.inchesToMeters(8.264031) // Up (positive Z)
+                        ),
+                        new Rotation3d(
+                                Units.degreesToRadians(0), // Roll
+                                Units.degreesToRadians(65.405233), // Pitch (tilted up)
+                                 Units.degreesToRadians(170))); // Yaw (facing back-left)
+
+        // Transform from robot center to Back Right camera
+        // Measured position: X=-9.704571", Y=-10.8977517" (right), Z=8.264031"
+        // Rotation: Roll=0°, Pitch=65.405233° (tilted up), Yaw=190° (facing back-right)
+        public static final Transform3d kRobotToCamBR =
+                new Transform3d(
+                        new Translation3d(
+                                Units.inchesToMeters(-9.704571), // Backward (negative X)
+                                Units.inchesToMeters(-10.8977517), // Right (negative Y)
+                                Units.inchesToMeters(8.264031) // Up (positive Z)
+                        ),
+                        new Rotation3d(
+                                Units.degreesToRadians(0), // Roll
+                                Units.degreesToRadians(65.405233), // Pitch (tilted up)
+                                Units.degreesToRadians(190))); // Yaw (facing back-right)
+
+        // The layout of the AprilTags on the field
+        // TODO: Update to AprilTagFields.k2026Reefscape when available in WPILib
+        // For now using kDefaultField which will be updated to 2026 when released
+        public static final AprilTagFieldLayout kTagLayout =
+                AprilTagFieldLayout.loadField(AprilTagFields.kDefaultField);
+
+        // The standard deviations of our vision estimated poses, which affect correction rate
+        // Lower values = trust vision more, higher values = trust odometry more
+        // Single tag is less reliable, so higher standard deviation
+        public static final Matrix<N3, N1> kSingleTagStdDevs = VecBuilder.fill(4, 4, 8);
+        // Multiple tags are more reliable, so lower standard deviation
+        public static final Matrix<N3, N1> kMultiTagStdDevs = VecBuilder.fill(0.5, 0.5, 1);
+        
+        // AprilTag driving parameters
+        public static final double kTargetDistanceMeters = 1.0; // Target distance from tag (1 meter)
+        public static final double kPositionToleranceMeters = 0.05; // 5cm tolerance
+        public static final double kRotationToleranceDegrees = 2.0; // 2 degree tolerance
+        
+        // PID constants for driving to AprilTag
+        public static final double kDriveP = 2.0; // Proportional gain for forward/backward
+        public static final double kDriveI = 0.0; // Integral gain
+        public static final double kDriveD = 0.1; // Derivative gain
+        
+        public static final double kStrafeP = 2.0; // Proportional gain for left/right
+        public static final double kStrafeI = 0.0;
+        public static final double kStrafeD = 0.1;
+        
+        public static final double kRotationP = 3.0; // Proportional gain for rotation
+        public static final double kRotationI = 0.0;
+        public static final double kRotationD = 0.1;
+        
+        // Maximum speeds when driving to tag (as fraction of max speed)
+        public static final double kMaxDriveSpeed = 0.5; // 50% of max speed
+        public static final double kMaxStrafeSpeed = 0.5;
+        public static final double kMaxRotationSpeed = 0.3; // 30% of max rotation
+        
+        // PathPlanner configuration for driving to AprilTags
+        public static final double kPathPlannerMaxVelocity = 3.0; // meters per second
+        public static final double kPathPlannerMaxAcceleration = 2.0; // meters per second squared
+        public static final double kPathPlannerMaxAngularVelocity = Math.PI; // radians per second
+        public static final double kPathPlannerMaxAngularAcceleration = Math.PI; // radians per second squared
+    }
+    
+}
