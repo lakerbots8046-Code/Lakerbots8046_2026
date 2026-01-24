@@ -1,0 +1,616 @@
+{
+  "field": {
+    "length": 16.54175,
+    "width": 8.0137
+  },
+  "tags": [
+    {
+      "ID": 1,
+      "pose": {
+        "translation": {
+          "x": 11.861559,
+          "y": 7.411489,
+          "z": 0.889,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 0.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 1.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 2,
+      "pose": {
+        "translation": {
+          "x": 11.901,
+          "y": 4.624756,
+          "z": 1.12395,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 0.7071068,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.7071068
+          }
+        }
+      }
+    },
+    {
+      "ID": 3,
+      "pose": {
+        "translation": {
+          "x": 11.297857,
+          "y": 4.376955,
+          "z": 1.12395,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 0.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 1.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 4,
+      "pose": {
+        "translation": {
+          "x": 11.297857,
+          "y": 4.021355,
+          "z": 1.12395,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 0.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 1.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 5,
+      "pose": {
+        "translation": {
+          "x": 11.901,
+          "y": 3.417951,
+          "z": 1.12395,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": -0.7071068,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.7071068
+          }
+        }
+      }
+    },
+    {
+      "ID": 6,
+      "pose": {
+        "translation": {
+          "x": 11.861559,
+          "y": 0.631213,
+          "z": 0.889,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 0.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 1.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 7,
+      "pose": {
+        "translation": {
+          "x": 11.936864,
+          "y": 0.631213,
+          "z": 0.889,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 1.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 8,
+      "pose": {
+        "translation": {
+          "x": 12.256999,
+          "y": 3.417951,
+          "z": 1.12395,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": -0.7071068,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.7071068
+          }
+        }
+      }
+    },
+    {
+      "ID": 9,
+      "pose": {
+        "translation": {
+          "x": 12.505156,
+          "y": 3.665752,
+          "z": 1.12395,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 1.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 10,
+      "pose": {
+        "translation": {
+          "x": 12.505156,
+          "y": 4.021355,
+          "z": 1.12395,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 1.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 11,
+      "pose": {
+        "translation": {
+          "x": 12.256999,
+          "y": 4.624756,
+          "z": 1.12395,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 0.7071068,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.7071068
+          }
+        }
+      }
+    },
+    {
+      "ID": 12,
+      "pose": {
+        "translation": {
+          "x": 11.936864,
+          "y": 7.411489,
+          "z": 0.889,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 1.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 13,
+      "pose": {
+        "translation": {
+          "x": 16.499332,
+          "y": 7.391908,
+          "z": 0.55245,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 0.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 1.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 14,
+      "pose": {
+        "translation": {
+          "x": 16.499332,
+          "y": 6.960108,
+          "z": 0.55245,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 0.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 1.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 15,
+      "pose": {
+        "translation": {
+          "x": 16.498976,
+          "y": 4.312489,
+          "z": 0.55245,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 0.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 1.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 16,
+      "pose": {
+        "translation": {
+          "x": 16.498976,
+          "y": 3.880689,
+          "z": 0.55245,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 0.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 1.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 17,
+      "pose": {
+        "translation": {
+          "x": 4.649064,
+          "y": 0.631213,
+          "z": 0.889,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 1.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 18,
+      "pose": {
+        "translation": {
+          "x": 4.611599,
+          "y": 3.417951,
+          "z": 1.12395,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": -0.7071068,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.7071068
+          }
+        }
+      }
+    },
+    {
+      "ID": 19,
+      "pose": {
+        "translation": {
+          "x": 5.215153,
+          "y": 3.665752,
+          "z": 1.12395,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 1.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 20,
+      "pose": {
+        "translation": {
+          "x": 5.215153,
+          "y": 4.021355,
+          "z": 1.12395,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 1.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 21,
+      "pose": {
+        "translation": {
+          "x": 4.611599,
+          "y": 4.624756,
+          "z": 1.12395,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 0.7071068,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.7071068
+          }
+        }
+      }
+    },
+    {
+      "ID": 22,
+      "pose": {
+        "translation": {
+          "x": 4.649064,
+          "y": 7.411489,
+          "z": 0.889,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 1.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 23,
+      "pose": {
+        "translation": {
+          "x": 4.574159,
+          "y": 7.411489,
+          "z": 0.889,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 0.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 1.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 24,
+      "pose": {
+        "translation": {
+          "x": 4.255999,
+          "y": 4.624756,
+          "z": 1.12395,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 0.7071068,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.7071068
+          }
+        }
+      }
+    },
+    {
+      "ID": 25,
+      "pose": {
+        "translation": {
+          "x": 4.007866,
+          "y": 4.376955,
+          "z": 1.12395,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 0.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 1.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 26,
+      "pose": {
+        "translation": {
+          "x": 4.007866,
+          "y": 4.021355,
+          "z": 1.12395,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 0.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 1.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 27,
+      "pose": {
+        "translation": {
+          "x": 4.255999,
+          "y": 3.417951,
+          "z": 1.12395,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": -0.7071068,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.7071068
+          }
+        }
+      }
+    },
+    {
+      "ID": 28,
+      "pose": {
+        "translation": {
+          "x": 4.574159,
+          "y": 0.631213,
+          "z": 0.889,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 0.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 1.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 29,
+      "pose": {
+        "translation": {
+          "x": 0.013691,
+          "y": 0.650773,
+          "z": 0.55245,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 1.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 30,
+      "pose": {
+        "translation": {
+          "x": 0.013691,
+          "y": 1.082573,
+          "z": 0.55245,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 1.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 31,
+      "pose": {
+        "translation": {
+          "x": 0.014047,
+          "y": 3.730192,
+          "z": 0.55245,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 1.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.0
+          }
+        }
+      }
+    },
+    {
+      "ID": 32,
+      "pose": {
+        "translation": {
+          "x": 0.014047,
+          "y": 4.161992,
+          "z": 0.55245,
+          "unit": "meter"
+        },
+        "rotation": {
+          "quaternion": {
+            "W": 1.0,
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.0
+          }
+        }
+      }
+    }
+  ]
+}

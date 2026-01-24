@@ -11,6 +11,8 @@ import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N3;
 import edu.wpi.first.math.util.Units;
+import edu.wpi.first.wpilibj.Filesystem;
+import java.io.IOException;
 
 public class Constants {
     
@@ -51,45 +53,62 @@ public class Constants {
         public static final String kCameraNameBR = "CAM_BR"; // Back Right camera
         
         // Camera stream URLs for dashboard viewing (Elastic, etc.)
-        // Using IP address to match NetworkTables client connection (10.80.46.2:5810)
-        public static final String kCameraStreamBL = "http://10.80.46.2:1184/stream.mjpg";
-        public static final String kCameraStreamBR = "http://10.80.46.2:1182/stream.mjpg";
+        // Using PhotonVision coprocessor IP address (10.80.46.11)
+        public static final String kCameraStreamBL = "http://10.80.46.11:1184/stream.mjpg";
+        public static final String kCameraStreamBR = "http://10.80.46.11:1182/stream.mjpg";
         
         // Transform from robot center to Back Left camera
-        // Measured position: X=-9.704571", Y=+10.8977515" (left), Z=8.264031"
-        // Rotation: Roll=0°, Pitch=65.405233° (tilted up), Yaw=170° (facing back-left)
+        // Measured position: X=-6.0" (adjusted for calibration), Y=+10.8977515" (left), Z=8.264031"
+        // Rotation: Roll=0°, Pitch=25° (tilted up), Yaw=190° (facing back-right, angled inward)
         public static final Transform3d kRobotToCamBL =
                 new Transform3d(
                         new Translation3d(
-                                Units.inchesToMeters(-9.704571), // Backward (negative X)
+                                Units.inchesToMeters(-6.0), // Backward (negative X) - ADJUSTED for calibration
                                 Units.inchesToMeters(10.8977515), // Left (positive Y)
                                 Units.inchesToMeters(8.264031) // Up (positive Z)
                         ),
                         new Rotation3d(
                                 Units.degreesToRadians(0), // Roll
-                                Units.degreesToRadians(65.405233), // Pitch (tilted up)
-                                 Units.degreesToRadians(170))); // Yaw (facing back-left)
+                                Units.degreesToRadians(25), // Pitch (tilted up) - CORRECTED from 65°
+                                Units.degreesToRadians(190))); // Yaw (angled inward toward right)
 
         // Transform from robot center to Back Right camera
-        // Measured position: X=-9.704571", Y=-10.8977517" (right), Z=8.264031"
-        // Rotation: Roll=0°, Pitch=65.405233° (tilted up), Yaw=190° (facing back-right)
+        // Measured position: X=-6.0" (adjusted for calibration), Y=-10.8977517" (right), Z=8.264031"
+        // Rotation: Roll=0°, Pitch=25° (tilted up), Yaw=170° (facing back-left, angled inward)
         public static final Transform3d kRobotToCamBR =
                 new Transform3d(
                         new Translation3d(
-                                Units.inchesToMeters(-9.704571), // Backward (negative X)
+                                Units.inchesToMeters(-6.0), // Backward (negative X) - ADJUSTED for calibration
                                 Units.inchesToMeters(-10.8977517), // Right (negative Y)
                                 Units.inchesToMeters(8.264031) // Up (positive Z)
                         ),
                         new Rotation3d(
                                 Units.degreesToRadians(0), // Roll
-                                Units.degreesToRadians(65.405233), // Pitch (tilted up)
-                                Units.degreesToRadians(190))); // Yaw (facing back-right)
+                                Units.degreesToRadians(25), // Pitch (tilted up) - CORRECTED from 65°
+                                Units.degreesToRadians(170))); // Yaw (angled inward toward left)
 
         // The layout of the AprilTags on the field
-        // TODO: Update to AprilTagFields.k2026Reefscape when available in WPILib
-        // For now using kDefaultField which will be updated to 2026 when released
-        public static final AprilTagFieldLayout kTagLayout =
-                AprilTagFieldLayout.loadField(AprilTagFields.kDefaultField);
+        // Using custom 2026 Rebuilt field layout loaded from JSON file
+        // File location: src/main/deploy/2026-rebuilt.json
+        public static final AprilTagFieldLayout kTagLayout = loadCustomLayout();
+        
+        /**
+         * Loads the custom 2026 Rebuilt AprilTag field layout from JSON file.
+         * Falls back to kDefaultField if loading fails.
+         */
+        private static AprilTagFieldLayout loadCustomLayout() {
+            try {
+                return new AprilTagFieldLayout(
+                    Filesystem.getDeployDirectory().toPath()
+                        .resolve("2026-rebuilt.json")
+                );
+            } catch (IOException e) {
+                System.err.println("Failed to load 2026 Rebuilt AprilTag layout! Using default.");
+                System.err.println("Error: " + e.getMessage());
+                e.printStackTrace();
+                return AprilTagFieldLayout.loadField(AprilTagFields.kDefaultField);
+            }
+        }
 
         // The standard deviations of our vision estimated poses, which affect correction rate
         // Lower values = trust vision more, higher values = trust odometry more

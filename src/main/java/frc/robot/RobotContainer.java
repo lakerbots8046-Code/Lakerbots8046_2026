@@ -13,6 +13,7 @@ import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
@@ -22,8 +23,13 @@ import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
 import frc.robot.generated.TunerConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.VisionSubsystem;
+import frc.robot.subsystems.TestMotorSubsystem;
+import frc.robot.commands.AimTurretAuto;
 import frc.robot.commands.DriveToAprilTag;
 import frc.robot.commands.DriveToAprilTagWithPathPlanner;
+
+import com.pathplanner.lib.auto.AutoBuilder;
+import com.pathplanner.lib.auto.NamedCommands;
 
 import java.util.Optional;
 
@@ -33,8 +39,14 @@ public class RobotContainer {
     // Vision subsystem
     private final VisionSubsystem visionSubsystem = new VisionSubsystem();
     
+    // Turret subsystem (CAN ID 6 on RIO bus)
+    private final TestMotorSubsystem turretSubsystem = new TestMotorSubsystem();
+    
     // Field2D for visualization on dashboard
     private final Field2d field2d = new Field2d();
+    
+    // Autonomous chooser for dashboard
+    private final SendableChooser<Command> autoChooser;
     
     private double MaxSpeed = 1.0 * TunerConstants.kSpeedAt12Volts.in(MetersPerSecond); // kSpeedAt12Volts desired top speed
     private double MaxAngularRate = RotationsPerSecond.of(0.75).in(RadiansPerSecond); // 3/4 of a rotation per second max angular velocity
@@ -53,12 +65,86 @@ public class RobotContainer {
     public final CommandSwerveDrivetrain drivetrain = TunerConstants.createDrivetrain();
 
     public RobotContainer() {
+        registerNamedCommands();
         configureBindings();
+        
+        // Initialize autonomous chooser
+        autoChooser = buildAutoChooser();
         
         // Publish Field2D to SmartDashboard for visualization
         SmartDashboard.putData("Field2d", field2d);
+        
+        // Publish autonomous chooser to SmartDashboard
+        SmartDashboard.putData("Auto Chooser", autoChooser);
     }
 
+    private void registerNamedCommands() {
+        NamedCommands.registerCommand("AimTurretAuto",
+            new AimTurretAuto(turretSubsystem));
+    }
+    
+    /**
+     * Builds the autonomous chooser with available autonomous routines.
+     * 
+     * @return SendableChooser with autonomous command options
+     */
+    private SendableChooser<Command> buildAutoChooser() {
+        SendableChooser<Command> chooser = new SendableChooser<>();
+        
+        // Default option: Simple drive forward
+        chooser.setDefaultOption("Drive Forward", getDriveForwardAuto());
+        
+        // PathPlanner autonomous routines
+        // Center Auto: Center Part 1 -> AimTurretAuto -> Center Part 2
+        try {
+            Command centerAuto = AutoBuilder.buildAuto("Center Auto");
+            chooser.addOption("Center Auto (PathPlanner)", centerAuto);
+        } catch (Exception e) {
+            System.err.println("Failed to load PathPlanner auto 'Center Auto': " + e.getMessage());
+            // Add a fallback option if PathPlanner auto fails to load
+            chooser.addOption("Center Auto (PathPlanner) - FAILED TO LOAD", Commands.none());
+        }
+        
+        // Left Side Auto: AimTurretAuto -> Left Side Part 1
+        try {
+            Command leftSideAuto = AutoBuilder.buildAuto("Left Side Auto");
+            chooser.addOption("Left Side Auto (PathPlanner)", leftSideAuto);
+        } catch (Exception e) {
+            System.err.println("Failed to load PathPlanner auto 'Left Side Auto': " + e.getMessage());
+            // Add a fallback option if PathPlanner auto fails to load
+            chooser.addOption("Left Side Auto (PathPlanner) - FAILED TO LOAD", Commands.none());
+        }
+        
+        // Do nothing option (useful for testing)
+        chooser.addOption("Do Nothing", Commands.none());
+        
+        return chooser;
+    }
+    
+    /**
+     * Creates the simple drive forward autonomous command.
+     * Drives forward at 0.5 m/s for 5 seconds.
+     * 
+     * @return Command that drives forward
+     */
+    private Command getDriveForwardAuto() {
+        final var idle = new SwerveRequest.Idle();
+        return Commands.sequence(
+            // Reset our field centric heading to match the robot
+            // facing away from our alliance station wall (0 deg).
+            drivetrain.runOnce(() -> drivetrain.seedFieldCentric(Rotation2d.kZero)),
+            // Then slowly drive forward (away from us) for 5 seconds.
+            drivetrain.applyRequest(() ->
+                drive.withVelocityX(0.5)
+                    .withVelocityY(0)
+                    .withRotationalRate(0)
+            )
+            .withTimeout(5.0),
+            // Finally idle for the rest of auton
+            drivetrain.applyRequest(() -> idle)
+        );
+    }
+    
     private void configureBindings() {
         // Note that X is defined as forward according to WPILib convention,
         // and Y is defined as to the left according to WPILib convention.
@@ -123,6 +209,13 @@ public class RobotContainer {
         
         // POV Left (270°): Drive to tag 13
         joystick.pov(270).whileTrue(new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, 13));
+
+        // Turret control - X button: Hold to spin, release to stop
+        joystick.x().whileTrue(
+            turretSubsystem.run(() -> turretSubsystem.startSpin())
+        ).onFalse(
+            turretSubsystem.runOnce(() -> turretSubsystem.stopSpin())
+        );
 
         drivetrain.registerTelemetry(logger::telemeterize);
     }
@@ -266,22 +359,12 @@ public class RobotContainer {
         return visionSubsystem;
     }
 
+    /**
+     * Gets the selected autonomous command from the chooser.
+     * 
+     * @return The selected autonomous command
+     */
     public Command getAutonomousCommand() {
-        // Simple drive forward auton
-        final var idle = new SwerveRequest.Idle();
-        return Commands.sequence(
-            // Reset our field centric heading to match the robot
-            // facing away from our alliance station wall (0 deg).
-            drivetrain.runOnce(() -> drivetrain.seedFieldCentric(Rotation2d.kZero)),
-            // Then slowly drive forward (away from us) for 5 seconds.
-            drivetrain.applyRequest(() ->
-                drive.withVelocityX(0.5)
-                    .withVelocityY(0)
-                    .withRotationalRate(0)
-            )
-            .withTimeout(5.0),
-            // Finally idle for the rest of auton
-            drivetrain.applyRequest(() -> idle)
-        );
+        return autoChooser.getSelected();
     }
 }

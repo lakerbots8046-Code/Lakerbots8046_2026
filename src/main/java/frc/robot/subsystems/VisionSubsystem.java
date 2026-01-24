@@ -253,46 +253,51 @@ public class VisionSubsystem extends SubsystemBase {
     }
 
     private void processCameraBLResults() {
-        var results = cameraBL.getAllUnreadResults();
+        // Use getLatestResult() instead of getAllUnreadResults() for stable values
+        var result = cameraBL.getLatestResult();
 
-        // Reset values
-        targetYawBL = 0.0;
-        targetPitchBL = 0.0;
-        targetAreaBL = 0.0;
-        targetDistanceBL = 0.0;
-        detectedTagIdBL = -1;
-        targetVisibleBL = false;
-        totalTargetsBL = 0;
-
-        for (var result : results) {
-            if (result.hasTargets()) {
-                List<PhotonTrackedTarget> targets = result.getTargets();
-                totalTargetsBL = targets.size();
-                
-                // ONLY find the selected tag - do not use fallback
-                PhotonTrackedTarget selectedTarget = null;
-                for (PhotonTrackedTarget target : targets) {
-                    if (target.getFiducialId() == selectedTagId) {
-                        selectedTarget = target;
-                        break;
-                    }
+        // Only reset if no targets detected
+        if (!result.hasTargets()) {
+            targetYawBL = 0.0;
+            targetPitchBL = 0.0;
+            targetAreaBL = 0.0;
+            targetDistanceBL = 0.0;
+            detectedTagIdBL = -1;
+            targetVisibleBL = false;
+            totalTargetsBL = 0;
+        } else {
+            List<PhotonTrackedTarget> targets = result.getTargets();
+            totalTargetsBL = targets.size();
+            
+            // ONLY find the selected tag - do not use fallback
+            PhotonTrackedTarget selectedTarget = null;
+            for (PhotonTrackedTarget target : targets) {
+                if (target.getFiducialId() == selectedTagId) {
+                    selectedTarget = target;
+                    break;
                 }
+            }
+            
+            // Extract data ONLY if we found the selected tag
+            if (selectedTarget != null) {
+                targetVisibleBL = true;
+                detectedTagIdBL = selectedTarget.getFiducialId();
+                targetYawBL = selectedTarget.getYaw();
+                targetPitchBL = selectedTarget.getPitch();
+                targetAreaBL = selectedTarget.getArea();
                 
-                // Extract data ONLY if we found the selected tag
-                if (selectedTarget != null) {
-                    targetVisibleBL = true;
-                    detectedTagIdBL = selectedTarget.getFiducialId();
-                    targetYawBL = selectedTarget.getYaw();
-                    targetPitchBL = selectedTarget.getPitch();
-                    targetAreaBL = selectedTarget.getArea();
-                    
-                    // Calculate approximate distance using target area (rough estimation)
-                    // This is a simplified calculation - adjust based on your camera/tag setup
-                    if (targetAreaBL > 0) {
-                        targetDistanceBL = Math.sqrt(1.0 / targetAreaBL) * 10.0; // Rough approximation
-                    }
+                // Calculate approximate distance using target area (rough estimation)
+                if (targetAreaBL > 0) {
+                    targetDistanceBL = Math.sqrt(1.0 / targetAreaBL) * 10.0;
                 }
-                break; // Use most recent result
+            } else {
+                // Selected tag not found, but other tags are visible
+                targetYawBL = 0.0;
+                targetPitchBL = 0.0;
+                targetAreaBL = 0.0;
+                targetDistanceBL = 0.0;
+                detectedTagIdBL = -1;
+                targetVisibleBL = false;
             }
         }
 
@@ -312,45 +317,51 @@ public class VisionSubsystem extends SubsystemBase {
     }
 
     private void processCameraBRResults() {
-        var results = cameraBR.getAllUnreadResults();
+        // Use getLatestResult() instead of getAllUnreadResults() for stable values
+        var result = cameraBR.getLatestResult();
 
-        // Reset values
-        targetYawBR = 0.0;
-        targetPitchBR = 0.0;
-        targetAreaBR = 0.0;
-        targetDistanceBR = 0.0;
-        detectedTagIdBR = -1;
-        targetVisibleBR = false;
-        totalTargetsBR = 0;
-
-        for (var result : results) {
-            if (result.hasTargets()) {
-                List<PhotonTrackedTarget> targets = result.getTargets();
-                totalTargetsBR = targets.size();
-                
-                // ONLY find the selected tag - do not use fallback
-                PhotonTrackedTarget selectedTarget = null;
-                for (PhotonTrackedTarget target : targets) {
-                    if (target.getFiducialId() == selectedTagId) {
-                        selectedTarget = target;
-                        break;
-                    }
+        // Only reset if no targets detected
+        if (!result.hasTargets()) {
+            targetYawBR = 0.0;
+            targetPitchBR = 0.0;
+            targetAreaBR = 0.0;
+            targetDistanceBR = 0.0;
+            detectedTagIdBR = -1;
+            targetVisibleBR = false;
+            totalTargetsBR = 0;
+        } else {
+            List<PhotonTrackedTarget> targets = result.getTargets();
+            totalTargetsBR = targets.size();
+            
+            // ONLY find the selected tag - do not use fallback
+            PhotonTrackedTarget selectedTarget = null;
+            for (PhotonTrackedTarget target : targets) {
+                if (target.getFiducialId() == selectedTagId) {
+                    selectedTarget = target;
+                    break;
                 }
+            }
+            
+            // Extract data ONLY if we found the selected tag
+            if (selectedTarget != null) {
+                targetVisibleBR = true;
+                detectedTagIdBR = selectedTarget.getFiducialId();
+                targetYawBR = selectedTarget.getYaw();
+                targetPitchBR = selectedTarget.getPitch();
+                targetAreaBR = selectedTarget.getArea();
                 
-                // Extract data ONLY if we found the selected tag
-                if (selectedTarget != null) {
-                    targetVisibleBR = true;
-                    detectedTagIdBR = selectedTarget.getFiducialId();
-                    targetYawBR = selectedTarget.getYaw();
-                    targetPitchBR = selectedTarget.getPitch();
-                    targetAreaBR = selectedTarget.getArea();
-                    
-                    // Calculate approximate distance using target area (rough estimation)
-                    if (targetAreaBR > 0) {
-                        targetDistanceBR = Math.sqrt(1.0 / targetAreaBR) * 10.0; // Rough approximation
-                    }
+                // Calculate approximate distance using target area (rough estimation)
+                if (targetAreaBR > 0) {
+                    targetDistanceBR = Math.sqrt(1.0 / targetAreaBR) * 10.0;
                 }
-                break; // Use most recent result
+            } else {
+                // Selected tag not found, but other tags are visible
+                targetYawBR = 0.0;
+                targetPitchBR = 0.0;
+                targetAreaBR = 0.0;
+                targetDistanceBR = 0.0;
+                detectedTagIdBR = -1;
+                targetVisibleBR = false;
             }
         }
 

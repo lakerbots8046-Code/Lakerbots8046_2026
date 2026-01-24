@@ -1,0 +1,31 @@
+{
+  "version": "2025.0",
+  "command": {
+    "type": "sequential",
+    "data": {
+      "commands": [
+        {
+          "type": "path",
+          "data": {
+            "pathName": "Center Part 1"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "AimTurretAuto"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "Center Part 2"
+          }
+        }
+      ]
+    }
+  },
+  "resetOdom": true,
+  "folder": null,
+  "choreoAuto": false
+}

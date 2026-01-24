@@ -35,7 +35,7 @@ public class Robot extends TimedRobot {
         // Initialize camera server for streaming - matches old project implementation
         // Create a network table
         NetworkTableInstance inst = NetworkTableInstance.getDefault();
-        inst.startClient3("10.80.46.2"); // IP of the PhotonVision device (from PhotonVision tuner: 10.80.46.2:5810)
+        inst.startClient3("10.80.46.11"); // IP of the PhotonVision coprocessor
         CameraServer.addServer(Constants.Vision.kCameraStreamBL); // BL Camera
         CameraServer.addServer(Constants.Vision.kCameraStreamBR); // BR Camera
         NetworkTable visionTable = inst.getTable("photonvision");
