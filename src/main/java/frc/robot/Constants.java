@@ -47,6 +47,44 @@ public class Constants {
         public static final Double[] tagePoseAlgea = {-16.0, 0.0};
     }
 
+    public static class IntakeConstants {
+        // Motor CAN IDs
+        public static final int kIntakeCollectMotorID = 3;
+        public static final int kIntakePivotMotorID = 2;
+        public static final String kCANBusName = "rio";
+        
+        // Intake Pivot Position Setpoints (in rotations)
+        public static final double kPivotStowedPosition = 0.0;      // Fully retracted/stowed
+        public static final double kPivotCollectPosition = 0.25;    // Extended for collecting game pieces
+        public static final double kPivotScoreHighPosition = 0.15;  // Position for high scoring
+        public static final double kPivotScoreLowPosition = 0.05;   // Position for low scoring
+        
+        // Intake Collection Velocities (in rotations per second)
+        public static final double kCollectIntakeVelocity = 30.0;   // Speed when intaking game pieces
+        public static final double kCollectOuttakeVelocity = -20.0; // Speed when ejecting game pieces
+        public static final double kCollectHoldVelocity = 5.0;      // Low speed to hold game piece
+        public static final double kCollectStopVelocity = 0.0;      // Stop the collection motor
+        
+        // Position Control Tolerance
+        public static final double kPivotPositionTolerance = 0.02;  // Tolerance in rotations (±0.02)
+        
+        // Gear Ratio
+        public static final double kSensorToMechanismRatio = 12.8;  // 12.8 rotor rotations per mechanism rotation
+        
+        // SmartDashboard Keys
+        public static final String kSmartDashboardPrefix = "Intake/";
+        public static final String kPivotPositionKey = "Pivot Position";
+        public static final String kPivotTargetKey = "Pivot Target";
+        public static final String kPivotErrorKey = "Pivot Error";
+        public static final String kPivotAtTargetKey = "Pivot At Target";
+        public static final String kCollectVelocityKey = "Collect Velocity";
+        public static final String kCollectCurrentKey = "Collect Current (A)";
+        public static final String kPivotCurrentKey = "Pivot Current (A)";
+        public static final String kPivotTempKey = "Pivot Temp (C)";
+        public static final String kCollectTempKey = "Collect Temp (C)";
+        public static final String kStatusKey = "Status";
+    }
+    
     public static class Vision {
         // Camera names - Updated for back-mounted cameras
         public static final String kCameraNameBL = "CAM_BL"; // Back Left camera

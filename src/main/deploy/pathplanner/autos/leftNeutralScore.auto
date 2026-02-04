@@ -7,19 +7,25 @@
         {
           "type": "path",
           "data": {
-            "pathName": "Center Part 1"
+            "pathName": "leftNeutralScore_Part1"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "leftNeutralScore_Part2"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "leftNeutralScore_Part3"
           }
         },
         {
           "type": "named",
           "data": {
             "name": "AimTurretAuto"
-          }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "Center Part 2"
           }
         }
       ]
