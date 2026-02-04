@@ -1,7 +1,17 @@
-# Turret Subsystem (CAN ID 6 on RIO Bus)
+# ⚠️ DEPRECATED - Test Motor Subsystem Guide
+
+**This guide is deprecated. The TestMotorSubsystem has been renamed to TurretSubsystem.**
+
+**Please refer to [TURRET_SUBSYSTEM_GUIDE.md](TURRET_SUBSYSTEM_GUIDE.md) for current documentation.**
+
+---
+
+# Turret Subsystem (CAN ID 6 on RIO Bus) - LEGACY DOCUMENTATION
 
 ## Overview
 Turret subsystem for controlling a TalonFX motor on CAN ID 6 (RIO bus) with SmartDashboard/Shuffleboard and controller controls.
+
+**NOTE:** This documentation refers to the old `TestMotorSubsystem` class which has been renamed to `TurretSubsystem`. All functionality remains the same.
 
 ## Features
 - **Dashboard Controls**: Start/Stop buttons

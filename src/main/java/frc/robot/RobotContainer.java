@@ -23,10 +23,12 @@ import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
 import frc.robot.generated.TunerConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.VisionSubsystem;
-import frc.robot.subsystems.TestMotorSubsystem;
+import frc.robot.subsystems.TurretSubsystem;
+import frc.robot.subsystems.Intake;
 import frc.robot.commands.AimTurretAuto;
 import frc.robot.commands.DriveToAprilTag;
 import frc.robot.commands.DriveToAprilTagWithPathPlanner;
+import frc.robot.commands.TrackAprilTagCommand;
 
 import com.pathplanner.lib.auto.AutoBuilder;
 import com.pathplanner.lib.auto.NamedCommands;
@@ -40,7 +42,10 @@ public class RobotContainer {
     private final VisionSubsystem visionSubsystem = new VisionSubsystem();
     
     // Turret subsystem (CAN ID 6 on RIO bus)
-    private final TestMotorSubsystem turretSubsystem = new TestMotorSubsystem();
+    private final TurretSubsystem turretSubsystem = new TurretSubsystem();
+
+    // Intake subsystem
+    private final Intake intake = new Intake();
     
     // Field2D for visualization on dashboard
     private final Field2d field2d = new Field2d();
@@ -73,9 +78,16 @@ public class RobotContainer {
         
         // Publish Field2D to SmartDashboard for visualization
         SmartDashboard.putData("Field2d", field2d);
-        
+
         // Publish autonomous chooser to SmartDashboard
         SmartDashboard.putData("Auto Chooser", autoChooser);
+
+        // Intake testing buttons
+        SmartDashboard.putData("Intake/Run Intake", intake.runIntake());
+        SmartDashboard.putData("Intake/Run Outtake", intake.runOuttake());
+        SmartDashboard.putData("Intake/Stop Collection", intake.stopCollection());
+        SmartDashboard.putData("Intake/Stow", intake.stowIntake());
+        SmartDashboard.putData("Intake/Hold Game Piece", intake.holdGamePiece());
     }
 
     private void registerNamedCommands() {
@@ -210,12 +222,20 @@ public class RobotContainer {
         // POV Left (270°): Drive to tag 13
         joystick.pov(270).whileTrue(new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, 13));
 
-        // Turret control - X button: Hold to spin, release to stop
+        // Turret control - Y button: Hold to track AprilTag, release to stop
+        joystick.y().whileTrue(
+            new TrackAprilTagCommand(turretSubsystem, visionSubsystem)
+        );
+        
+        // Turret manual control - X button: Hold to spin, release to stop
         joystick.x().whileTrue(
             turretSubsystem.run(() -> turretSubsystem.startSpin())
         ).onFalse(
             turretSubsystem.runOnce(() -> turretSubsystem.stopSpin())
         );
+
+        // Intake control - Left trigger: Run intake while held, stop when released
+        joystick.leftTrigger(0.5).whileTrue(intake.runIntake()).onFalse(intake.stopCollection());
 
         drivetrain.registerTelemetry(logger::telemeterize);
     }

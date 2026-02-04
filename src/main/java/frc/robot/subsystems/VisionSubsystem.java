@@ -9,6 +9,7 @@ import org.photonvision.EstimatedRobotPose;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Pose3d;
 import frc.robot.Constants;
 import java.util.List;
 import java.util.Optional;
@@ -64,14 +65,12 @@ public class VisionSubsystem extends SubsystemBase {
             PoseStrategy.MULTI_TAG_PNP_ON_COPROCESSOR,
             Constants.Vision.kRobotToCamBL
         );
-        poseEstimatorBL.setMultiTagFallbackStrategy(PoseStrategy.LOWEST_AMBIGUITY);
-        
+
         poseEstimatorBR = new PhotonPoseEstimator(
             Constants.Vision.kTagLayout,
             PoseStrategy.MULTI_TAG_PNP_ON_COPROCESSOR,
             Constants.Vision.kRobotToCamBR
         );
-        poseEstimatorBR.setMultiTagFallbackStrategy(PoseStrategy.LOWEST_AMBIGUITY);
 
         // Set up tag ID chooser
         tagIdChooser = new SendableChooser<>();
@@ -132,17 +131,27 @@ public class VisionSubsystem extends SubsystemBase {
      */
     private void updatePoseEstimates() {
         // Update BL camera pose estimate
-        var resultBL = cameraBL.getLatestResult();
-        if (resultBL.hasTargets()) {
-            latestEstimatedPoseBL = poseEstimatorBL.update(resultBL);
+        var resultsBL = cameraBL.getAllUnreadResults();
+        if (!resultsBL.isEmpty()) {
+            var resultBL = resultsBL.get(resultsBL.size() - 1);
+            if (resultBL.hasTargets()) {
+                latestEstimatedPoseBL = poseEstimatorBL.update(resultBL);
+            } else {
+                latestEstimatedPoseBL = Optional.empty();
+            }
         } else {
             latestEstimatedPoseBL = Optional.empty();
         }
-        
+
         // Update BR camera pose estimate
-        var resultBR = cameraBR.getLatestResult();
-        if (resultBR.hasTargets()) {
-            latestEstimatedPoseBR = poseEstimatorBR.update(resultBR);
+        var resultsBR = cameraBR.getAllUnreadResults();
+        if (!resultsBR.isEmpty()) {
+            var resultBR = resultsBR.get(resultsBR.size() - 1);
+            if (resultBR.hasTargets()) {
+                latestEstimatedPoseBR = poseEstimatorBR.update(resultBR);
+            } else {
+                latestEstimatedPoseBR = Optional.empty();
+            }
         } else {
             latestEstimatedPoseBR = Optional.empty();
         }
@@ -253,11 +262,12 @@ public class VisionSubsystem extends SubsystemBase {
     }
 
     private void processCameraBLResults() {
-        // Use getLatestResult() instead of getAllUnreadResults() for stable values
-        var result = cameraBL.getLatestResult();
+        // Use getAllUnreadResults() to get latest result
+        var results = cameraBL.getAllUnreadResults();
+        var result = results.isEmpty() ? null : results.get(results.size() - 1);
 
         // Only reset if no targets detected
-        if (!result.hasTargets()) {
+        if (result == null || !result.hasTargets()) {
             targetYawBL = 0.0;
             targetPitchBL = 0.0;
             targetAreaBL = 0.0;
@@ -317,11 +327,12 @@ public class VisionSubsystem extends SubsystemBase {
     }
 
     private void processCameraBRResults() {
-        // Use getLatestResult() instead of getAllUnreadResults() for stable values
-        var result = cameraBR.getLatestResult();
+        // Use getAllUnreadResults() to get latest result
+        var results = cameraBR.getAllUnreadResults();
+        var result = results.isEmpty() ? null : results.get(results.size() - 1);
 
         // Only reset if no targets detected
-        if (!result.hasTargets()) {
+        if (result == null || !result.hasTargets()) {
             targetYawBR = 0.0;
             targetPitchBR = 0.0;
             targetAreaBR = 0.0;
@@ -441,7 +452,7 @@ public class VisionSubsystem extends SubsystemBase {
      * @param pose The new reference pose
      */
     public void setReferencePose(Pose2d pose) {
-        poseEstimatorBL.setReferencePose(pose);
-        poseEstimatorBR.setReferencePose(pose);
+        poseEstimatorBL.setReferencePose(new Pose3d(pose));
+        poseEstimatorBR.setReferencePose(new Pose3d(pose));
     }
 }

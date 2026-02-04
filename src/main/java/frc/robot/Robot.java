@@ -102,8 +102,8 @@ public class Robot extends TimedRobot {
         SmartDashboard.putBoolean("Controller B Button", controller.getBButton());
         SmartDashboard.putBoolean("Controller X Button", controller.getXButton());
         SmartDashboard.putBoolean("Controller Y Button", controller.getYButton());
-        SmartDashboard.putBoolean("Controller Left Bumper", controller.getLeftBumper());
-        SmartDashboard.putBoolean("Controller Right Bumper", controller.getRightBumper());
+        SmartDashboard.putBoolean("Controller Left Bumper", controller.getLeftBumperButton());
+        SmartDashboard.putBoolean("Controller Right Bumper", controller.getRightBumperButton());
         SmartDashboard.putBoolean("Controller Back Button", controller.getBackButton());
         SmartDashboard.putBoolean("Controller Start Button", controller.getStartButton());
         SmartDashboard.putBoolean("Controller Left Stick Button", controller.getLeftStickButton());

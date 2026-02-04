@@ -44,8 +44,8 @@ public class Intake extends SubsystemBase {
     
   public Intake() {
     // Initialize motors using constants
-    intakeCollect = new TalonFX(IntakeConstants.kIntakeCollectMotorID, IntakeConstants.kCANBusName);
-    intakePivot = new TalonFX(IntakeConstants.kIntakePivotMotorID, IntakeConstants.kCANBusName);
+    intakeCollect = new TalonFX(IntakeConstants.kIntakeCollectMotorID);
+    intakePivot = new TalonFX(IntakeConstants.kIntakePivotMotorID);
     
     // Config
     TalonFXConfiguration cfg = new TalonFXConfiguration();

@@ -47,6 +47,58 @@ public class Constants {
         public static final Double[] tagePoseAlgea = {-16.0, 0.0};
     }
 
+    public static class TurretConstants {
+        // Motor CAN ID
+        public static final int kTurretMotorID = 6;
+        public static final String kCANBusName = "rio";
+        
+        // Gear Ratio (adjust based on your turret gearing)
+        public static final double kGearRatio = 1.0;
+        public static final double kRotationsPerDegree = kGearRatio / 360.0;
+        
+        // Speed Control
+        public static final double kDefaultSpinSpeed = 0.3; // 30% power for testing
+        public static final double kMaxSpinSpeed = 1.0; // Maximum allowed speed
+        public static final double kMinSpinSpeed = -1.0; // Minimum allowed speed (reverse)
+        
+        // Position Control
+        public static final double kPositionToleranceDegrees = 2.0; // Tolerance for angle checking
+        
+        // Rotation Limits (to prevent wiring damage)
+        // Allows almost 360° rotation with safety margin
+        public static final double kMinRotationDegrees = -175.0; // Minimum rotation angle
+        public static final double kMaxRotationDegrees = 175.0;  // Maximum rotation angle
+        public static final double kWrapAroundThreshold = 160.0; // When to trigger wrap-around (degrees from limit)
+        
+        // AprilTag Tracking
+        public static final double kTrackingP = 0.02; // Proportional gain for tracking
+        public static final double kTrackingI = 0.0;  // Integral gain
+        public static final double kTrackingD = 0.001; // Derivative gain
+        public static final double kTrackingToleranceDegrees = 3.0; // Tolerance for "locked in" state
+        public static final double kMaxTrackingSpeed = 0.5; // Maximum speed during tracking (50%)
+        public static final double kMinTrackingOutput = 0.05; // Minimum output to overcome friction
+        
+        // Wrap-around behavior
+        public static final double kWrapAroundSpeed = 0.3; // Speed during wrap-around rotation
+        public static final double kWrapAroundTargetOffset = 170.0; // Target angle after wrap (opposite side)
+        
+        // SmartDashboard Keys
+        public static final String kSmartDashboardPrefix = "Turret/";
+        public static final String kStartSpinKey = "Start Spin";
+        public static final String kStopSpinKey = "Stop Spin";
+        public static final String kSpinSpeedKey = "Spin Speed";
+        public static final String kIsSpinningKey = "Is Spinning";
+        public static final String kCurrentSpeedKey = "Current Speed";
+        public static final String kMotorCurrentKey = "Motor Current (A)";
+        public static final String kMotorTempKey = "Motor Temp (C)";
+        public static final String kStatusKey = "Status";
+        public static final String kTargetAngleKey = "Target Angle";
+        public static final String kCurrentAngleKey = "Current Angle";
+        public static final String kAtLimitKey = "At Limit";
+        public static final String kTrackingLockedKey = "Tracking Locked";
+        public static final String kTrackingErrorKey = "Tracking Error";
+    }
+
     public static class IntakeConstants {
         // Motor CAN IDs
         public static final int kIntakeCollectMotorID = 3;
