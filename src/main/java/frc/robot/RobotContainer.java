@@ -25,6 +25,8 @@ import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.VisionSubsystem;
 import frc.robot.subsystems.TurretSubsystem;
 import frc.robot.subsystems.Intake;
+import frc.robot.subsystems.Launcher;
+import frc.robot.subsystems.Spindexer;
 import frc.robot.commands.AimTurretAuto;
 import frc.robot.commands.DriveToAprilTag;
 import frc.robot.commands.DriveToAprilTagWithPathPlanner;
@@ -46,6 +48,12 @@ public class RobotContainer {
 
     // Intake subsystem
     private final Intake intake = new Intake();
+
+    // Spindexer subsystem
+    private final Spindexer spindexer = new Spindexer();
+
+    // Launcher subsystem
+    private final Launcher launcher = new Launcher();
     
     // Field2D for visualization on dashboard
     private final Field2d field2d = new Field2d();
@@ -82,12 +90,42 @@ public class RobotContainer {
         // Publish autonomous chooser to SmartDashboard
         SmartDashboard.putData("Auto Chooser", autoChooser);
 
-        // Intake testing buttons
+        // ================= INTAKE testing buttons =================
         SmartDashboard.putData("Intake/Run Intake", intake.runIntake());
         SmartDashboard.putData("Intake/Run Outtake", intake.runOuttake());
         SmartDashboard.putData("Intake/Stop Collection", intake.stopCollection());
         SmartDashboard.putData("Intake/Stow", intake.stowIntake());
         SmartDashboard.putData("Intake/Hold Game Piece", intake.holdGamePiece());
+
+        // ================ SPINDEXER testing buttons ================
+        SmartDashboard.putData("Intake/Run Spindexer", spindexer.runSpindexer());
+        SmartDashboard.putData("Intake/Run OutTake", spindexer.runSpindexerOuttake());
+        SmartDashboard.putData("STOP Spindexer", spindexer.stopSpindexerSpin());
+        SmartDashboard.putData("Intake/Run Spindexer", spindexer.runSpindexer());
+    
+        // =============== FLAPPY WHEEL FEEDER testing buttons ===============
+        SmartDashboard.putData("Run Flappy Wheel", spindexer.runFlappyWheel());
+        SmartDashboard.putData("Run Flappy Wheel Outtake", spindexer.runFlappyWheelOuttake());
+        SmartDashboard.putData("Stop Flappy Wheel", spindexer.stopFlappyWheelSpin());
+
+        // ================ FEEDER testing buttons ================
+        SmartDashboard.putData("Run Feeder", spindexer.runFeeder());
+        SmartDashboard.putData("Run Feeder Outtake", spindexer.runFeederOuttake());
+        SmartDashboard.putData("Stop Feeder", spindexer.stopFeederSpin());
+
+        // ================ TURRET testing buttons ================
+        SmartDashboard.putData("Turret/Start Spin", turretSubsystem.run(() -> turretSubsystem.startSpin()));
+        SmartDashboard.putData("Turret/Stop Spin", turretSubsystem.runOnce(() -> turretSubsystem.stopSpin()));
+        
+        // =============== LAUNCHER testing buttons ===============
+        SmartDashboard.putData("Launcher/Run Launcher", launcher.runLauncherIntake());
+        SmartDashboard.putData("Launcher/Run Launcher Outtake", launcher.runLauncherOuttake());
+        SmartDashboard.putData("Launcher/Stop Launcher", launcher.stopLauncherSpin());
+
+        // ================ HOOD testing buttons ================
+        //SmartDashboard.putData("Hood/Move Up", launcher.moveHoodUp());
+        //SmartDashboard.putData("Hood/Move Down", launcher.moveHoodDown());
+        //SmartDashboard.putData("Hood/Stop", launcher.stopHood());
     }
 
     private void registerNamedCommands() {

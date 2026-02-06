@@ -29,15 +29,6 @@ public class Constants {
             new Translation2d(wheelBase / 2.0, -trackWidth / 2.0),
             new Translation2d(-wheelBase / 2.0, trackWidth / 2.0),
             new Translation2d(-wheelBase / 2.0, -trackWidth / 2.0));
-    
-    
-
-    public class FlapHookConstants{
-        public static final double hookflapOpen = 0; // all x 9 for new gear ratio
-        public static final double hookPrepare = -70; //-6.5
-        public static final double hookLatch = -143; //-143     -16
-        public static final double flapCollect = -45; //-5
-    }
 
 
     public class TagConstants{
@@ -47,6 +38,82 @@ public class Constants {
         public static final Double[] tagePoseAlgea = {-16.0, 0.0};
     }
 
+    public static class SpindexerConstants {
+        // Motor CAN IDs
+        public static final int kSpindexerMotorID = 4;
+        public static final int kFlappyWheelFeederMotorID = 5;
+        public static final int kFeederMotorID = 6;
+        public static double kSensorToMechanismRatio;
+        public static double kSpindexerVelocity;
+        public static double kSpindexerOuttakeVelocity;
+        public static double kSpindexerIntakeVelocity;
+        public static double kSpindexerHoldVelocity;
+        public static String kSmartDashboardPrefix;
+        public static String kSpindexerVelocityKey;
+        public static String kSpindexerCurrentKey;
+        public static String kFeederVelocityKey;
+        public static String kFeederCurrentKey;
+        public static String kFeederTempKey;
+        public static String kSpindexerTempKey;
+        public static String kStatusKey;
+        public static double kFeederIntakeVelocity;
+        public static double kFeederOuttakeVelocity;
+        public static double kFeederHoldVelocity;
+        public static String kFlappyWheelVelocityKey;
+        public static String kFlappyWheelCurrentKey;
+        public static String kFlappyWheelTempKey;
+    }
+
+
+    public static class LauncherConstants {
+        // Motor CAN IDs
+        public static final int kLauncherMotorID = 8;
+        public static final int kHoodMotorID = 9;
+        public static final int kTurretMotorID = 7;
+        public static double kSensorToMechanismRatio;
+        public static double kHoodStowedPosition;
+        public static double kHoodCollectPosition;
+        public static double kHoodScoreHighPosition;
+        public static double kHoodScoreLowPosition;
+        public static double kLauncherIntakeVelocity;
+        public static double kCollectOuttakeVelocity;
+        public static double kCollectHoldVelocity;
+        public static double kHoodPositionTolerance;
+        public static String kSmartDashboardPrefix;
+        public static String kCollectVelocityKey;
+        public static String kCollectCurrentKey;
+        public static String kCollectTempKey;
+        public static String kStatusKey;
+        public static double kTurretPositionTolerance;
+        public static String kTurretPositionKey;
+        public static String kTurretTargetKey;
+        public static String kTurretErrorKey;
+        public static String kTurretAtTargetKey;
+        public static String kHoodPositionKey;
+        public static String kHoodTargetKey;
+        public static String kHoodErrorKey;
+        public static String kHoodAtTargetKey;
+        public static String kPivotCurrentKey;
+        public static String kTurretTempKey;
+        public static String kHoodTempKey;
+    }
+
+
+    public static class ClimberConstants {
+        // Motor CAN IDs
+        public static final int kClimberMotorID = 10;
+        public static double kSensorToMechanismRatio;
+        public static double kClimbVelocity;
+        public static double kClimbHoldVelocity;
+        public static String kSmartDashboardPrefix;
+        public static String kClimbVelocityKey;
+        public static String kClimbCurrentKey;
+        public static String kClimbTempKey;
+        public static String kStatusKey;
+    }
+
+
+// Note: Turret code is currently integrated into Launcher subsystem for better coordination between hood and turret aiming.
     public static class TurretConstants {
         // Motor CAN ID
         public static final int kTurretMotorID = 6;
@@ -97,6 +164,8 @@ public class Constants {
         public static final String kAtLimitKey = "At Limit";
         public static final String kTrackingLockedKey = "Tracking Locked";
         public static final String kTrackingErrorKey = "Tracking Error";
+        public static double kSensorToMechanismRatio;
+       
     }
 
     public static class IntakeConstants {

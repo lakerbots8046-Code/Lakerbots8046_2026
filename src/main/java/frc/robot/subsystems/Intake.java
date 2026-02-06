@@ -48,46 +48,51 @@ public class Intake extends SubsystemBase {
     intakePivot = new TalonFX(IntakeConstants.kIntakePivotMotorID);
     
     // Config
-    TalonFXConfiguration cfg = new TalonFXConfiguration();
+    TalonFXConfiguration cfgCollect = new TalonFXConfiguration();
+    TalonFXConfiguration cfgPivot = new TalonFXConfiguration();
+
+    // Need to resolve two different configurations for each motor, so we'll apply them sequentially with different slot configs?? magic AI stuff
 
     /*  ----------------------INTAKE COLLECT : VelocityClosedLoop ->------------------------------------ */
+    // ============ CONFIGURE COLLECTOR VELOCITY CONTROL ============ //
     /* Voltage-based velocity requires a velocity feed forward to account for the back-emf of the motor */
-    cfg.Slot0.kS = 0.1; // To account for friction, add 0.1 V of static feedforward
-    cfg.Slot0.kV = 0.12; // Kraken X60 is a 500 kV motor, 500 rpm per V = 8.333 rps per V, 1/8.33 = 0.12 volts / rotation per second
-    cfg.Slot0.kP = 0.11; // An error of 1 rotation per second results in 0.11 V output
-    cfg.Slot0.kI = 0; // No output for integrated error
-    cfg.Slot0.kD = 0; // No output for error derivative
+    cfgCollect.Slot0.kS = 0.1; // To account for friction, add 0.1 V of static feedforward
+    cfgCollect.Slot0.kV = 0.12; // Kraken X60 is a 500 kV motor, 500 rpm per V = 8.333 rps per V, 1/8.33 = 0.12 volts / rotation per second
+    cfgCollect.Slot0.kP = 0.11; // An error of 1 rotation per second results in 0.11 V output
+    cfgCollect.Slot0.kI = 0; // No output for integrated error
+    cfgCollect.Slot0.kD = 0; // No output for error derivative
     // Peak output of 8 volts
-    cfg.Voltage.withPeakForwardVoltage(Volts.of(8))
+    cfgCollect.Voltage.withPeakForwardVoltage(Volts.of(8))
       .withPeakReverseVoltage(Volts.of(-8));
 
     /* Torque-based velocity does not require a velocity feed forward, as torque will accelerate the rotor up to the desired velocity by itself */
-    cfg.Slot1.kS = 2.5; // To account for friction, add 2.5 A of static feedforward
-    cfg.Slot1.kP = 5; // An error of 1 rotation per second results in 5 A output
-    cfg.Slot1.kI = 0; // No output for integrated error
-    cfg.Slot1.kD = 0; // No output for error derivative
+    cfgCollect.Slot1.kS = 2.5; // To account for friction, add 2.5 A of static feedforward
+    cfgCollect.Slot1.kP = 5; // An error of 1 rotation per second results in 5 A output
+    cfgCollect.Slot1.kI = 0; // No output for integrated error
+    cfgCollect.Slot1.kD = 0; // No output for error derivative
     // Peak output of 40 A
-    cfg.TorqueCurrent.withPeakForwardTorqueCurrent(Amps.of(40))
+    cfgCollect.TorqueCurrent.withPeakForwardTorqueCurrent(Amps.of(40))
       .withPeakReverseTorqueCurrent(Amps.of(-40));
      /* Retry config apply up to 5 times, report if failure */
     
-    
+ 
     /* ---------------------------------- INTAKE PIVOT : Motion Magic -> ----------------------------------*/
+    // ============ CONFIGURE PIVOT POSITION CONTROL ============ //
 
     // Configure Gear Ratio using constant
-    FeedbackConfigs fdb = cfg.Feedback;
+    FeedbackConfigs fdb = cfgPivot.Feedback;
     fdb.SensorToMechanismRatio = IntakeConstants.kSensorToMechanismRatio; //12.8 rotor rotations per mechanism rotation
-    cfg.Feedback.SensorToMechanismRatio = IntakeConstants.kSensorToMechanismRatio;
+    cfgPivot.Feedback.SensorToMechanismRatio = IntakeConstants.kSensorToMechanismRatio;
     
 
     //Configure Motion Magic
-    MotionMagicConfigs mm = cfg.MotionMagic;
+    MotionMagicConfigs mm = cfgPivot.MotionMagic;
     mm.withMotionMagicCruiseVelocity(RotationsPerSecond.of(15))
       .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(15))
       .withMotionMagicJerk(RotationsPerSecondPerSecond.per(Second).of(100));
  
 
-    Slot0Configs slot0 = cfg.Slot0;
+    Slot0Configs slot0 = cfgPivot.Slot0;
     slot0.kS = 0.25; // Add 0.25 V output to overcome static friction
     slot0.kV = 0.12; // A velocity target of 1 rps results in 0.12 V output
     slot0.kA = 0.01; // An acceleration of 1 rps/s requires 0.01 V output
@@ -96,11 +101,11 @@ public class Intake extends SubsystemBase {
     slot0.kD = 0.5; // A velocity error of 1 rps results in 0.5 V output
 
 
-    //Status code for all
+    //Status code for ALL
     StatusCode status = StatusCode.StatusCodeNotInitialized;
     for (int i = 0; i < 5; ++i) {
-      status = intakePivot.getConfigurator().apply(cfg);
-      status = intakeCollect.getConfigurator().apply(cfg);
+      status = intakePivot.getConfigurator().apply(cfgCollect);
+      status = intakeCollect.getConfigurator().apply(cfgPivot);
       if (status.isOK()) break;
     }
     if (!status.isOK()) {

@@ -8,6 +8,8 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants.TurretConstants;
 
+//===================================== NOT OFFICIAL TURRET CODE!! TURRET CODE IS IN LAUNCHER.JAVA =====================================//
+
 /**
  * Turret subsystem for aiming and positioning.
  * Provides dashboard controls to start/stop spinning the turret motor.
