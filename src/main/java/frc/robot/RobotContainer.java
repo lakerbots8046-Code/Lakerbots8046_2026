@@ -30,14 +30,14 @@ import frc.robot.subsystems.Spindexer;
 import frc.robot.commands.AimTurretAuto;
 import frc.robot.commands.DriveToAprilTag;
 import frc.robot.commands.DriveToAprilTagWithPathPlanner;
-import frc.robot.commands.TrackAprilTagCommand;
+//import frc.robot.commands.TrackAprilTagCommand;
 
 import com.pathplanner.lib.auto.AutoBuilder;
 import com.pathplanner.lib.auto.NamedCommands;
 
 import java.util.Optional;
 
-import org.photonvision.EstimatedRobotPose;
+//import org.photonvision.EstimatedRobotPose;
 
 public class RobotContainer {
     // Vision subsystem
@@ -47,13 +47,13 @@ public class RobotContainer {
     private final TurretSubsystem turretSubsystem = new TurretSubsystem();
 
     // Intake subsystem
-    private final Intake intake = new Intake();
+    public static Intake intake = new Intake();
 
     // Spindexer subsystem
-    private final Spindexer spindexer = new Spindexer();
+    public static Spindexer spindexer = new Spindexer();
 
     // Launcher subsystem
-    private final Launcher launcher = new Launcher();
+    public static Launcher launcher = new Launcher();
     
     // Field2D for visualization on dashboard
     private final Field2d field2d = new Field2d();
@@ -90,42 +90,46 @@ public class RobotContainer {
         // Publish autonomous chooser to SmartDashboard
         SmartDashboard.putData("Auto Chooser", autoChooser);
 
-        // ================= INTAKE testing buttons =================
-        SmartDashboard.putData("Intake/Run Intake", intake.runIntake());
-        SmartDashboard.putData("Intake/Run Outtake", intake.runOuttake());
-        SmartDashboard.putData("Intake/Stop Collection", intake.stopCollection());
-        SmartDashboard.putData("Intake/Stow", intake.stowIntake());
-        SmartDashboard.putData("Intake/Hold Game Piece", intake.holdGamePiece());
+        // ================= INTAKE COLLECT testing buttons =================
+        SmartDashboard.putData("Run Intake Collect Positive Voltage", intake.setIntakeRollersVoltage(2));
+        SmartDashboard.putData("Run Intake Collect Negative Voltage", intake.setIntakeRollersVoltage(-2));
+        SmartDashboard.putData("Stop Intake Collect Voltage", intake.setIntakeRollersVoltage(0));
+        
+        // ================ INTAKE PIVOT testing buttons ================
+        SmartDashboard.putData("Run Intake Pivot Positive Voltage", intake.setIntakePivotVoltage(1));
+        SmartDashboard.putData("Run Intake Pivot Negative Voltage", intake.setIntakePivotVoltage(-1));
+        SmartDashboard.putData("Stop Intake Pivot Voltage", intake.setIntakePivotVoltage(0));
 
         // ================ SPINDEXER testing buttons ================
-        SmartDashboard.putData("Intake/Run Spindexer", spindexer.runSpindexer());
-        SmartDashboard.putData("Intake/Run OutTake", spindexer.runSpindexerOuttake());
-        SmartDashboard.putData("STOP Spindexer", spindexer.stopSpindexerSpin());
-        SmartDashboard.putData("Intake/Run Spindexer", spindexer.runSpindexer());
+        SmartDashboard.putData("Run Spindexer Positive Voltage", spindexer.setSpindexerVoltage(2));
+        SmartDashboard.putData("Run Spindexer Negative Voltage", spindexer.setSpindexerVoltage(-2));
+        SmartDashboard.putData("Stop Spindexer Voltage", spindexer.setSpindexerVoltage(0));
     
         // =============== FLAPPY WHEEL FEEDER testing buttons ===============
-        SmartDashboard.putData("Run Flappy Wheel", spindexer.runFlappyWheel());
-        SmartDashboard.putData("Run Flappy Wheel Outtake", spindexer.runFlappyWheelOuttake());
-        SmartDashboard.putData("Stop Flappy Wheel", spindexer.stopFlappyWheelSpin());
+        SmartDashboard.putData("Run Flappy Wheel Positive Voltage", spindexer.setFlappyWheelVoltage(2));
+        SmartDashboard.putData("Run Flappy Wheel Negative Voltage", spindexer.setFlappyWheelVoltage(-2));
+        SmartDashboard.putData("Stop Flappy Wheel Voltage", spindexer.setFlappyWheelVoltage(0));
 
         // ================ FEEDER testing buttons ================
-        SmartDashboard.putData("Run Feeder", spindexer.runFeeder());
-        SmartDashboard.putData("Run Feeder Outtake", spindexer.runFeederOuttake());
-        SmartDashboard.putData("Stop Feeder", spindexer.stopFeederSpin());
-
-        // ================ TURRET testing buttons ================
-        SmartDashboard.putData("Turret/Start Spin", turretSubsystem.run(() -> turretSubsystem.startSpin()));
-        SmartDashboard.putData("Turret/Stop Spin", turretSubsystem.runOnce(() -> turretSubsystem.stopSpin()));
+        SmartDashboard.putData("Run Feeder Positive Voltage", spindexer.setFeederVoltage(2));
+        SmartDashboard.putData("Run Feeder Negative Voltage", spindexer.setFeederVoltage(-2));
+        SmartDashboard.putData("Stop Feeder Voltage", spindexer.setFeederVoltage(0));
         
         // =============== LAUNCHER testing buttons ===============
-        SmartDashboard.putData("Launcher/Run Launcher", launcher.runLauncherIntake());
-        SmartDashboard.putData("Launcher/Run Launcher Outtake", launcher.runLauncherOuttake());
-        SmartDashboard.putData("Launcher/Stop Launcher", launcher.stopLauncherSpin());
+        SmartDashboard.putData("Run Launcher Positive Voltage", launcher.setLauncherVoltage(2));
+        SmartDashboard.putData("Run Launcher Negative Voltage", launcher.setLauncherVoltage(-2));
+        SmartDashboard.putData("Stop Launcher Voltage", launcher.setLauncherVoltage(0));
+
+        // ================ TURRET testing buttons ================
+        SmartDashboard.putData("Run Turret Positive Voltage", launcher.setTurretVoltage(1));
+        SmartDashboard.putData("Run Turret Negative Voltage", launcher.setTurretVoltage(-1));
+        SmartDashboard.putData("Stop Turret Voltage", launcher.setTurretVoltage(0));
 
         // ================ HOOD testing buttons ================
-        //SmartDashboard.putData("Hood/Move Up", launcher.moveHoodUp());
-        //SmartDashboard.putData("Hood/Move Down", launcher.moveHoodDown());
-        //SmartDashboard.putData("Hood/Stop", launcher.stopHood());
+        SmartDashboard.putData("Run Hood Positive Voltage", launcher.setHoodVoltage(1));
+        SmartDashboard.putData("Run Hood Negative Voltage", launcher.setHoodVoltage(-1));
+        SmartDashboard.putData("Stop Hood Voltage", launcher.setHoodVoltage(0));
+
     }
 
     private void registerNamedCommands() {
@@ -200,10 +204,11 @@ public class RobotContainer {
         // and Y is defined as to the left according to WPILib convention.
         drivetrain.setDefaultCommand(
             // Drivetrain will execute this command periodically
+            // squareInput() is applied to translation axes for finer low-speed control
             drivetrain.applyRequest(() ->
-                drive.withVelocityX(-joystick.getLeftY() * MaxSpeed) // Drive forward with negative Y (forward)
-                    .withVelocityY(-joystick.getLeftX() * MaxSpeed) // Drive left with negative X (left)
-                    .withRotationalRate(-joystick.getRightX() * MaxAngularRate) // Drive counterclockwise with negative X (left)
+                drive.withVelocityX(squareInput(-joystick.getLeftY()) * MaxSpeed) // Drive forward with squared negative Y (forward)
+                    .withVelocityY(squareInput(-joystick.getLeftX()) * MaxSpeed) // Drive left with squared negative X (left)
+                    .withRotationalRate(squareInput(-joystick.getRightX()) * MaxAngularRate) // Drive counterclockwise with squared negative X (left)
             )
         );
 
@@ -214,7 +219,17 @@ public class RobotContainer {
             drivetrain.applyRequest(() -> idle).ignoringDisable(true)
         );
 
-        joystick.a().whileTrue(drivetrain.applyRequest(() -> brake));
+        // A button: LaunchFromTower shoot command
+        // Runs all 4 motors simultaneously while held; all stop on release.
+        //   Spindexer (CAN 4): -0.2 V | StarFeeder (CAN 5): +0.2 V
+        //   Feeder (CAN 6):    +0.2 V | Launcher (CAN 8):   +0.2 V
+        // (Temp test values — update to final values after on-robot testing)
+        joystick.a().whileTrue(
+            Commands.parallel(
+                spindexer.launchFromTower(),
+                launcher.launchFromTowerLauncher()
+            )
+        );
         joystick.b().whileTrue(drivetrain.applyRequest(() ->
             point.withModuleDirection(new Rotation2d(-joystick.getLeftY(), -joystick.getLeftX()))
         ));
@@ -226,22 +241,24 @@ public class RobotContainer {
         joystick.start().and(joystick.y()).whileTrue(drivetrain.sysIdQuasistatic(Direction.kForward));
         joystick.start().and(joystick.x()).whileTrue(drivetrain.sysIdQuasistatic(Direction.kReverse));
 
-        // Reset the field-centric heading on left bumper press.
-        joystick.leftBumper().onTrue(drivetrain.runOnce(() -> {
+        // View (Back) button: resets field-centric heading
+        joystick.back().onTrue(drivetrain.runOnce(() -> {
             drivetrain.seedFieldCentric();
-            // Also update vision pose estimators with the new pose
             Pose2d currentPose = drivetrain.getState().Pose;
             visionSubsystem.setReferencePose(currentPose);
             SmartDashboard.putString("Field-Centric Status", "Reset at: " + System.currentTimeMillis());
-            System.out.println("Field-centric heading reset! Current pose: " + currentPose);
         }));
 
-        // Drive to AprilTag commands
-        // Right bumper: Drive to the currently selected tag using PathPlanner (advanced)
-        joystick.rightBumper().whileTrue(
-            new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, visionSubsystem.getSelectedTagId())
-        );
-        
+        // Left bumper: Toggle intake deploy/collect.
+        // First press: deploys pivot to -1.2 rot (Motion Magic) and starts rollers.
+        // Second press: stops rollers and retracts pivot to home (-0.1 rot).
+        joystick.leftBumper().toggleOnTrue(intake.intakeDeployCollect());
+
+        // Right bumper: Toggle intake rollers on/off independently of pivot.
+        // First press stops rollers; second press starts them again.
+        // Uses no-subsystem command so it does NOT interrupt the pivot control.
+        joystick.rightBumper().onTrue(intake.toggleRollers());
+
         // Right trigger: Drive to selected tag using basic PID (fallback/simple mode)
         joystick.rightTrigger(0.5).whileTrue(
             new DriveToAprilTag(drivetrain, visionSubsystem, visionSubsystem.getSelectedTagId())
@@ -259,21 +276,6 @@ public class RobotContainer {
         
         // POV Left (270°): Drive to tag 13
         joystick.pov(270).whileTrue(new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, 13));
-
-        // Turret control - Y button: Hold to track AprilTag, release to stop
-        joystick.y().whileTrue(
-            new TrackAprilTagCommand(turretSubsystem, visionSubsystem)
-        );
-        
-        // Turret manual control - X button: Hold to spin, release to stop
-        joystick.x().whileTrue(
-            turretSubsystem.run(() -> turretSubsystem.startSpin())
-        ).onFalse(
-            turretSubsystem.runOnce(() -> turretSubsystem.stopSpin())
-        );
-
-        // Intake control - Left trigger: Run intake while held, stop when released
-        joystick.leftTrigger(0.5).whileTrue(intake.runIntake()).onFalse(intake.stopCollection());
 
         drivetrain.registerTelemetry(logger::telemeterize);
     }
@@ -399,6 +401,28 @@ public class RobotContainer {
         return Optional.empty();
     }
     
+    /**
+     * Applies a squared curve to a joystick input while preserving the sign.
+     * This gives finer control at low speeds while still allowing full speed
+     * at full joystick deflection.
+     *
+     * <p>Formula: {@code Math.copySign(value * value, value)}
+     *
+     * <p>Examples:
+     * <ul>
+     *   <li>0.0  → 0.0  (no movement)</li>
+     *   <li>0.5  → 0.25 (half stick = quarter speed)</li>
+     *   <li>1.0  → 1.0  (full stick = full speed)</li>
+     *   <li>-0.5 → -0.25 (sign preserved)</li>
+     * </ul>
+     *
+     * @param value Raw joystick axis value in the range [-1.0, 1.0]
+     * @return Squared value with the original sign, in the range [-1.0, 1.0]
+     */
+    private double squareInput(double value) {
+        return Math.copySign(value * value, value);
+    }
+
     /**
      * Gets the Field2d object for external access if needed.
      * 

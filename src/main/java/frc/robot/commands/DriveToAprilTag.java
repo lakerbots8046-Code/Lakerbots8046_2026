@@ -3,7 +3,7 @@ package frc.robot.commands;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
-import edu.wpi.first.math.geometry.Transform2d;
+//import edu.wpi.first.math.geometry.Transform2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
@@ -99,7 +99,6 @@ public class DriveToAprilTag extends Command {
     
     @Override
     public void initialize() {
-        System.out.println("DriveToAprilTag: Starting to drive to tag " + targetTagId);
         SmartDashboard.putString("DriveToTag/Status", "Initializing");
         SmartDashboard.putNumber("DriveToTag/Target Tag", targetTagId);
         
@@ -199,13 +198,7 @@ public class DriveToAprilTag extends Command {
         // Stop the robot
         drivetrain.setControl(new SwerveRequest.Idle());
         
-        if (interrupted) {
-            System.out.println("DriveToAprilTag: Command interrupted");
-            SmartDashboard.putString("DriveToTag/Status", "Interrupted");
-        } else {
-            System.out.println("DriveToAprilTag: Reached target");
-            SmartDashboard.putString("DriveToTag/Status", "Complete");
-        }
+        SmartDashboard.putString("DriveToTag/Status", interrupted ? "Interrupted" : "Complete");
     }
     
     @Override

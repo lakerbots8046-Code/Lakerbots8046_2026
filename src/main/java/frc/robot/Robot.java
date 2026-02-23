@@ -5,18 +5,13 @@
 package frc.robot;
 
 import com.ctre.phoenix6.HootAutoReplay;
+import com.ctre.phoenix6.SignalLogger;
 
-import edu.wpi.first.cameraserver.CameraServer;
-import edu.wpi.first.networktables.NetworkTable;
-import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.TimedRobot;
-import edu.wpi.first.wpilibj.XboxController;
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 
 public class Robot extends TimedRobot {
-    private XboxController controller;
     private Command m_autonomousCommand;
 
     private final RobotContainer m_robotContainer;
@@ -27,22 +22,13 @@ public class Robot extends TimedRobot {
         .withJoystickReplay();
 
     public Robot() {
+        // Stop Phoenix 6 Signal Logger to prevent .hoot log files from filling
+        // the roboRIO's limited disk space (~62 MB free). Safe for competition use —
+        // disables binary log recording only; all robot functionality is unaffected.
+        // To re-enable for SysId characterization, comment out this line.
+        SignalLogger.stop();
+
         m_robotContainer = new RobotContainer();
-        
-        // Controller (if needed separately from RobotContainer)
-        controller = new XboxController(Constants.OperatorConstants.kDriverControllerPort);
-        
-        // Initialize camera server for streaming - matches old project implementation
-        // Create a network table
-        NetworkTableInstance inst = NetworkTableInstance.getDefault();
-        inst.startClient3("10.80.46.11"); // IP of the PhotonVision coprocessor
-        CameraServer.addServer(Constants.Vision.kCameraStreamBL); // BL Camera
-        CameraServer.addServer(Constants.Vision.kCameraStreamBR); // BR Camera
-        NetworkTable visionTable = inst.getTable("photonvision");
-        
-        System.out.println("Camera streams configured:");
-        System.out.println("  BL: " + Constants.Vision.kCameraStreamBL);
-        System.out.println("  BR: " + Constants.Vision.kCameraStreamBR);
     }
 
     @Override
@@ -89,51 +75,7 @@ public class Robot extends TimedRobot {
     }
 
     @Override
-    public void teleopPeriodic() {
-        // Get vision data from subsystem
-        var visionSubsystem = m_robotContainer.getVisionSubsystem();
-        boolean targetVisibleBL = visionSubsystem.isTargetVisibleBL();
-        boolean targetVisibleBR = visionSubsystem.isTargetVisibleBR();
-        double targetYawBL = visionSubsystem.getTargetYawBL();
-        double targetYawBR = visionSubsystem.getTargetYawBR();
-        
-        // Output all Xbox controller button states to SmartDashboard
-        SmartDashboard.putBoolean("Controller A Button", controller.getAButton());
-        SmartDashboard.putBoolean("Controller B Button", controller.getBButton());
-        SmartDashboard.putBoolean("Controller X Button", controller.getXButton());
-        SmartDashboard.putBoolean("Controller Y Button", controller.getYButton());
-        SmartDashboard.putBoolean("Controller Left Bumper", controller.getLeftBumperButton());
-        SmartDashboard.putBoolean("Controller Right Bumper", controller.getRightBumperButton());
-        SmartDashboard.putBoolean("Controller Back Button", controller.getBackButton());
-        SmartDashboard.putBoolean("Controller Start Button", controller.getStartButton());
-        SmartDashboard.putBoolean("Controller Left Stick Button", controller.getLeftStickButton());
-        SmartDashboard.putBoolean("Controller Right Stick Button", controller.getRightStickButton());
-        
-        // Output all Xbox controller axis values to SmartDashboard
-        SmartDashboard.putNumber("Controller Left Stick X", controller.getLeftX());
-        SmartDashboard.putNumber("Controller Left Stick Y", controller.getLeftY());
-        SmartDashboard.putNumber("Controller Right Stick X", controller.getRightX());
-        SmartDashboard.putNumber("Controller Right Stick Y", controller.getRightY());
-        SmartDashboard.putNumber("Controller Left Trigger", controller.getLeftTriggerAxis());
-        SmartDashboard.putNumber("Controller Right Trigger", controller.getRightTriggerAxis());
-        
-        // Output D-Pad (POV) state
-        SmartDashboard.putNumber("Controller POV", controller.getPOV());
-
-        // OPTIONAL: Auto-turn using BL camera when 'A' button is held
-        if (controller.getAButton() && targetVisibleBL) {
-            double turnCommand = -1.0 * targetYawBL * 0.02; // Simplified - adjust multiplier as needed
-            SmartDashboard.putNumber("Auto Turn Command BL", turnCommand);
-            // If you want to inject this into drivetrain, you'd need access
-            // to drivetrain object, or push this to NetworkTables / a global state
-        }
-        
-        // OPTIONAL: Auto-turn using BR camera when 'B' button is held
-        if (controller.getBButton() && targetVisibleBR) {
-            double turnCommand = -1.0 * targetYawBR * 0.02; // Simplified - adjust multiplier as needed
-            SmartDashboard.putNumber("Auto Turn Command BR", turnCommand);
-        }
-    }
+    public void teleopPeriodic() {}
 
     @Override
     public void teleopExit() {}

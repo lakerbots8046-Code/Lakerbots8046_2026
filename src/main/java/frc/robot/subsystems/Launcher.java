@@ -10,6 +10,7 @@ import com.ctre.phoenix6.StatusCode;
 import com.ctre.phoenix6.controls.NeutralOut;
 import com.ctre.phoenix6.controls.VelocityTorqueCurrentFOC;
 import com.ctre.phoenix6.controls.VelocityVoltage;
+import com.ctre.phoenix6.controls.DutyCycleOut;
 import com.ctre.phoenix6.configs.FeedbackConfigs;
 import com.ctre.phoenix6.configs.MotionMagicConfigs;
 import com.ctre.phoenix6.configs.Slot0Configs;
@@ -17,11 +18,12 @@ import com.ctre.phoenix6.configs.TalonFXConfiguration;
 import com.ctre.phoenix6.controls.MotionMagicVoltage;
 import com.ctre.phoenix6.hardware.TalonFX;
 
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+//import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants.LauncherConstants;
+import frc.robot.Constants.TurretConstants;
 import frc.robot.Mechanisms;
 
 /**
@@ -44,14 +46,16 @@ public class Launcher extends SubsystemBase {
     private final VelocityVoltage m_VelocityVoltage = new VelocityVoltage(0).withSlot(0);
     private final VelocityTorqueCurrentFOC m_velocityTorque = new VelocityTorqueCurrentFOC(0).withSlot(0);
     private final NeutralOut m_brake = new NeutralOut();
+    private final DutyCycleOut m_dutyCycleOut = new DutyCycleOut(0);
 
   //Mechanisms visualization  
     private final Mechanisms m_mechanisms = new Mechanisms();
 
   // State tracking
     private double lastHoodAngle = 0;
-    private double lastLauncherVelocity = 0;  
+    private double lastLauncherVelocity = 0;
     private double lastTurretAngle = 0;
+    private int periodicCounter = 0; // Throttle SmartDashboard updates to reduce NT load
   
   public Launcher() {
     // Initialize Motors using constants
@@ -139,13 +143,16 @@ public class Launcher extends SubsystemBase {
       status = launcherMotor.getConfigurator().apply(cfgLaunch);
       if (status.isOK()) break;
     }
-    if (!status.isOK()) {
-      System.out.println("Could not configure device. Error: " + status.toString());
-    }
   }
 
    // ========================= TURRET POSITION CONTROL METHODS ========================= //
    
+  public Command setTurretVoltage(double speed){
+    return Commands.run(() -> {
+      turretMotor.set(speed);
+    }, this);
+  }
+  
   /**
    * Sets the pivot to a specific position in rotations
    * @param mechRotations Target position in mechanism rotations
@@ -308,6 +315,12 @@ public class Launcher extends SubsystemBase {
 
   // ==================== COMMAND FACTORY METHODS ====================
   
+  public Command setHoodVoltage(double speed){
+    return Commands.run(() -> {
+      hoodMotor.set(speed);
+    }, this);
+  }
+
   /**
    * Command to move pivot to stowed position
    * @return Command that stows the intake
@@ -348,6 +361,35 @@ public class Launcher extends SubsystemBase {
     }, this);
   }
   
+
+  public Command setLauncherVoltage(double speed){
+    return Commands.run(() -> {
+      launcherMotor.set(speed);
+    }, this);
+  }
+
+  // ==================== LAUNCH FROM TOWER COMMAND ====================
+
+  /**
+   * LaunchFromTower launcher command.
+   * Runs the launcher motor at a fixed voltage for tower shooting.
+   *   - Launcher motor (CAN 8): +0.2 V  (temp test value; final value: +6 V)
+   *
+   * Designed to be used in parallel with Spindexer.launchFromTower().
+   * Runs while the button is held; launcher stops when the command ends.
+   *
+   * @return Command that drives the launcher motor for tower shooting
+   */
+  public Command launchFromTowerLauncher() {
+    return Commands.run(() -> {
+      // Launcher: TurretConstants.flywheelDutyCycleOut (temp: +0.2 | final: +1.0)
+      launcherMotor.setControl(m_dutyCycleOut.withOutput(TurretConstants.flywheelDutyCycleOut));
+    }, this).finallyDo(() -> {
+      // Stop launcher when command ends (button released)
+      launcherMotor.setControl(m_brake);
+    });
+  }
+
   /**
    * Command to run intake collection at intake speed
    * @return Command that runs collection motor
@@ -421,33 +463,37 @@ public class Launcher extends SubsystemBase {
 
   @Override
   public void periodic() {
-    // Update SmartDashboard with telemetry
-    String prefix = LauncherConstants.kSmartDashboardPrefix;
-    
-    SmartDashboard.putNumber(prefix + LauncherConstants.kTurretPositionKey, getTurretPosition());
+    // Update mechanism visualization every loop (needed for accurate animation)
+    m_mechanisms.update(hoodMotor.getPosition(), hoodMotor.getVelocity());
+    m_mechanisms.update(turretMotor.getPosition(), turretMotor.getVelocity());
+
+    // Throttle SmartDashboard updates to every 5 loops (~100ms) to reduce NT memory pressure
+    periodicCounter++;
+    if (periodicCounter < 5) return;
+    periodicCounter = 0;
+
+    //String prefix = LauncherConstants.kSmartDashboardPrefix;
+   /*
+   
+   SmartDashboard.putNumber(prefix + LauncherConstants.kTurretPositionKey, getTurretPosition());
     SmartDashboard.putNumber(prefix + LauncherConstants.kTurretTargetKey, lastTurretAngle);
     SmartDashboard.putNumber(prefix + LauncherConstants.kTurretErrorKey, getTurretError());
     SmartDashboard.putBoolean(prefix + LauncherConstants.kTurretAtTargetKey, isTurretAtTarget());
-    
     SmartDashboard.putNumber(prefix + LauncherConstants.kHoodPositionKey, getHoodPosition());
     SmartDashboard.putNumber(prefix + LauncherConstants.kHoodTargetKey, lastHoodAngle);
     SmartDashboard.putNumber(prefix + LauncherConstants.kHoodErrorKey, getHoodError());
     SmartDashboard.putBoolean(prefix + LauncherConstants.kHoodAtTargetKey, isHoodAtTarget());
-    
     SmartDashboard.putNumber(prefix + LauncherConstants.kCollectVelocityKey, getCollectVelocity());
     SmartDashboard.putNumber(prefix + LauncherConstants.kCollectCurrentKey, getCollectCurrent());
     SmartDashboard.putNumber(prefix + LauncherConstants.kPivotCurrentKey, getHoodCurrent());
-    
     SmartDashboard.putNumber(prefix + LauncherConstants.kTurretTempKey, getTurretTemperature());
     SmartDashboard.putNumber(prefix + LauncherConstants.kHoodTempKey, getHoodTemperature());
     SmartDashboard.putNumber(prefix + LauncherConstants.kCollectTempKey, getCollectTemperature());
-    
-    // Status string
-    String status = String.format("Hood: %.2f | Turret: %.2f | Launcher: %.1f RPS", getHoodPosition(), getTurretPosition(), getCollectVelocity());
-    SmartDashboard.putString(prefix + LauncherConstants.kStatusKey, status);
-    
-    // Update mechanism visualization
-    m_mechanisms.update(hoodMotor.getPosition(), hoodMotor.getVelocity());
-    m_mechanisms.update(turretMotor.getPosition(), turretMotor.getVelocity());
+    SmartDashboard.putString(prefix + LauncherConstants.kStatusKey,
+        String.format("Hood: %.2f | Turret: %.2f | Launcher: %.1f RPS",
+            getHoodPosition(), getTurretPosition(), getCollectVelocity()));
+            
+            
+    */
   }
 }

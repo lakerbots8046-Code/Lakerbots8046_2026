@@ -59,7 +59,6 @@ public class TrackAprilTagCommand extends Command {
     
     @Override
     public void initialize() {
-        System.out.println("TrackAprilTagCommand: Starting AprilTag tracking");
         pidController.reset();
         isLockedOn = false;
         isWrappingAround = false;
@@ -148,10 +147,8 @@ public class TrackAprilTagCommand extends Command {
         // Calculate wrap-around target (opposite side)
         if (turretSubsystem.isNearMaxLimit()) {
             wrapAroundTarget = -TurretConstants.kWrapAroundTargetOffset;
-            System.out.println("TrackAprilTagCommand: Wrapping around to negative side (target: " + wrapAroundTarget + "°)");
         } else {
             wrapAroundTarget = TurretConstants.kWrapAroundTargetOffset;
-            System.out.println("TrackAprilTagCommand: Wrapping around to positive side (target: " + wrapAroundTarget + "°)");
         }
         
         SmartDashboard.putString(TurretConstants.kSmartDashboardPrefix + TurretConstants.kStatusKey, 
@@ -168,7 +165,6 @@ public class TrackAprilTagCommand extends Command {
         if (turretSubsystem.atAngle(wrapAroundTarget, TurretConstants.kPositionToleranceDegrees)) {
             isWrappingAround = false;
             pidController.reset();
-            System.out.println("TrackAprilTagCommand: Wrap-around complete at " + currentAngle + "°");
             return;
         }
         
@@ -190,13 +186,8 @@ public class TrackAprilTagCommand extends Command {
         
         SmartDashboard.putBoolean(TurretConstants.kSmartDashboardPrefix + TurretConstants.kTrackingLockedKey, false);
         
-        if (interrupted) {
-            System.out.println("TrackAprilTagCommand: Interrupted");
-            SmartDashboard.putString(TurretConstants.kSmartDashboardPrefix + TurretConstants.kStatusKey, 
-                                    "Tracking: Stopped");
-        } else {
-            System.out.println("TrackAprilTagCommand: Ended");
-        }
+        SmartDashboard.putString(TurretConstants.kSmartDashboardPrefix + TurretConstants.kStatusKey, 
+                                "Tracking: Stopped");
     }
     
     @Override

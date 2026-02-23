@@ -46,7 +46,17 @@ public class Mechanisms {
    MechanismLigament2d side8 = side7.append(new MechanismLigament2d("side8", 0.15307, 45, 6, new Color8Bit(Color.kAliceBlue)));
 
     /**
-     * Runs the mech2d widget in GUI.
+     * Constructor — registers the Mechanism2d with SmartDashboard once.
+     * Calling putData() every loop was flooding the NT queue; this ensures
+     * it is only registered a single time at startup.
+     */
+    public Mechanisms() {
+        SmartDashboard.putData("mech2d", mech); // Register once at construction, not every loop
+    }
+
+    /**
+     * Updates the mech2d ligament angles/lengths.
+     * Call this at a throttled rate (e.g. every 5 loops) to reduce NT traffic.
      *
      * This utilizes GUI to simulate and display a TalonFX and exists to allow users to test and understand
      * features of our products in simulation using our examples out of the box. Users may modify to have a
@@ -55,6 +65,6 @@ public class Mechanisms {
     public void update(StatusSignal<Angle> position, StatusSignal<AngularVelocity> velocity) {
         VelocityMech.setLength(velocity.getValue().in(RotationsPerSecond)/120); // Divide by 120 to scale motion to fit in the window
         arm.setAngle(position.getValue().in(Rotations) * 360);
-        SmartDashboard.putData("mech2d", mech); // Creates mech2d in SmartDashboard
+        // putData() removed from here — registered once in constructor instead
     }
 }

@@ -27,27 +27,19 @@ public class AimTurretAuto extends Command {
     
     @Override
     public void initialize() {
-        System.out.println("AimTurretAuto: Starting - Spinning turret for " + SPIN_DURATION + " seconds");
         turretSubsystem.startSpin();
         timer.restart();
     }
     
     @Override
     public void execute() {
-        // Turret continues spinning
-        double elapsed = timer.get();
-        System.out.println("AimTurretAuto: Spinning - " + String.format("%.2f", elapsed) + "s elapsed");
+        // Turret continues spinning until timer elapses
     }
     
     @Override
     public void end(boolean interrupted) {
         turretSubsystem.stopSpin();
         timer.stop();
-        if (interrupted) {
-            System.out.println("AimTurretAuto: Interrupted after " + String.format("%.2f", timer.get()) + " seconds");
-        } else {
-            System.out.println("AimTurretAuto: Completed - Spun for " + SPIN_DURATION + " seconds");
-        }
     }
     
     @Override

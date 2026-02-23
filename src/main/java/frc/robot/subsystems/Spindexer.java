@@ -10,15 +10,17 @@ import com.ctre.phoenix6.StatusCode;
 import com.ctre.phoenix6.controls.NeutralOut;
 import com.ctre.phoenix6.controls.VelocityTorqueCurrentFOC;
 import com.ctre.phoenix6.controls.VelocityVoltage;
+import com.ctre.phoenix6.controls.DutyCycleOut;
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
 import com.ctre.phoenix6.controls.MotionMagicVoltage;
 import com.ctre.phoenix6.hardware.TalonFX;
 
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+//import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants.SpindexerConstants;
+import frc.robot.Constants.TurretConstants;
 
 /**
  * Subsystem for the Launcher mechanism, which includes:
@@ -39,11 +41,13 @@ public class Spindexer extends SubsystemBase {
     private final VelocityVoltage m_VelocityVoltage = new VelocityVoltage(0).withSlot(0);
     private final VelocityTorqueCurrentFOC m_velocityTorque = new VelocityTorqueCurrentFOC(0).withSlot(0);
     private final NeutralOut m_brake = new NeutralOut();
+    private final DutyCycleOut m_dutyCycleOut = new DutyCycleOut(0);
 
   // State tracking
     private double lastSpindexerVelocity = 0; 
     private double lastFlappyWheelVelocity = 0;
-    private double lastFeederVelocity = 0;   
+    private double lastFeederVelocity = 0;
+    private int periodicCounter = 0; // Throttle SmartDashboard updates to reduce NT load
   
   public Spindexer() {
     // Initialize Motors using constants
@@ -129,9 +133,6 @@ public class Spindexer extends SubsystemBase {
       status = feederMotor.getConfigurator().apply(cfgFeeder);
       if (status.isOK()) break;
     }
-    if (!status.isOK()) {
-      System.out.println("Could not configure device. Error: " + status.toString());
-    }
   }
 
 
@@ -150,6 +151,7 @@ public class Spindexer extends SubsystemBase {
    */
   public void stopSpindexer() {
     spindexerMotor.setControl(m_brake);
+    // this is not correct this sets the control mode to brake but we need to set the voltage or Speed to Zero
   }
   
   /**
@@ -159,9 +161,18 @@ public class Spindexer extends SubsystemBase {
   public double getSpindexerVelocity() {
     return spindexerMotor.getVelocity().getValueAsDouble();
   }
+//TO DO --- create open loop voltage contgrol methods and commands for initial testing
+// - 
+//public void setSpindexerVoltage(m_VelocityVoltage.w
+
 
   // ==================== COMMAND FACTORY METHODS ====================
   
+  public Command setSpindexerVoltage(double speed){
+    return Commands.run(() -> {
+      spindexerMotor.set(speed);
+    }, this);
+  }
   
   /**
    * Command to run intake collection at intake speed
@@ -216,6 +227,12 @@ public class Spindexer extends SubsystemBase {
 
   // ==================== COMMAND FACTORY METHODS ====================
   
+  public Command setFlappyWheelVoltage(double speed){
+    return Commands.run(() -> {
+      flappyWheelFeederMotor.set(speed);
+    }, this);
+  }
+
   /**
    * Command to run intake collection at intake speed
    * @return Command that runs collection motor
@@ -269,6 +286,12 @@ public class Spindexer extends SubsystemBase {
 
   // ==================== COMMAND FACTORY METHODS ====================
   
+  public Command setFeederVoltage(double speed){
+    return Commands.run(() -> {
+      feederMotor.set(speed);
+    }, this);
+  }
+
   /**
    * Command to run intake collection at intake speed
    * @return Command that runs collection motor
@@ -347,6 +370,36 @@ public class Spindexer extends SubsystemBase {
 
   
 
+  // ==================== LAUNCH FROM TOWER COMMAND ====================
+
+  /**
+   * LaunchFromTower shoot command.
+   * Runs all three Spindexer-side motors at fixed voltages for tower shooting.
+   *   - Spindexer motor (CAN 4):        -0.2 V  (temp test value)
+   *   - StarFeeder / FlappyWheel (CAN 5): +0.2 V  (temp test value)
+   *   - Feeder motor (CAN 6):            +0.2 V  (temp test value)
+   *
+   * Designed to be used in parallel with Launcher.launchFromTowerLauncher().
+   * Runs while the button is held; all motors stop when the command ends.
+   *
+   * @return Command that drives the three feed-side motors for tower shooting
+   */
+  public Command launchFromTower() {
+    return Commands.run(() -> {
+      // Spindexer: TurretConstants.spindexerDutyCycleOut (temp: -0.2 | final: -1.0)
+      spindexerMotor.setControl(m_dutyCycleOut.withOutput(TurretConstants.spindexerDutyCycleOut));
+      // StarFeeder (FlappyWheel): TurretConstants.starFeederDutyCycleOut (temp: +0.2 | final: +1.0)
+      flappyWheelFeederMotor.setControl(m_dutyCycleOut.withOutput(TurretConstants.starFeederDutyCycleOut));
+      // Feeder: TurretConstants.feederDutyCycleOut (temp: +0.2 | final: +0.5)
+      feederMotor.setControl(m_dutyCycleOut.withOutput(TurretConstants.feederDutyCycleOut));
+    }, this).finallyDo(() -> {
+      // Stop all three motors when command ends (button released)
+      spindexerMotor.setControl(m_brake);
+      flappyWheelFeederMotor.setControl(m_brake);
+      feederMotor.setControl(m_brake);
+    });
+  }
+
   /**
    * Example command factory method.
    *
@@ -374,25 +427,28 @@ public class Spindexer extends SubsystemBase {
 
   @Override
   public void periodic() {
-    // Update SmartDashboard with telemetry
+    // Throttle SmartDashboard updates to every 5 loops (~100ms) to reduce NT memory pressure
+    periodicCounter++;
+    if (periodicCounter < 5) return;
+    periodicCounter = 0;
+
+    /*
     String prefix = SpindexerConstants.kSmartDashboardPrefix;
-    
     SmartDashboard.putNumber(prefix + SpindexerConstants.kSpindexerVelocityKey, getSpindexerVelocity());
     SmartDashboard.putNumber(prefix + SpindexerConstants.kSpindexerCurrentKey, getSpindexerCurrent());
-   
     SmartDashboard.putNumber(prefix + SpindexerConstants.kFlappyWheelVelocityKey, getFlappyWheelVelocity());
     SmartDashboard.putNumber(prefix + SpindexerConstants.kFlappyWheelCurrentKey, getFlappyWheelCurrent());
-    
     SmartDashboard.putNumber(prefix + SpindexerConstants.kFeederVelocityKey, getFeederVelocity());
     SmartDashboard.putNumber(prefix + SpindexerConstants.kFeederCurrentKey, getFeederCurrent());
-    
     SmartDashboard.putNumber(prefix + SpindexerConstants.kFeederTempKey, getFeederTemperature());
     SmartDashboard.putNumber(prefix + SpindexerConstants.kFlappyWheelTempKey, getFlappyWheelTemperature());
     SmartDashboard.putNumber(prefix + SpindexerConstants.kSpindexerTempKey, getSpindexerTemperature());
-    
-    // Status string
-    String status = String.format("Spindexer: %.2f | FlappyWheel: %.1f | Feeder: %.1f RPS", getSpindexerVelocity(), getFlappyWheelVelocity(), getFeederVelocity());
-    SmartDashboard.putString(prefix + SpindexerConstants.kStatusKey, status);
-  }
+    SmartDashboard.putString(prefix + SpindexerConstants.kStatusKey,
+        String.format("Spindexer: %.2f | FlappyWheel: %.1f | Feeder: %.1f RPS",
+            getSpindexerVelocity(), getFlappyWheelVelocity(), getFeederVelocity()));
+  
+  */
+          }
+
 }
 

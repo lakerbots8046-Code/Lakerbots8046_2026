@@ -149,6 +149,13 @@ public class Constants {
         public static final double kWrapAroundSpeed = 0.3; // Speed during wrap-around rotation
         public static final double kWrapAroundTargetOffset = 170.0; // Target angle after wrap (opposite side)
         
+        // Launch from Tower Command duty cycle outputs (range: -1.0 to +1.0)
+        // Temp test values — update to final values after on-robot testing
+        public static final double spindexerDutyCycleOut = -0.4;  // Spindexer (CAN 4): temp -0.2 | final: -1.0
+        public static final double starFeederDutyCycleOut = -0.1;  // StarFeeder (CAN 5): temp -0.2 | final: -1.0
+        public static final double feederDutyCycleOut = 0.5;     // Feeder (CAN 6):     temp -0.2 | final: -0.5
+        public static final double flywheelDutyCycleOut = -0.65;    // Launcher (CAN 8):   temp -0.2 | final: -1.0
+
         // SmartDashboard Keys
         public static final String kSmartDashboardPrefix = "Turret/";
         public static final String kStartSpinKey = "Start Spin";
@@ -170,17 +177,19 @@ public class Constants {
 
     public static class IntakeConstants {
         // Motor CAN IDs
-        public static final int kIntakeCollectMotorID = 3;
+        public static final int kIntakeRollersMotorID = 3;
         public static final int kIntakePivotMotorID = 2;
         public static final String kCANBusName = "rio";
         
         // Intake Pivot Position Setpoints (in rotations)
-        public static final double kPivotStowedPosition = 0.0;      // Fully retracted/stowed
-        public static final double kPivotCollectPosition = 0.25;    // Extended for collecting game pieces
-        public static final double kPivotScoreHighPosition = 0.15;  // Position for high scoring
-        public static final double kPivotScoreLowPosition = 0.05;   // Position for low scoring
+        public static final double kPivotStowedPosition = 0.0;           // Fully retracted/stowed
+        public static final double kPivotCollectPosition = 0.25;         // Extended for collecting game pieces
+        public static final double kPivotScoreHighPosition = 0.15;       // Position for high scoring
+        public static final double kPivotScoreLowPosition = 0.05;        // Position for low scoring
+        public static final double kPivotDeployCollectPosition = -1.37; // Deploy position for intake_deploy_collect
+        public static final double kPivotHomePosition = 0.0;            // Retract/home position after collecting
         
-        // Intake Collection Velocities (in rotations per second)
+        // Intake Collection Velocities (in rotations per second
         public static final double kCollectIntakeVelocity = 30.0;   // Speed when intaking game pieces
         public static final double kCollectOuttakeVelocity = -20.0; // Speed when ejecting game pieces
         public static final double kCollectHoldVelocity = 5.0;      // Low speed to hold game piece
@@ -204,6 +213,16 @@ public class Constants {
         public static final String kPivotTempKey = "Pivot Temp (C)";
         public static final String kCollectTempKey = "Collect Temp (C)";
         public static final String kStatusKey = "Status";
+        public static final double kRollersIntakeVelocity = -75.0;  // Speed when intaking game pieces (rps) — negative = correct intake direction
+        public static final double kRollersOuttakeVelocity = -20.0; // Speed when ejecting game pieces (rps)
+        public static final double kRollersHoldVelocity = 5.0;      // Low speed to hold game piece (rps)
+        public static String kRollersVelocityKey;
+        public static String kRollersCurrentKey;
+        public static String kRollersTempKey;
+
+        // Manual pivot control speed (duty cycle, 0.0–1.0)
+        // X button lowers at -kPivotManualSpeed, Y button raises at +kPivotManualSpeed
+        public static final double kPivotManualSpeed = 0.1; // 10% — reduced to prevent slamming into limits
     }
     
     public static class Vision {

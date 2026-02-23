@@ -33,7 +33,6 @@ public class TurretSubsystem extends SubsystemBase {
         // Initialize dashboard controls
         initializeDashboard();
         
-        System.out.println("Turret subsystem initialized on CAN ID " + TurretConstants.kTurretMotorID + " (" + TurretConstants.kCANBusName + " bus)");
     }
     
     /**
@@ -57,15 +56,19 @@ public class TurretSubsystem extends SubsystemBase {
         SmartDashboard.putString(prefix + TurretConstants.kStatusKey, "Stopped");
     }
     
+    // Loop counter for throttling SmartDashboard updates
+    private int periodicCounter = 0;
+
     @Override
     public void periodic() {
-        // Check dashboard buttons
+        // Check dashboard buttons and apply motor speed every loop
         checkDashboardControls();
-        
-        // Apply motor speed
         turretMotor.set(targetSpeed);
-        
-        // Update dashboard status
+
+        // Throttle SmartDashboard updates to every 5 loops (~100ms)
+        periodicCounter++;
+        if (periodicCounter < 5) return;
+        periodicCounter = 0;
         updateDashboard();
     }
     
@@ -130,7 +133,6 @@ public class TurretSubsystem extends SubsystemBase {
         double speed = SmartDashboard.getNumber(prefix + TurretConstants.kSpinSpeedKey, TurretConstants.kDefaultSpinSpeed);
         targetSpeed = Math.max(TurretConstants.kMinSpinSpeed, Math.min(TurretConstants.kMaxSpinSpeed, speed));
         isSpinning = true;
-        System.out.println("Turret: Started spinning at " + (targetSpeed * 100) + "%");
     }
     
     /**
@@ -139,7 +141,6 @@ public class TurretSubsystem extends SubsystemBase {
     public void stopSpin() {
         targetSpeed = 0.0;
         isSpinning = false;
-        System.out.println("Turret: Stopped spinning");
     }
     
     /**
@@ -177,7 +178,6 @@ public class TurretSubsystem extends SubsystemBase {
         targetSpeed = 0.0;
         isSpinning = false;
         turretMotor.set(0.0);
-        System.out.println("Turret: EMERGENCY STOP");
     }
     
     /**
@@ -206,7 +206,6 @@ public class TurretSubsystem extends SubsystemBase {
      */
     public void resetEncoder() {
         turretMotor.setPosition(0);
-        System.out.println("Turret: Encoder reset to 0");
     }
     
     /**

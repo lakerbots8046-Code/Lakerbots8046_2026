@@ -2,7 +2,7 @@ package frc.robot.commands;
 
 import com.pathplanner.lib.auto.AutoBuilder;
 import com.pathplanner.lib.path.PathConstraints;
-import com.pathplanner.lib.path.PathPlannerPath;
+//import com.pathplanner.lib.path.PathPlannerPath;
 
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
@@ -14,7 +14,7 @@ import frc.robot.Constants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.VisionSubsystem;
 
-import java.util.List;
+//import java.util.List;
 import java.util.Optional;
 
 /**
@@ -65,7 +65,6 @@ public class DriveToAprilTagWithPathPlanner extends Command {
     
     @Override
     public void initialize() {
-        System.out.println("DriveToAprilTagWithPathPlanner: Starting to drive to tag " + targetTagId);
         SmartDashboard.putString("PathPlanner/Status", "Initializing");
         SmartDashboard.putNumber("PathPlanner/Target Tag", targetTagId);
         
@@ -129,9 +128,6 @@ public class DriveToAprilTagWithPathPlanner extends Command {
             SmartDashboard.putNumber("PathPlanner/Target Y", targetPose.getY());
             SmartDashboard.putNumber("PathPlanner/Target Rotation", targetPose.getRotation().getDegrees());
             
-            System.out.println("DriveToAprilTagWithPathPlanner: Path generated from " + 
-                currentPose + " to " + targetPose);
-            
         } catch (Exception e) {
             System.err.println("DriveToAprilTagWithPathPlanner: Failed to generate path: " + e.getMessage());
             SmartDashboard.putString("PathPlanner/Status", "Path Generation Failed");
@@ -164,13 +160,7 @@ public class DriveToAprilTagWithPathPlanner extends Command {
             pathFollowingCommand.cancel();
         }
         
-        if (interrupted) {
-            System.out.println("DriveToAprilTagWithPathPlanner: Command interrupted");
-            SmartDashboard.putString("PathPlanner/Status", "Interrupted");
-        } else {
-            System.out.println("DriveToAprilTagWithPathPlanner: Reached target");
-            SmartDashboard.putString("PathPlanner/Status", "Complete");
-        }
+        SmartDashboard.putString("PathPlanner/Status", interrupted ? "Interrupted" : "Complete");
     }
     
     @Override
