@@ -11,6 +11,8 @@ import com.ctre.phoenix6.swerve.SwerveRequest;
 
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
@@ -28,14 +30,19 @@ import frc.robot.subsystems.Intake;
 import frc.robot.subsystems.Launcher;
 import frc.robot.subsystems.Spindexer;
 import frc.robot.commands.AimTurretAuto;
+import frc.robot.commands.CenterOnAprilTagCommand;
 import frc.robot.commands.DriveToAprilTag;
 import frc.robot.commands.DriveToAprilTagWithPathPlanner;
-//import frc.robot.commands.TrackAprilTagCommand;
+import frc.robot.commands.ShootOnMoveCommand;
+import frc.robot.commands.TrackAprilTagCommand;
+import frc.robot.util.ShootingArcManager;
 
 import com.pathplanner.lib.auto.AutoBuilder;
 import com.pathplanner.lib.auto.NamedCommands;
+import com.pathplanner.lib.path.PathConstraints;
 
 import java.util.Optional;
+import java.util.Set;
 
 //import org.photonvision.EstimatedRobotPose;
 
@@ -259,10 +266,21 @@ public class RobotContainer {
         // Uses no-subsystem command so it does NOT interrupt the pivot control.
         joystick.rightBumper().onTrue(intake.toggleRollers());
 
-        // Right trigger: Drive to selected tag using basic PID (fallback/simple mode)
+        // Left trigger: Center on selected tag using live camera data (vision-based centering).
+        // Uses whichever camera (BL or BR) currently has the best view of the tag.
+        // Strafes to make yaw=0 and drives backward to reach target distance.
+        joystick.leftTrigger(0.5).whileTrue(
+            new CenterOnAprilTagCommand(drivetrain, visionSubsystem)
+        );
+
+        // Right trigger: Drive to selected tag using basic PID (odometry-based, fallback/simple mode)
         joystick.rightTrigger(0.5).whileTrue(
             new DriveToAprilTag(drivetrain, visionSubsystem, visionSubsystem.getSelectedTagId())
         );
+
+        // X button: Drive to Tag 10 (Tower), aim turret, then fire.
+        // Sequence: PathPlanner → aim turret (3s) → launchFromTower (2s)
+        joystick.x().onTrue(buildTag10ShootCommand());
         
         // POV buttons for specific tags using PathPlanner (for quick access to common tags)
         // POV Up (0°): Drive to tag 14 (common scoring position)
@@ -277,60 +295,106 @@ public class RobotContainer {
         // POV Left (270°): Drive to tag 13
         joystick.pov(270).whileTrue(new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, 13));
 
+        // ── Y button: Shoot-on-Arc ────────────────────────────────────────────
+        // Phase 1: PathPlanner drives to the nearest shooting position on the arc
+        //          around the closest tower (alliance-aware, vision-preferred).
+        //          Launcher pre-spins and turret pre-aims during the drive.
+        // Phase 2: Robot slides left/right along the arc with the left joystick X.
+        //          Turret continuously aims using field-relative pose.
+        //          Fires automatically when turret is aimed AND launcher is at speed.
+        // Release Y to stop everything.
+        joystick.y().whileTrue(buildShootOnArcCommand());
+
         drivetrain.registerTelemetry(logger::telemeterize);
     }
     
+    /**
+     * Builds the Tag 10 → aim → shoot sequence command.
+     *
+     * Step 1: PathPlanner drives to a position 2 m in front of Tag 10 on the Tower.
+     *         Tag 10 field position: (12.505, 4.021) facing +X.
+     *         Robot shooting position: (~14.5m, 4.021m) facing the Tower.
+     *
+     * Step 2: TrackAprilTagCommand aims the turret at Tag 10 using vision (3 s timeout).
+     *
+     * Step 3: launchFromTower() fires all motors for 2 seconds.
+     *
+     * Dashboard key: "Tag10Shoot/Status"
+     */
+    private Command buildTag10ShootCommand() {
+        final int TAG_10_ID = 10;
+        final double SHOOT_OFFSET_M = 2.0;   // meters in front of Tag 10
+        final double AIM_TIMEOUT_S  = 3.0;   // max seconds to aim turret
+        final double FIRE_DURATION_S = 2.0;  // seconds to run launchFromTower
+
+        return Commands.sequence(
+            // ── Step 1: Drive to shooting position near Tag 10 ──────────────
+            Commands.runOnce(() ->
+                SmartDashboard.putString("Tag10Shoot/Status", "Step 1: Driving to Tag 10")),
+            new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, TAG_10_ID, SHOOT_OFFSET_M),
+
+            // ── Step 2: Aim turret at Tag 10 using vision ───────────────────
+            Commands.runOnce(() ->
+                SmartDashboard.putString("Tag10Shoot/Status", "Step 2: Aiming Turret")),
+            new TrackAprilTagCommand(turretSubsystem, visionSubsystem, TAG_10_ID)
+                .withTimeout(AIM_TIMEOUT_S),
+
+            // ── Step 3: Fire using launchFromTower ──────────────────────────
+            Commands.runOnce(() ->
+                SmartDashboard.putString("Tag10Shoot/Status", "Step 3: Firing")),
+            Commands.parallel(
+                spindexer.launchFromTower(),
+                launcher.launchFromTowerLauncher()
+            ).withTimeout(FIRE_DURATION_S),
+
+            Commands.runOnce(() ->
+                SmartDashboard.putString("Tag10Shoot/Status", "Complete"))
+        );
+    }
+
     /**
      * Updates the drivetrain's pose estimator with vision measurements.
      * This should be called periodically (e.g., from Robot.robotPeriodic()).
      */
     public void updateVisionMeasurements() {
-        // Process BL camera vision measurement
-        var poseBL = visionSubsystem.getEstimatedGlobalPoseBL();
-        if (poseBL.isPresent()) {
-            var estimatedPose = poseBL.get();
+        // ── Back Facing camera: pose estimation DISABLED for now ─────────────
+        // BF camera is reserved for target tracking/measurements only.
+        // Re-enable this block when BF camera pose estimation is needed.
+        // var poseBF = visionSubsystem.getEstimatedGlobalPoseBF();
+        // if (poseBF.isPresent()) {
+        //     var estimatedPose = poseBF.get();
+        //     Pose2d pose2d = estimatedPose.estimatedPose.toPose2d();
+        //     var stdDevs = estimatedPose.targetsUsed.size() >= 2
+        //         ? Constants.Vision.kMultiTagStdDevs
+        //         : Constants.Vision.kSingleTagStdDevs;
+        //     drivetrain.addVisionMeasurement(pose2d, estimatedPose.timestampSeconds, stdDevs);
+        //     SmartDashboard.putString("Vision/BF/Measurement Status", "Applied");
+        // } else {
+        //     SmartDashboard.putString("Vision/BF/Measurement Status", "No Pose");
+        // }
+        SmartDashboard.putString("Vision/BF/Measurement Status", "Disabled (FF only mode)");
+
+        // ── Front Facing camera: ACTIVE pose estimator ───────────────────────
+        var poseFF = visionSubsystem.getEstimatedGlobalPoseFF();
+        if (poseFF.isPresent()) {
+            var estimatedPose = poseFF.get();
             Pose2d pose2d = estimatedPose.estimatedPose.toPose2d();
-            
-            // Determine standard deviation based on number of tags
-            var stdDevs = estimatedPose.targetsUsed.size() >= 2 
-                ? Constants.Vision.kMultiTagStdDevs 
+
+            // Use tighter std devs for multi-tag, looser for single tag
+            var stdDevs = estimatedPose.targetsUsed.size() >= 2
+                ? Constants.Vision.kMultiTagStdDevs
                 : Constants.Vision.kSingleTagStdDevs;
-            
-            // Add vision measurement to drivetrain
+
+            // Feed FF pose estimate into the drivetrain Kalman filter
             drivetrain.addVisionMeasurement(
                 pose2d,
                 estimatedPose.timestampSeconds,
                 stdDevs
             );
-            
-            // Publish to dashboard for debugging
-            SmartDashboard.putString("Vision/BL/Measurement Status", "Applied");
+
+            SmartDashboard.putString("Vision/FF/Measurement Status", "Applied");
         } else {
-            SmartDashboard.putString("Vision/BL/Measurement Status", "No Pose");
-        }
-        
-        // Process BR camera vision measurement
-        var poseBR = visionSubsystem.getEstimatedGlobalPoseBR();
-        if (poseBR.isPresent()) {
-            var estimatedPose = poseBR.get();
-            Pose2d pose2d = estimatedPose.estimatedPose.toPose2d();
-            
-            // Determine standard deviation based on number of tags
-            var stdDevs = estimatedPose.targetsUsed.size() >= 2 
-                ? Constants.Vision.kMultiTagStdDevs 
-                : Constants.Vision.kSingleTagStdDevs;
-            
-            // Add vision measurement to drivetrain
-            drivetrain.addVisionMeasurement(
-                pose2d,
-                estimatedPose.timestampSeconds,
-                stdDevs
-            );
-            
-            // Publish to dashboard for debugging
-            SmartDashboard.putString("Vision/BR/Measurement Status", "Applied");
-        } else {
-            SmartDashboard.putString("Vision/BR/Measurement Status", "No Pose");
+            SmartDashboard.putString("Vision/FF/Measurement Status", "No Pose");
         }
     }
     
@@ -353,26 +417,26 @@ public class RobotContainer {
      */
     private void updateAprilTagVisualization() {
         // Get detected tag IDs from both cameras
-        int detectedTagBL = visionSubsystem.getDetectedTagIdBL();
-        int detectedTagBR = visionSubsystem.getDetectedTagIdBR();
+        int detectedTagBF = visionSubsystem.getDetectedTagIdBF();
+        int detectedTagFF = visionSubsystem.getDetectedTagIdFF();
         
         // Clear previous tag poses
-        field2d.getObject("Detected Tags BL").setPoses();
-        field2d.getObject("Detected Tags BR").setPoses();
+        field2d.getObject("Detected Tags BF").setPoses();
+        field2d.getObject("Detected Tags FF").setPoses();
         
-        // Add BL camera detected tag
-        if (detectedTagBL > 0 && visionSubsystem.isTargetVisibleBL()) {
-            Optional<Pose2d> tagPose = getAprilTagPose(detectedTagBL);
+        // Add Back Facing camera detected tag
+        if (detectedTagBF > 0 && visionSubsystem.isTargetVisibleBF()) {
+            Optional<Pose2d> tagPose = getAprilTagPose(detectedTagBF);
             if (tagPose.isPresent()) {
-                field2d.getObject("Detected Tags BL").setPose(tagPose.get());
+                field2d.getObject("Detected Tags BF").setPose(tagPose.get());
             }
         }
         
-        // Add BR camera detected tag
-        if (detectedTagBR > 0 && visionSubsystem.isTargetVisibleBR()) {
-            Optional<Pose2d> tagPose = getAprilTagPose(detectedTagBR);
+        // Add Front Facing camera detected tag
+        if (detectedTagFF > 0 && visionSubsystem.isTargetVisibleFF()) {
+            Optional<Pose2d> tagPose = getAprilTagPose(detectedTagFF);
             if (tagPose.isPresent()) {
-                field2d.getObject("Detected Tags BR").setPose(tagPose.get());
+                field2d.getObject("Detected Tags FF").setPose(tagPose.get());
             }
         }
     }
@@ -440,6 +504,158 @@ public class RobotContainer {
     public VisionSubsystem getVisionSubsystem() {
         return visionSubsystem;
     }
+
+    // =========================================================================
+    // Shoot-on-Arc helpers
+    // =========================================================================
+
+    /**
+     * Builds the full shoot-on-arc command sequence bound to the Y button.
+     *
+     * <h3>Phase 1 — Drive to arc (PathPlanner)</h3>
+     * <ul>
+     *   <li>Determines the active tower tag (vision-preferred, then alliance fallback).</li>
+     *   <li>Calculates the nearest shooting position on the arc at
+     *       {@link Constants.ShootingArc#kPreferredShootingDistance} from the tower.</li>
+     *   <li>PathPlanner generates an on-the-fly path and drives there.</li>
+     *   <li>Launcher pre-spins to the distance-based target RPS during the drive.</li>
+     *   <li>Turret pre-aims at the tower during the drive.</li>
+     * </ul>
+     *
+     * <h3>Phase 2 — Shoot on arc (ShootOnMoveCommand)</h3>
+     * <ul>
+     *   <li>Left joystick X slides the robot left/right along the arc.</li>
+     *   <li>Robot heading is locked to face the tower.</li>
+     *   <li>Turret continuously aims using field-relative pose (not camera yaw).</li>
+     *   <li>Fires automatically when turret is aimed AND launcher is at speed.</li>
+     * </ul>
+     *
+     * <p>Releasing the Y button interrupts the sequence and stops all mechanisms.
+     */
+    private Command buildShootOnArcCommand() {
+        // TESTING SPEEDS — slow approach for initial on-robot testing.
+        // Increase Constants.ShootingArc.kApproach* values once behavior is confirmed.
+        PathConstraints constraints = new PathConstraints(
+            Constants.ShootingArc.kApproachMaxVelocity,           // 1.0 m/s (testing)
+            Constants.ShootingArc.kApproachMaxAcceleration,       // 0.75 m/s² (testing)
+            Constants.ShootingArc.kApproachMaxAngularVelocity,    // π/2 rad/s (testing)
+            Constants.ShootingArc.kApproachMaxAngularAcceleration // π/2 rad/s² (testing)
+        );
+
+        return Commands.sequence(
+            // ── Phase 1: Drive to nearest arc position ────────────────────────
+            Commands.runOnce(() -> {
+                SmartDashboard.putString("ShootArc/Status", "Phase 1: Driving to Arc");
+                SmartDashboard.putNumber("ShootArc/Tower Tag ID", getActiveTowerTagId());
+            }),
+            Commands.deadline(
+                // PathPlanner drives to the arc (deadline — ends when path is done)
+                Commands.defer(() -> {
+                    int tagId = getActiveTowerTagId();
+                    var nearestPos = ShootingArcManager.getNearestShootingPose(
+                        drivetrain.getState().Pose, tagId);
+                    SmartDashboard.putNumber("ShootArc/Target X", nearestPos.getX());
+                    SmartDashboard.putNumber("ShootArc/Target Y", nearestPos.getY());
+                    return AutoBuilder.pathfindToPose(nearestPos, constraints, 0.0);
+                }, Set.of(drivetrain)),
+
+                // Pre-spin flywheel AND pre-aim turret (CAN 7) during drive.
+                // Both are in the Launcher subsystem — combined into one Commands.run()
+                // to avoid a subsystem conflict between two parallel commands.
+                Commands.run(() -> {
+                    int tagId = getActiveTowerTagId();
+                    var tower = ShootingArcManager.getTowerCenter(tagId);
+                    var robotPose = drivetrain.getState().Pose;
+                    double dist = ShootingArcManager.calculateDistance(robotPose, tower);
+
+                    // Pre-spin flywheel to distance-based target RPS
+                    launcher.setCollectVelocity(ShootingArcManager.calculateLauncherRPS(dist));
+
+                    // Pre-aim turret using Motion Magic (raw motor rotations)
+                    double targetAngleDeg = ShootingArcManager.calculateTurretAngle(robotPose, tower);
+                    double targetRaw = targetAngleDeg * Constants.TurretConstants.kRotationsPerDegree;
+                    // Clamp to physical limits before sending to motor
+                    targetRaw = Math.max(-Constants.TurretConstants.kPhysicalLimitRotations,
+                                Math.min( Constants.TurretConstants.kPhysicalLimitRotations, targetRaw));
+                    launcher.setTurretPosition(targetRaw);
+                }, launcher)
+            ),
+
+            // ── Phase 2: Shoot on arc ─────────────────────────────────────────
+            Commands.runOnce(() ->
+                SmartDashboard.putString("ShootArc/Status", "Phase 2: Shooting on Arc")),
+            new ShootOnMoveCommand(
+                drivetrain,
+                launcher,    // turret (CAN 7) + flywheel (CAN 8) + hood (CAN 9)
+                spindexer,
+                this::getActiveTowerTagId,
+                () -> -joystick.getLeftX()   // negative = right stick = clockwise arc
+            )
+        )
+        // ── Safety net: stop all motors when Y is released at ANY point ───────
+        // ShootOnMoveCommand.end() handles Phase 2 cleanup correctly.
+        // This finallyDo() covers Phase 1 interruption (PathPlanner + pre-spin
+        // have no built-in cleanup) and is harmless if called after Phase 2.
+        .finallyDo(() -> {
+            launcher.stopTurretDirect();
+            launcher.stopLauncher();
+            spindexer.stopFeedMotorsDirect();
+            drivetrain.setControl(new SwerveRequest.Idle());
+            SmartDashboard.putBoolean("ShootArc/Firing", false);
+            SmartDashboard.putString("ShootArc/Status", "Stopped (Y released)");
+        });
+    }
+
+    /**
+     * Returns the best tower tag ID to use for shooting.
+     *
+     * <p>Priority:
+     * <ol>
+     *   <li>Any tower tag currently visible to either camera (most accurate).</li>
+     *   <li>Alliance-based primary tag from {@link DriverStation#getAlliance()}.</li>
+     *   <li>Red primary tag (Tag 10) as final fallback.</li>
+     * </ol>
+     */
+    private int getActiveTowerTagId() {
+        // 1. Prefer a tag that is currently visible
+        int visibleTag = getVisibleTowerTag();
+        if (visibleTag > 0) return visibleTag;
+
+        // 2. Fall back to alliance-based selection
+        var alliance = DriverStation.getAlliance();
+        if (alliance.isPresent() && alliance.get() == Alliance.Blue) {
+            return Constants.ShootingArc.kBluePrimaryTagId;
+        }
+        return Constants.ShootingArc.kRedPrimaryTagId;
+    }
+
+    /**
+     * Scans both cameras for any currently-visible tower tag.
+     *
+     * @return The first tower tag ID found, or {@code -1} if none are visible.
+     */
+    private int getVisibleTowerTag() {
+        // All tower tag IDs across both alliances
+        int[] allTowerTags = {9, 10, 11, 19, 20, 21};
+
+        // Check Back-Facing camera first
+        int bfTag = visionSubsystem.getDetectedTagIdBF();
+        for (int tag : allTowerTags) {
+            if (tag == bfTag) return tag;
+        }
+
+        // Check Front-Facing camera
+        int ffTag = visionSubsystem.getDetectedTagIdFF();
+        for (int tag : allTowerTags) {
+            if (tag == ffTag) return tag;
+        }
+
+        return -1; // No tower tag visible
+    }
+
+    // =========================================================================
+    // Getters
+    // =========================================================================
 
     /**
      * Gets the selected autonomous command from the chooser.

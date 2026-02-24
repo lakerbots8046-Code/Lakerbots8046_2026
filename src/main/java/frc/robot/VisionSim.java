@@ -57,8 +57,8 @@ public class VisionSim {
             // targets.
             cameraSim = new PhotonCameraSim(cam_in, cameraProp);
             // Add the simulated camera to view the targets on this simulated field.
-            // Using BL camera transform for simulation
-            visionSim.addCamera(cameraSim, kRobotToCamBL);
+            // Using Back Facing camera transform for simulation
+            visionSim.addCamera(cameraSim, kRobotToCamBF);
 
             cameraSim.enableDrawWireframe(true);
         }

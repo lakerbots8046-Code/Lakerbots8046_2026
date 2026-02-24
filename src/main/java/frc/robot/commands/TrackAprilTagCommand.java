@@ -69,7 +69,8 @@ public class TrackAprilTagCommand extends Command {
     
     @Override
     public void execute() {
-        // Determine which tag to track
+        // Determine which tag to track (used for reference; VisionSubsystem filters internally)
+        @SuppressWarnings("unused")
         int tagToTrack = targetTagId == -1 ? visionSubsystem.getSelectedTagId() : targetTagId;
         
         // Check if we're currently wrapping around
@@ -78,14 +79,8 @@ public class TrackAprilTagCommand extends Command {
             return;
         }
         
-        // Get vision data from both cameras
-        boolean targetVisibleBL = visionSubsystem.isTargetVisibleBL() && 
-                                 visionSubsystem.getDetectedTagIdBL() == tagToTrack;
-        boolean targetVisibleBR = visionSubsystem.isTargetVisibleBR() && 
-                                 visionSubsystem.getDetectedTagIdBR() == tagToTrack;
-        
-        // If target is not visible, stop tracking
-        if (!targetVisibleBL && !targetVisibleBR) {
+        // If neither camera sees the target, stop tracking
+        if (!visionSubsystem.isAnyTargetVisible()) {
             turretSubsystem.setSpeed(0.0);
             isLockedOn = false;
             SmartDashboard.putBoolean(TurretConstants.kSmartDashboardPrefix + TurretConstants.kTrackingLockedKey, false);
@@ -94,8 +89,10 @@ public class TrackAprilTagCommand extends Command {
             return;
         }
         
-        // Get target yaw (prefer BL camera, use BR as backup)
-        double targetYaw = targetVisibleBL ? visionSubsystem.getTargetYawBL() : visionSubsystem.getTargetYawBR();
+        // Get target yaw from the best available camera.
+        // Priority: camera with larger target area (closer/more confident).
+        // Automatically falls back to whichever single camera still sees the tag.
+        double targetYaw = visionSubsystem.getBestTargetYaw();
         
         // Calculate desired turret angle
         // The turret needs to rotate to align with the target
@@ -132,8 +129,13 @@ public class TrackAprilTagCommand extends Command {
         SmartDashboard.putNumber(TurretConstants.kSmartDashboardPrefix + TurretConstants.kTrackingErrorKey, targetYaw);
         SmartDashboard.putNumber(TurretConstants.kSmartDashboardPrefix + TurretConstants.kCurrentAngleKey, currentAngle);
         
-        String status = isLockedOn ? "Tracking: LOCKED" : String.format("Tracking: Error %.1f°", targetYaw);
+        // Report active camera and lock status to dashboard
+        String activeCamera = visionSubsystem.getActiveCameraName();
+        String status = isLockedOn
+            ? "Tracking: LOCKED [" + activeCamera + "]"
+            : String.format("Tracking: Error %.1f° [%s]", targetYaw, activeCamera);
         SmartDashboard.putString(TurretConstants.kSmartDashboardPrefix + TurretConstants.kStatusKey, status);
+        SmartDashboard.putString(TurretConstants.kSmartDashboardPrefix + "Active Camera", activeCamera);
     }
     
     /**

@@ -12,7 +12,7 @@ import frc.robot.Constants.TurretConstants;
 
 /**
  * Turret subsystem for aiming and positioning.
- * Provides dashboard controls to start/stop spinning the turret motor.
+ * Provides dashboard controls  start/stop spinning the turret motor.
  * Also supports position control for autonomous aiming.
  */
 public class TurretSubsystem extends SubsystemBase {
@@ -231,58 +231,52 @@ public class TurretSubsystem extends SubsystemBase {
     }
     
     /**
-     * Check if current angle is within rotation limits
+     * Check if current angle is within the physical rotation limits (±18°).
      * 
      * @return true if within limits
      */
     public boolean isWithinLimits() {
         double currentAngle = getAngle();
-        return currentAngle >= TurretConstants.kMinRotationDegrees && 
+        return currentAngle >= TurretConstants.kMinRotationDegrees &&
                currentAngle <= TurretConstants.kMaxRotationDegrees;
     }
     
     /**
-     * Check if current angle is near the minimum limit
+     * Check if current angle is near the minimum limit (within kNearLimitBuffer degrees).
+     * Used to trigger a soft stop before hitting the physical hard stop.
      * 
-     * @return true if near minimum limit
+     * @return true if within kNearLimitBuffer degrees of the minimum limit
      */
     public boolean isNearMinLimit() {
         double currentAngle = getAngle();
-        return currentAngle <= (TurretConstants.kMinRotationDegrees + 
-                               (180.0 - TurretConstants.kWrapAroundThreshold));
+        return currentAngle <= (TurretConstants.kMinRotationDegrees + TurretConstants.kNearLimitBuffer);
     }
     
     /**
-     * Check if current angle is near the maximum limit
+     * Check if current angle is near the maximum limit (within kNearLimitBuffer degrees).
+     * Used to trigger a soft stop before hitting the physical hard stop.
      * 
-     * @return true if near maximum limit
+     * @return true if within kNearLimitBuffer degrees of the maximum limit
      */
     public boolean isNearMaxLimit() {
         double currentAngle = getAngle();
-        return currentAngle >= (TurretConstants.kMaxRotationDegrees - 
-                               (180.0 - TurretConstants.kWrapAroundThreshold));
+        return currentAngle >= (TurretConstants.kMaxRotationDegrees - TurretConstants.kNearLimitBuffer);
     }
     
     /**
-     * Check if turret needs to wrap around to continue tracking
-     * This happens when the turret is near a limit and the target is on the opposite side
-     * 
-     * @param targetAngle The desired target angle in degrees
-     * @return true if wrap-around is needed
+     * Wrap-around is DISABLED for this turret.
+     *
+     * The turret has a physical range of only ±18°. There is no room to wrap around.
+     * If the target is outside the ±18° range, the robot must rotate (via drivetrain)
+     * to bring the target within the turret's range.
+     *
+     * This method always returns {@code false}.
+     *
+     * @param targetAngle The desired target angle in degrees (unused)
+     * @return always false — wrap-around is not supported on this turret
      */
     public boolean needsWrapAround(double targetAngle) {
-        double currentAngle = getAngle();
-        
-        // If we're near the max limit and target is on the negative side
-        if (isNearMaxLimit() && targetAngle < 0) {
-            return true;
-        }
-        
-        // If we're near the min limit and target is on the positive side
-        if (isNearMinLimit() && targetAngle > 0) {
-            return true;
-        }
-        
+        // Wrap-around disabled: turret range is only ±18°, no room to wrap.
         return false;
     }
     

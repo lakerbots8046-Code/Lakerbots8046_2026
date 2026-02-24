@@ -11,38 +11,37 @@ import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Pose3d;
 import frc.robot.Constants;
-import java.util.List;
 import java.util.Optional;
 
 public class VisionSubsystem extends SubsystemBase {
-    private final PhotonCamera cameraBL;
-    private final PhotonCamera cameraBR;
-    
+    private final PhotonCamera cameraBF;  // Back Facing camera (formerly BL)
+    private final PhotonCamera cameraFF;  // Front Facing camera (formerly BR)
+
     // Pose estimators for each camera
-    private final PhotonPoseEstimator poseEstimatorBL;
-    private final PhotonPoseEstimator poseEstimatorBR;
-    
+    private final PhotonPoseEstimator poseEstimatorBF;
+    private final PhotonPoseEstimator poseEstimatorFF;
+
     // Latest estimated poses
-    private Optional<EstimatedRobotPose> latestEstimatedPoseBL = Optional.empty();
-    private Optional<EstimatedRobotPose> latestEstimatedPoseBR = Optional.empty();
+    private Optional<EstimatedRobotPose> latestEstimatedPoseBF = Optional.empty();
+    private Optional<EstimatedRobotPose> latestEstimatedPoseFF = Optional.empty();
 
-    // BL Camera data
-    private double targetYawBL = 0.0;
-    private double targetPitchBL = 0.0;
-    private double targetAreaBL = 0.0;
-    private double targetDistanceBL = 0.0;
-    private int detectedTagIdBL = -1;
-    private boolean targetVisibleBL = false;
-    private int totalTargetsBL = 0;
+    // Back Facing Camera data
+    private double targetYawBF = 0.0;
+    private double targetPitchBF = 0.0;
+    private double targetAreaBF = 0.0;
+    private double targetDistanceBF = 0.0;
+    private int detectedTagIdBF = -1;
+    private boolean targetVisibleBF = false;
+    private int totalTargetsBF = 0;
 
-    // BR Camera data
-    private double targetYawBR = 0.0;
-    private double targetPitchBR = 0.0;
-    private double targetAreaBR = 0.0;
-    private double targetDistanceBR = 0.0;
-    private int detectedTagIdBR = -1;
-    private boolean targetVisibleBR = false;
-    private int totalTargetsBR = 0;
+    // Front Facing Camera data
+    private double targetYawFF = 0.0;
+    private double targetPitchFF = 0.0;
+    private double targetAreaFF = 0.0;
+    private double targetDistanceFF = 0.0;
+    private int detectedTagIdFF = -1;
+    private boolean targetVisibleFF = false;
+    private int totalTargetsFF = 0;
 
     private int selectedTagId = 14; // Default tag ID
 
@@ -51,25 +50,23 @@ public class VisionSubsystem extends SubsystemBase {
 
     public VisionSubsystem() {
         // Initialize both cameras with names from Constants
-        // Set version check to false to avoid version mismatch errors during startup
-        cameraBL = new PhotonCamera(Constants.Vision.kCameraNameBL);
-        cameraBL.setVersionCheckEnabled(false); // Disable version check to prevent startup errors
-        
-        cameraBR = new PhotonCamera(Constants.Vision.kCameraNameBR);
-        cameraBR.setVersionCheckEnabled(false); // Disable version check to prevent startup errors
-        
+        cameraBF = new PhotonCamera(Constants.Vision.kCameraNameBF);
+        cameraBF.setVersionCheckEnabled(false);
+
+        cameraFF = new PhotonCamera(Constants.Vision.kCameraNameFF);
+        cameraFF.setVersionCheckEnabled(false);
+
         // Initialize pose estimators with MULTI_TAG_PNP_ON_COPROCESSOR strategy
-        // This uses multiple tags when available for better accuracy
-        poseEstimatorBL = new PhotonPoseEstimator(
+        poseEstimatorBF = new PhotonPoseEstimator(
             Constants.Vision.kTagLayout,
             PoseStrategy.MULTI_TAG_PNP_ON_COPROCESSOR,
-            Constants.Vision.kRobotToCamBL
+            Constants.Vision.kRobotToCamBF
         );
 
-        poseEstimatorBR = new PhotonPoseEstimator(
+        poseEstimatorFF = new PhotonPoseEstimator(
             Constants.Vision.kTagLayout,
             PoseStrategy.MULTI_TAG_PNP_ON_COPROCESSOR,
-            Constants.Vision.kRobotToCamBR
+            Constants.Vision.kRobotToCamFF
         );
 
         // Set up tag ID chooser
@@ -98,361 +95,309 @@ public class VisionSubsystem extends SubsystemBase {
         tagIdChooser.addOption("Tag 22", 22);
         tagIdChooser.addOption("Tag 23", 23);
         tagIdChooser.addOption("Tag 24", 24);
+        tagIdChooser.addOption("Tag 25", 25);
+        tagIdChooser.addOption("Tag 26", 26);
+        tagIdChooser.addOption("Tag 27", 27);
+        tagIdChooser.addOption("Tag 28", 28);
+        tagIdChooser.addOption("Tag 29", 29);
+        tagIdChooser.addOption("Tag 30", 30);
+        tagIdChooser.addOption("Tag 31", 31);
+        tagIdChooser.addOption("Tag 32", 32);
         SmartDashboard.putData("Vision Tag Selector", tagIdChooser);
-        
+
         // Publish camera stream URLs for dashboard viewing
-        SmartDashboard.putString("Camera/BL/Stream URL", Constants.Vision.kCameraStreamBL);
-        SmartDashboard.putString("Camera/BR/Stream URL", Constants.Vision.kCameraStreamBR);
-        SmartDashboard.putString("Camera/BL/Name", Constants.Vision.kCameraNameBL);
-        SmartDashboard.putString("Camera/BR/Name", Constants.Vision.kCameraNameBR);
+        SmartDashboard.putString("Camera/BF/Stream URL", Constants.Vision.kCameraStreamBF);
+        SmartDashboard.putString("Camera/FF/Stream URL", Constants.Vision.kCameraStreamFF);
+        SmartDashboard.putString("Camera/BF/Name", Constants.Vision.kCameraNameBF);
+        SmartDashboard.putString("Camera/FF/Name", Constants.Vision.kCameraNameFF);
     }
 
     @Override
     public void periodic() {
-        // Update selected tag ID from chooser
         selectedTagId = tagIdChooser.getSelected();
 
-        // Update pose estimates for both cameras
-        updatePoseEstimates();
+        // ── Read camera results ONCE per loop ────────────────────────────────
+        // getAllUnreadResults() is DESTRUCTIVE — calling it a second time on the
+        // same camera returns an empty list because the buffer was already cleared.
+        // We use var for type inference to avoid needing an explicit import.
+        var allResultsBF = cameraBF.getAllUnreadResults();
+        var allResultsFF = cameraFF.getAllUnreadResults();
 
-        // Process results for each camera independently
-        processCameraBLResults();
-        processCameraBRResults();
-        
-        // Publish combined vision status for easy viewing
+        var latestBF = allResultsBF.isEmpty() ? null : allResultsBF.get(allResultsBF.size() - 1);
+        var latestFF = allResultsFF.isEmpty() ? null : allResultsFF.get(allResultsFF.size() - 1);
+
+        // ── Update pose estimates ─────────────────────────────────────────────
+        if (latestBF != null) {
+            latestEstimatedPoseBF = latestBF.hasTargets()
+                ? poseEstimatorBF.update(latestBF)
+                : Optional.empty();
+        }
+        if (latestFF != null) {
+            latestEstimatedPoseFF = latestFF.hasTargets()
+                ? poseEstimatorFF.update(latestFF)
+                : Optional.empty();
+        }
+
+        // ── Process BF camera target tracking ────────────────────────────────
+        if (latestBF == null || !latestBF.hasTargets()) {
+            targetYawBF = 0.0; targetPitchBF = 0.0; targetAreaBF = 0.0;
+            targetDistanceBF = 0.0; detectedTagIdBF = -1;
+            targetVisibleBF = false; totalTargetsBF = 0;
+        } else {
+            var targetsBF = latestBF.getTargets();
+            totalTargetsBF = targetsBF.size();
+            PhotonTrackedTarget selBF = null;
+            for (PhotonTrackedTarget t : targetsBF) {
+                if (t.getFiducialId() == selectedTagId) { selBF = t; break; }
+            }
+            if (selBF != null) {
+                targetVisibleBF = true; detectedTagIdBF = selBF.getFiducialId();
+                targetYawBF = selBF.getYaw(); targetPitchBF = selBF.getPitch();
+                targetAreaBF = selBF.getArea();
+                if (targetAreaBF > 0) targetDistanceBF = Math.sqrt(1.0 / targetAreaBF) * 10.0;
+            } else {
+                targetYawBF = 0.0; targetPitchBF = 0.0; targetAreaBF = 0.0;
+                targetDistanceBF = 0.0; detectedTagIdBF = -1; targetVisibleBF = false;
+            }
+        }
+        SmartDashboard.putBoolean("BF Target Visible", targetVisibleBF);
+        SmartDashboard.putNumber("BF Detected Tag ID", detectedTagIdBF);
+        SmartDashboard.putNumber("BF Target Yaw (deg)", targetYawBF);
+        SmartDashboard.putNumber("BF Target Pitch (deg)", targetPitchBF);
+        SmartDashboard.putNumber("BF Target Area (%)", targetAreaBF);
+        SmartDashboard.putNumber("BF Approx Distance", targetDistanceBF);
+        SmartDashboard.putNumber("BF Total Targets", totalTargetsBF);
+        SmartDashboard.putBoolean("BF Camera Connected", cameraBF.isConnected());
+        SmartDashboard.putNumber("AprilTag " + selectedTagId + " Yaw BF", targetYawBF);
+        SmartDashboard.putBoolean("Vision Target Visible BF", targetVisibleBF);
+
+        // ── Process FF camera target tracking ────────────────────────────────
+        if (latestFF == null || !latestFF.hasTargets()) {
+            targetYawFF = 0.0; targetPitchFF = 0.0; targetAreaFF = 0.0;
+            targetDistanceFF = 0.0; detectedTagIdFF = -1;
+            targetVisibleFF = false; totalTargetsFF = 0;
+        } else {
+            var targetsFF = latestFF.getTargets();
+            totalTargetsFF = targetsFF.size();
+            PhotonTrackedTarget selFF = null;
+            for (PhotonTrackedTarget t : targetsFF) {
+                if (t.getFiducialId() == selectedTagId) { selFF = t; break; }
+            }
+            if (selFF != null) {
+                targetVisibleFF = true; detectedTagIdFF = selFF.getFiducialId();
+                targetYawFF = selFF.getYaw(); targetPitchFF = selFF.getPitch();
+                targetAreaFF = selFF.getArea();
+                if (targetAreaFF > 0) targetDistanceFF = Math.sqrt(1.0 / targetAreaFF) * 10.0;
+            } else {
+                targetYawFF = 0.0; targetPitchFF = 0.0; targetAreaFF = 0.0;
+                targetDistanceFF = 0.0; detectedTagIdFF = -1; targetVisibleFF = false;
+            }
+        }
+        SmartDashboard.putBoolean("FF Target Visible", targetVisibleFF);
+        SmartDashboard.putNumber("FF Detected Tag ID", detectedTagIdFF);
+        SmartDashboard.putNumber("FF Target Yaw (deg)", targetYawFF);
+        SmartDashboard.putNumber("FF Target Pitch (deg)", targetPitchFF);
+        SmartDashboard.putNumber("FF Target Area (%)", targetAreaFF);
+        SmartDashboard.putNumber("FF Approx Distance", targetDistanceFF);
+        SmartDashboard.putNumber("FF Total Targets", totalTargetsFF);
+        SmartDashboard.putBoolean("FF Camera Connected", cameraFF.isConnected());
+        SmartDashboard.putNumber("AprilTag " + selectedTagId + " Yaw FF", targetYawFF);
+        SmartDashboard.putBoolean("Vision Target Visible FF", targetVisibleFF);
+
         publishCombinedStatus();
-        
-        // Publish pose estimation data to dashboard
         publishPoseEstimationData();
     }
-    
-    /**
-     * Updates pose estimates from both cameras
-     */
-    private void updatePoseEstimates() {
-        // Update BL camera pose estimate
-        var resultsBL = cameraBL.getAllUnreadResults();
-        if (!resultsBL.isEmpty()) {
-            var resultBL = resultsBL.get(resultsBL.size() - 1);
-            if (resultBL.hasTargets()) {
-                latestEstimatedPoseBL = poseEstimatorBL.update(resultBL);
-            } else {
-                latestEstimatedPoseBL = Optional.empty();
+
+    private void publishPoseEstimationData() {
+        // Back Facing Camera pose estimation
+        if (latestEstimatedPoseBF.isPresent()) {
+            EstimatedRobotPose estimatedPose = latestEstimatedPoseBF.get();
+            Pose2d pose = estimatedPose.estimatedPose.toPose2d();
+
+            SmartDashboard.putBoolean("Vision/BF/Pose Valid", true);
+            SmartDashboard.putNumber("Vision/BF/Pose X", pose.getX());
+            SmartDashboard.putNumber("Vision/BF/Pose Y", pose.getY());
+            SmartDashboard.putNumber("Vision/BF/Pose Rotation", pose.getRotation().getDegrees());
+            SmartDashboard.putNumber("Vision/BF/Pose Timestamp", estimatedPose.timestampSeconds);
+            SmartDashboard.putNumber("Vision/BF/Tags Used", estimatedPose.targetsUsed.size());
+
+            StringBuilder tagIds = new StringBuilder();
+            for (var target : estimatedPose.targetsUsed) {
+                if (tagIds.length() > 0) tagIds.append(", ");
+                tagIds.append(target.getFiducialId());
             }
+            SmartDashboard.putString("Vision/BF/Tags Used IDs", tagIds.toString());
         } else {
-            latestEstimatedPoseBL = Optional.empty();
+            SmartDashboard.putBoolean("Vision/BF/Pose Valid", false);
         }
 
-        // Update BR camera pose estimate
-        var resultsBR = cameraBR.getAllUnreadResults();
-        if (!resultsBR.isEmpty()) {
-            var resultBR = resultsBR.get(resultsBR.size() - 1);
-            if (resultBR.hasTargets()) {
-                latestEstimatedPoseBR = poseEstimatorBR.update(resultBR);
-            } else {
-                latestEstimatedPoseBR = Optional.empty();
-            }
-        } else {
-            latestEstimatedPoseBR = Optional.empty();
-        }
-    }
-    
-    /**
-     * Publishes pose estimation data to SmartDashboard for Elastic dashboard
-     */
-    private void publishPoseEstimationData() {
-        // BL Camera pose estimation
-        if (latestEstimatedPoseBL.isPresent()) {
-            EstimatedRobotPose estimatedPose = latestEstimatedPoseBL.get();
+        // Front Facing Camera pose estimation
+        if (latestEstimatedPoseFF.isPresent()) {
+            EstimatedRobotPose estimatedPose = latestEstimatedPoseFF.get();
             Pose2d pose = estimatedPose.estimatedPose.toPose2d();
-            
-            SmartDashboard.putBoolean("Vision/BL/Pose Valid", true);
-            SmartDashboard.putNumber("Vision/BL/Pose X", pose.getX());
-            SmartDashboard.putNumber("Vision/BL/Pose Y", pose.getY());
-            SmartDashboard.putNumber("Vision/BL/Pose Rotation", pose.getRotation().getDegrees());
-            SmartDashboard.putNumber("Vision/BL/Pose Timestamp", estimatedPose.timestampSeconds);
-            SmartDashboard.putNumber("Vision/BL/Tags Used", estimatedPose.targetsUsed.size());
-            
-            // Publish tag IDs used
+
+            SmartDashboard.putBoolean("Vision/FF/Pose Valid", true);
+            SmartDashboard.putNumber("Vision/FF/Pose X", pose.getX());
+            SmartDashboard.putNumber("Vision/FF/Pose Y", pose.getY());
+            SmartDashboard.putNumber("Vision/FF/Pose Rotation", pose.getRotation().getDegrees());
+            SmartDashboard.putNumber("Vision/FF/Pose Timestamp", estimatedPose.timestampSeconds);
+            SmartDashboard.putNumber("Vision/FF/Tags Used", estimatedPose.targetsUsed.size());
+
             StringBuilder tagIds = new StringBuilder();
             for (var target : estimatedPose.targetsUsed) {
                 if (tagIds.length() > 0) tagIds.append(", ");
                 tagIds.append(target.getFiducialId());
             }
-            SmartDashboard.putString("Vision/BL/Tags Used IDs", tagIds.toString());
+            SmartDashboard.putString("Vision/FF/Tags Used IDs", tagIds.toString());
         } else {
-            SmartDashboard.putBoolean("Vision/BL/Pose Valid", false);
+            SmartDashboard.putBoolean("Vision/FF/Pose Valid", false);
         }
-        
-        // BR Camera pose estimation
-        if (latestEstimatedPoseBR.isPresent()) {
-            EstimatedRobotPose estimatedPose = latestEstimatedPoseBR.get();
-            Pose2d pose = estimatedPose.estimatedPose.toPose2d();
-            
-            SmartDashboard.putBoolean("Vision/BR/Pose Valid", true);
-            SmartDashboard.putNumber("Vision/BR/Pose X", pose.getX());
-            SmartDashboard.putNumber("Vision/BR/Pose Y", pose.getY());
-            SmartDashboard.putNumber("Vision/BR/Pose Rotation", pose.getRotation().getDegrees());
-            SmartDashboard.putNumber("Vision/BR/Pose Timestamp", estimatedPose.timestampSeconds);
-            SmartDashboard.putNumber("Vision/BR/Tags Used", estimatedPose.targetsUsed.size());
-            
-            // Publish tag IDs used
-            StringBuilder tagIds = new StringBuilder();
-            for (var target : estimatedPose.targetsUsed) {
-                if (tagIds.length() > 0) tagIds.append(", ");
-                tagIds.append(target.getFiducialId());
-            }
-            SmartDashboard.putString("Vision/BR/Tags Used IDs", tagIds.toString());
-        } else {
-            SmartDashboard.putBoolean("Vision/BR/Pose Valid", false);
-        }
-        
-        // Combined status
-        boolean anyPoseValid = latestEstimatedPoseBL.isPresent() || latestEstimatedPoseBR.isPresent();
+
+        boolean anyPoseValid = latestEstimatedPoseBF.isPresent() || latestEstimatedPoseFF.isPresent();
         SmartDashboard.putBoolean("Vision/Any Pose Valid", anyPoseValid);
-        
+
         int totalTagsUsed = 0;
-        if (latestEstimatedPoseBL.isPresent()) {
-            totalTagsUsed += latestEstimatedPoseBL.get().targetsUsed.size();
+        if (latestEstimatedPoseBF.isPresent()) {
+            totalTagsUsed += latestEstimatedPoseBF.get().targetsUsed.size();
         }
-        if (latestEstimatedPoseBR.isPresent()) {
-            totalTagsUsed += latestEstimatedPoseBR.get().targetsUsed.size();
+        if (latestEstimatedPoseFF.isPresent()) {
+            totalTagsUsed += latestEstimatedPoseFF.get().targetsUsed.size();
         }
         SmartDashboard.putNumber("Vision/Total Tags Used", totalTagsUsed);
     }
-    
-    /**
-     * Publishes combined vision status for easy dashboard viewing
-     */
+
     private void publishCombinedStatus() {
-        // Show which tag we're looking for
         SmartDashboard.putNumber("Target Tag ID", selectedTagId);
-        
-        // Show detected tags from both cameras
-        String detectedTags = "";
-        if (targetVisibleBL && targetVisibleBR) {
-            detectedTags = "BL: Tag " + detectedTagIdBL + " | BR: Tag " + detectedTagIdBR;
-        } else if (targetVisibleBL) {
-            detectedTags = "BL: Tag " + detectedTagIdBL;
-        } else if (targetVisibleBR) {
-            detectedTags = "BR: Tag " + detectedTagIdBR;
+
+        String detectedTags;
+        if (targetVisibleBF && targetVisibleFF) {
+            detectedTags = "BF: Tag " + detectedTagIdBF + " | FF: Tag " + detectedTagIdFF;
+        } else if (targetVisibleBF) {
+            detectedTags = "BF: Tag " + detectedTagIdBF;
+        } else if (targetVisibleFF) {
+            detectedTags = "FF: Tag " + detectedTagIdFF;
         } else {
             detectedTags = "No Tags Detected";
         }
         SmartDashboard.putString("Detected Tags", detectedTags);
-        
-        // Show if target tag is visible
-        boolean targetFound = (targetVisibleBL && detectedTagIdBL == selectedTagId) || 
-                             (targetVisibleBR && detectedTagIdBR == selectedTagId);
+
+        boolean targetFound = (targetVisibleBF && detectedTagIdBF == selectedTagId) ||
+                              (targetVisibleFF && detectedTagIdFF == selectedTagId);
         SmartDashboard.putBoolean("Target Tag Found", targetFound);
-        
-        // Show which camera sees the target
-        String cameraSeeing = "";
-        if (targetVisibleBL && detectedTagIdBL == selectedTagId && 
-            targetVisibleBR && detectedTagIdBR == selectedTagId) {
+
+        String cameraSeeing;
+        if (targetVisibleBF && detectedTagIdBF == selectedTagId &&
+            targetVisibleFF && detectedTagIdFF == selectedTagId) {
             cameraSeeing = "Both Cameras";
-        } else if (targetVisibleBL && detectedTagIdBL == selectedTagId) {
-            cameraSeeing = "Back-Left Camera";
-        } else if (targetVisibleBR && detectedTagIdBR == selectedTagId) {
-            cameraSeeing = "Back-Right Camera";
+        } else if (targetVisibleBF && detectedTagIdBF == selectedTagId) {
+            cameraSeeing = "Back-Facing Camera";
+        } else if (targetVisibleFF && detectedTagIdFF == selectedTagId) {
+            cameraSeeing = "Front-Facing Camera";
         } else {
             cameraSeeing = "None";
         }
         SmartDashboard.putString("Target Visible On", cameraSeeing);
+
+        SmartDashboard.putString("Vision/Active Camera", getActiveCameraName());
+        SmartDashboard.putBoolean("Vision/Any Target Visible", isAnyTargetVisible());
+        SmartDashboard.putNumber("Vision/Best Target Yaw", getBestTargetYaw());
+        SmartDashboard.putNumber("Vision/Best Target Distance", getBestTargetDistance());
     }
 
-    private void processCameraBLResults() {
-        // Use getAllUnreadResults() to get latest result
-        var results = cameraBL.getAllUnreadResults();
-        var result = results.isEmpty() ? null : results.get(results.size() - 1);
 
-        // Only reset if no targets detected
-        if (result == null || !result.hasTargets()) {
-            targetYawBL = 0.0;
-            targetPitchBL = 0.0;
-            targetAreaBL = 0.0;
-            targetDistanceBL = 0.0;
-            detectedTagIdBL = -1;
-            targetVisibleBL = false;
-            totalTargetsBL = 0;
-        } else {
-            List<PhotonTrackedTarget> targets = result.getTargets();
-            totalTargetsBL = targets.size();
-            
-            // ONLY find the selected tag - do not use fallback
-            PhotonTrackedTarget selectedTarget = null;
-            for (PhotonTrackedTarget target : targets) {
-                if (target.getFiducialId() == selectedTagId) {
-                    selectedTarget = target;
-                    break;
-                }
-            }
-            
-            // Extract data ONLY if we found the selected tag
-            if (selectedTarget != null) {
-                targetVisibleBL = true;
-                detectedTagIdBL = selectedTarget.getFiducialId();
-                targetYawBL = selectedTarget.getYaw();
-                targetPitchBL = selectedTarget.getPitch();
-                targetAreaBL = selectedTarget.getArea();
-                
-                // Calculate approximate distance using target area (rough estimation)
-                if (targetAreaBL > 0) {
-                    targetDistanceBL = Math.sqrt(1.0 / targetAreaBL) * 10.0;
-                }
-            } else {
-                // Selected tag not found, but other tags are visible
-                targetYawBL = 0.0;
-                targetPitchBL = 0.0;
-                targetAreaBL = 0.0;
-                targetDistanceBL = 0.0;
-                detectedTagIdBL = -1;
-                targetVisibleBL = false;
-            }
+    // -------------------------------------------------------------------------
+    // Priority / fallback camera selection methods
+    // -------------------------------------------------------------------------
+
+    public boolean isAnyTargetVisible() {
+        return targetVisibleBF || targetVisibleFF;
+    }
+
+    public double getBestTargetYaw() {
+        if (targetVisibleBF && targetVisibleFF) {
+            return targetAreaBF >= targetAreaFF ? targetYawBF : targetYawFF;
+        } else if (targetVisibleBF) {
+            return targetYawBF;
+        } else if (targetVisibleFF) {
+            return targetYawFF;
         }
-
-        // Update SmartDashboard with comprehensive metrics for BL camera
-        SmartDashboard.putBoolean("BL Target Visible", targetVisibleBL);
-        SmartDashboard.putNumber("BL Detected Tag ID", detectedTagIdBL);
-        SmartDashboard.putNumber("BL Target Yaw (deg)", targetYawBL);
-        SmartDashboard.putNumber("BL Target Pitch (deg)", targetPitchBL);
-        SmartDashboard.putNumber("BL Target Area (%)", targetAreaBL);
-        SmartDashboard.putNumber("BL Approx Distance", targetDistanceBL);
-        SmartDashboard.putNumber("BL Total Targets", totalTargetsBL);
-        SmartDashboard.putBoolean("BL Camera Connected", cameraBL.isConnected());
-        
-        // Legacy outputs for compatibility
-        SmartDashboard.putNumber("AprilTag " + selectedTagId + " Yaw BL", targetYawBL);
-        SmartDashboard.putBoolean("Vision Target Visible BL", targetVisibleBL);
+        return 0.0;
     }
 
-    private void processCameraBRResults() {
-        // Use getAllUnreadResults() to get latest result
-        var results = cameraBR.getAllUnreadResults();
-        var result = results.isEmpty() ? null : results.get(results.size() - 1);
-
-        // Only reset if no targets detected
-        if (result == null || !result.hasTargets()) {
-            targetYawBR = 0.0;
-            targetPitchBR = 0.0;
-            targetAreaBR = 0.0;
-            targetDistanceBR = 0.0;
-            detectedTagIdBR = -1;
-            targetVisibleBR = false;
-            totalTargetsBR = 0;
-        } else {
-            List<PhotonTrackedTarget> targets = result.getTargets();
-            totalTargetsBR = targets.size();
-            
-            // ONLY find the selected tag - do not use fallback
-            PhotonTrackedTarget selectedTarget = null;
-            for (PhotonTrackedTarget target : targets) {
-                if (target.getFiducialId() == selectedTagId) {
-                    selectedTarget = target;
-                    break;
-                }
-            }
-            
-            // Extract data ONLY if we found the selected tag
-            if (selectedTarget != null) {
-                targetVisibleBR = true;
-                detectedTagIdBR = selectedTarget.getFiducialId();
-                targetYawBR = selectedTarget.getYaw();
-                targetPitchBR = selectedTarget.getPitch();
-                targetAreaBR = selectedTarget.getArea();
-                
-                // Calculate approximate distance using target area (rough estimation)
-                if (targetAreaBR > 0) {
-                    targetDistanceBR = Math.sqrt(1.0 / targetAreaBR) * 10.0;
-                }
-            } else {
-                // Selected tag not found, but other tags are visible
-                targetYawBR = 0.0;
-                targetPitchBR = 0.0;
-                targetAreaBR = 0.0;
-                targetDistanceBR = 0.0;
-                detectedTagIdBR = -1;
-                targetVisibleBR = false;
-            }
+    public double getBestTargetDistance() {
+        if (targetVisibleBF && targetVisibleFF) {
+            return targetAreaBF >= targetAreaFF ? targetDistanceBF : targetDistanceFF;
+        } else if (targetVisibleBF) {
+            return targetDistanceBF;
+        } else if (targetVisibleFF) {
+            return targetDistanceFF;
         }
-
-        // Update SmartDashboard with comprehensive metrics for BR camera
-        SmartDashboard.putBoolean("BR Target Visible", targetVisibleBR);
-        SmartDashboard.putNumber("BR Detected Tag ID", detectedTagIdBR);
-        SmartDashboard.putNumber("BR Target Yaw (deg)", targetYawBR);
-        SmartDashboard.putNumber("BR Target Pitch (deg)", targetPitchBR);
-        SmartDashboard.putNumber("BR Target Area (%)", targetAreaBR);
-        SmartDashboard.putNumber("BR Approx Distance", targetDistanceBR);
-        SmartDashboard.putNumber("BR Total Targets", totalTargetsBR);
-        SmartDashboard.putBoolean("BR Camera Connected", cameraBR.isConnected());
-        
-        // Legacy outputs for compatibility
-        SmartDashboard.putNumber("AprilTag " + selectedTagId + " Yaw BR", targetYawBR);
-        SmartDashboard.putBoolean("Vision Target Visible BR", targetVisibleBR);
+        return 0.0;
     }
 
-    // Getter methods for BL camera
-    public double getTargetYawBL() {
-        return targetYawBL;
+    public String getActiveCameraName() {
+        if (targetVisibleBF && targetVisibleFF) {
+            return targetAreaBF >= targetAreaFF ? "Back-Facing (Primary)" : "Front-Facing (Primary)";
+        } else if (targetVisibleBF) {
+            return "Back-Facing (Only)";
+        } else if (targetVisibleFF) {
+            return "Front-Facing (Only)";
+        }
+        return "None";
     }
 
-    public boolean isTargetVisibleBL() {
-        return targetVisibleBL;
-    }
-    
-    public int getDetectedTagIdBL() {
-        return detectedTagIdBL;
-    }
-    
-    public double getTargetDistanceBL() {
-        return targetDistanceBL;
+    // -------------------------------------------------------------------------
+    // Individual camera getters
+    // -------------------------------------------------------------------------
+
+    // Back Facing camera getters
+    public double getTargetYawBF() {
+        return targetYawBF;
     }
 
-    // Getter methods for BR camera
-    public double getTargetYawBR() {
-        return targetYawBR;
+    public boolean isTargetVisibleBF() {
+        return targetVisibleBF;
     }
 
-    public boolean isTargetVisibleBR() {
-        return targetVisibleBR;
-    }
-    
-    public int getDetectedTagIdBR() {
-        return detectedTagIdBR;
-    }
-    
-    public double getTargetDistanceBR() {
-        return targetDistanceBR;
+    public int getDetectedTagIdBF() {
+        return detectedTagIdBF;
     }
 
-    // Public getter for selected tag ID
+    public double getTargetDistanceBF() {
+        return targetDistanceBF;
+    }
+
+    // Front Facing camera getters
+    public double getTargetYawFF() {
+        return targetYawFF;
+    }
+
+    public boolean isTargetVisibleFF() {
+        return targetVisibleFF;
+    }
+
+    public int getDetectedTagIdFF() {
+        return detectedTagIdFF;
+    }
+
+    public double getTargetDistanceFF() {
+        return targetDistanceFF;
+    }
+
     public int getSelectedTagId() {
         return selectedTagId;
     }
-    
-    /**
-     * Gets the latest estimated robot pose from the BL camera
-     * @return Optional containing the estimated pose, or empty if no estimate available
-     */
-    public Optional<EstimatedRobotPose> getEstimatedGlobalPoseBL() {
-        return latestEstimatedPoseBL;
+
+    public Optional<EstimatedRobotPose> getEstimatedGlobalPoseBF() {
+        return latestEstimatedPoseBF;
     }
-    
-    /**
-     * Gets the latest estimated robot pose from the BR camera
-     * @return Optional containing the estimated pose, or empty if no estimate available
-     */
-    public Optional<EstimatedRobotPose> getEstimatedGlobalPoseBR() {
-        return latestEstimatedPoseBR;
+
+    public Optional<EstimatedRobotPose> getEstimatedGlobalPoseFF() {
+        return latestEstimatedPoseFF;
     }
-    
-    /**
-     * Sets the reference pose for the pose estimators.
-     * This should be called when resetting odometry.
-     * @param pose The new reference pose
-     */
+
     public void setReferencePose(Pose2d pose) {
-        poseEstimatorBL.setReferencePose(new Pose3d(pose));
-        poseEstimatorBR.setReferencePose(new Pose3d(pose));
+        poseEstimatorBF.setReferencePose(new Pose3d(pose));
+        poseEstimatorFF.setReferencePose(new Pose3d(pose));
     }
 }

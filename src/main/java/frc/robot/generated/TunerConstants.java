@@ -65,7 +65,15 @@ public class TunerConstants {
                 .withStatorCurrentLimitEnable(true)
         );
     private static final CANcoderConfiguration encoderInitialConfigs = new CANcoderConfiguration();
-    // Configs for the Pigeon 2; leave this null to skip applying Pigeon 2 configs
+    // Pigeon 2 physical position on robot (documentation only — translation offset
+    // does NOT affect heading accuracy; angular velocity is uniform across a rigid body):
+    //   X = -1.799" (1.799 inches behind robot center)
+    //   Y = +0.743" (0.743 inches to the left of robot center)
+    //
+    // Pigeon is mounted flat with no rotational offset relative to the robot's forward direction.
+    // Set to null = no configuration pushed to Pigeon (uses factory defaults: flat mount, 0° yaw offset).
+    // If the Pigeon is physically rotated on the robot, create a Pigeon2Configuration here
+    // and set MountPose.MountPoseYaw to the rotation angle in degrees.
     private static final Pigeon2Configuration pigeonConfigs = null;
 
     // CAN bus that the devices are located on;

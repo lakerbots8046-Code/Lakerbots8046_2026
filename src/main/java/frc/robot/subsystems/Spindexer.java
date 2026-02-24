@@ -370,6 +370,36 @@ public class Spindexer extends SubsystemBase {
 
   
 
+  // ==================== DIRECT MOTOR CONTROL (for use inside other commands) ====================
+
+  /**
+   * Directly runs all three feed-side motors at the specified duty cycles.
+   *
+   * <p>Intended for use inside another command's {@code execute()} method where
+   * returning a {@link Command} object is not possible.  Uses the same duty-cycle
+   * output mode as {@link #launchFromTower()}.
+   *
+   * @param spindexerDC    Duty cycle for the spindexer motor   (CAN 4), range [-1, 1]
+   * @param flappyWheelDC  Duty cycle for the flappy-wheel motor (CAN 5), range [-1, 1]
+   * @param feederDC       Duty cycle for the feeder motor       (CAN 6), range [-1, 1]
+   */
+  public void runFeedMotorsDirect(double spindexerDC, double flappyWheelDC, double feederDC) {
+    spindexerMotor.set(spindexerDC);
+    flappyWheelFeederMotor.set(flappyWheelDC);
+    feederMotor.set(feederDC);
+  }
+
+  /**
+   * Directly stops all three feed-side motors (coast/brake).
+   *
+   * <p>Intended for use inside another command's {@code execute()} or {@code end()} method.
+   */
+  public void stopFeedMotorsDirect() {
+    spindexerMotor.setControl(m_brake);
+    flappyWheelFeederMotor.setControl(m_brake);
+    feederMotor.setControl(m_brake);
+  }
+
   // ==================== LAUNCH FROM TOWER COMMAND ====================
 
   /**

@@ -91,33 +91,35 @@ public class Launcher extends SubsystemBase {
 
      /* -------------------------------------- TURRET & HOOD : Motion Magic -> ----------------------------------*/
     // ============ CONFIGURE TURRET POSITION CONTROL ============ //
-    // Configure Gear Ratio using constant
-    FeedbackConfigs fdbTurret = cfgTurret.Feedback;
-    fdbTurret.SensorToMechanismRatio = 1; //12.8 rotor rotations per mechanism rotation
-    fdbTurret.SensorToMechanismRatio = LauncherConstants.kSensorToMechanismRatio; //12.8 rotor rotations per mechanism rotation
-    cfgTurret.Feedback.SensorToMechanismRatio = LauncherConstants.kSensorToMechanismRatio;
+    //
+    // SensorToMechanismRatio = 1.0 → getTurretPosition() returns raw motor rotations.
+    // LauncherConstants.kSensorToMechanismRatio is declared but never initialized
+    // (Java defaults it to 0.0), which causes CTRE to divide by zero internally,
+    // producing NaN/Infinity positions and severe motor oscillation. DO NOT use it here.
+    cfgTurret.Feedback.SensorToMechanismRatio = 1.0;
 
-    //Configure Motion Magic
+    // Configure Motion Magic cruise/accel/jerk in raw motor rotations per second
     MotionMagicConfigs mmTurret = cfgTurret.MotionMagic;
-    mmTurret.withMotionMagicCruiseVelocity(RotationsPerSecond.of(15))
-      .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(15))
-      .withMotionMagicJerk(RotationsPerSecondPerSecond.per(Second).of(100));
- 
+    mmTurret.withMotionMagicCruiseVelocity(RotationsPerSecond.of(10))
+      .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(10))
+      .withMotionMagicJerk(RotationsPerSecondPerSecond.per(Second).of(80));
 
     Slot0Configs slot0Turret = cfgTurret.Slot0;
-    slot0Turret.kS = 0.25; // Add 0.25 V output to overcome static friction
-    slot0Turret.kV = 0.12; // A velocity target of 1 rps results in 0.12 V output
-    slot0Turret.kA = 0.01; // An acceleration of 1 rps/s requires 0.01 V output
-    slot0Turret.kP = 60; // A position error of 0.2 rotations results in 12 V output
-    slot0Turret.kI = 0; // No output for integrated error
-    slot0Turret.kD = 0.5; // A velocity error of 1 rps results in 0.5 V output
+    slot0Turret.kS = 0.1;  // Static friction feedforward (V) — reduced from 0.25
+    slot0Turret.kV = 0.12; // Velocity feedforward: 1 rps → 0.12 V
+    slot0Turret.kA = 0.01; // Acceleration feedforward
+    // kP is calibrated for RAW MOTOR ROTATIONS (SensorToMechanismRatio = 1.0).
+    // Gear ratio = 115/3 ≈ 38.33 → 1 raw rotation ≈ 9.4°.
+    // At kP=4: a 1-rotation error (~9.4°) produces 4 V output — conservative for first test.
+    // Increase toward 8–12 once oscillation is confirmed gone.
+    slot0Turret.kP = 4.0;
+    slot0Turret.kI = 0;    // No integral
+    slot0Turret.kD = 1.5;  // Derivative damping — increased from 0.5 to reduce overshoot
 
     // ============ CONFIGURE HOOD POSITION CONTROL ============ //
-    // Configure Gear Ratio using constant
-    FeedbackConfigs fdbHood = cfgHood.Feedback;
-    fdbHood.SensorToMechanismRatio = 1; //12.8 rotor rotations per mechanism rotation
-    fdbHood.SensorToMechanismRatio = LauncherConstants.kSensorToMechanismRatio; //12.8 rotor rotations per mechanism rotation
-    cfgTurret.Feedback.SensorToMechanismRatio = LauncherConstants.kSensorToMechanismRatio;
+    // Hood uses the same uninitialized constant (0.0) — keep ratio at 1.0 for now.
+    // Do NOT reference cfgTurret here; that would overwrite the turret ratio we just set.
+    cfgHood.Feedback.SensorToMechanismRatio = 1.0;
 
     //Configure Motion Magic
     MotionMagicConfigs mmHood = cfgHood.MotionMagic;
@@ -252,6 +254,37 @@ public class Launcher extends SubsystemBase {
    */
   public void stopLauncher() {
     launcherMotor.setControl(m_brake);
+  }
+
+  // ==================== TURRET HELPERS FOR SHOOT-ON-ARC ====================
+
+  /**
+   * Gets the turret position converted to degrees.
+   * Since SensorToMechanismRatio is not configured, getTurretPosition() returns
+   * raw motor rotations. This converts using the known gear ratio (115/3).
+   *
+   * @return Turret angle in degrees (0 = center, positive = CCW)
+   */
+  public double getTurretPositionDegrees() {
+      return getTurretPosition() / TurretConstants.kRotationsPerDegree;
+  }
+
+  /**
+   * Checks whether the turret is within its physical hard-stop limits.
+   * Physical limits: ±18 raw motor rotations (measured in Tuner X).
+   *
+   * @return true if within limits, false if past a hard stop
+   */
+  public boolean isTurretWithinLimits() {
+      return Math.abs(getTurretPosition()) <= TurretConstants.kPhysicalLimitRotations;
+  }
+
+  /**
+   * Stops the turret motor immediately (brake mode).
+   * For use inside command execute()/end() methods where a Command cannot be returned.
+   */
+  public void stopTurretDirect() {
+      turretMotor.setControl(m_brake);
   }
   
   /**
