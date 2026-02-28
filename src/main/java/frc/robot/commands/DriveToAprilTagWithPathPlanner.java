@@ -31,6 +31,9 @@ public class DriveToAprilTagWithPathPlanner extends Command {
     private Command pathFollowingCommand;
     private boolean hasValidTarget = false;
     private Pose2d targetPose;
+
+    /** Throttle counter — SmartDashboard writes every 5 execute() calls (~100 ms). */
+    private int dashboardCounter = 0;
     
     /**
      * Creates a new DriveToAprilTagWithPathPlanner command.
@@ -67,9 +70,10 @@ public class DriveToAprilTagWithPathPlanner extends Command {
     public void initialize() {
         SmartDashboard.putString("PathPlanner/Status", "Initializing");
         SmartDashboard.putNumber("PathPlanner/Target Tag", targetTagId);
-        
+
         hasValidTarget = false;
         pathFollowingCommand = null;
+        dashboardCounter = 0;
         
         // Get the AprilTag pose from the field layout
         Optional<Pose2d> tagPoseOpt = getAprilTagPose(targetTagId);
@@ -140,17 +144,20 @@ public class DriveToAprilTagWithPathPlanner extends Command {
         if (!hasValidTarget || pathFollowingCommand == null) {
             return;
         }
-        
-        // Update dashboard with current progress
-        Pose2d currentPose = drivetrain.getState().Pose;
-        double distanceToTarget = currentPose.getTranslation().getDistance(targetPose.getTranslation());
-        double rotationError = Math.abs(
-            currentPose.getRotation().getRadians() - targetPose.getRotation().getRadians()
-        );
-        
-        SmartDashboard.putNumber("PathPlanner/Distance to Target", distanceToTarget);
-        SmartDashboard.putNumber("PathPlanner/Rotation Error (deg)", Math.toDegrees(rotationError));
-        SmartDashboard.putBoolean("PathPlanner/At Target", isFinished());
+
+        // Throttled dashboard writes (~10 Hz) — no motor control here (PathPlanner owns it)
+        dashboardCounter++;
+        if (dashboardCounter >= 5) {
+            dashboardCounter = 0;
+            Pose2d currentPose = drivetrain.getState().Pose;
+            double distanceToTarget = currentPose.getTranslation().getDistance(targetPose.getTranslation());
+            double rotationError = Math.abs(
+                currentPose.getRotation().getRadians() - targetPose.getRotation().getRadians()
+            );
+            SmartDashboard.putNumber( "PathPlanner/Distance to Target",   distanceToTarget);
+            SmartDashboard.putNumber( "PathPlanner/Rotation Error (deg)", Math.toDegrees(rotationError));
+            SmartDashboard.putBoolean("PathPlanner/At Target",            isFinished());
+        }
     }
     
     @Override

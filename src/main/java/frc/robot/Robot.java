@@ -21,12 +21,21 @@ public class Robot extends TimedRobot {
         .withTimestampReplay()
         .withJoystickReplay();
 
+    /**
+     * Throttle counter for Field2d visualization updates.
+     * Field2d only needs ~10 Hz — updating it at 50 Hz wastes CPU on
+     * AprilTagFieldLayout map lookups and NetworkTables writes every 20 ms.
+     * Updated every 5 calls ≈ 100 ms.
+     */
+    private int field2dCounter = 0;
+
     public Robot() {
         // Stop Phoenix 6 Signal Logger to prevent .hoot log files from filling
         // the roboRIO's limited disk space (~62 MB free). Safe for competition use —
         // disables binary log recording only; all robot functionality is unaffected.
         // To re-enable for SysId characterization, comment out this line.
-        SignalLogger.stop();
+        SignalLogger.stop();// Comment this back IN!!!!
+        //SignalLogger.start();
 
         m_robotContainer = new RobotContainer();
     }
@@ -39,8 +48,16 @@ public class Robot extends TimedRobot {
         // Update vision measurements for pose estimation
         m_robotContainer.updateVisionMeasurements();
         
-        // Update Field2D with current robot pose and vision targets
-        m_robotContainer.updateField2d();
+        // Update Field2D with current robot pose and vision targets (~10 Hz)
+        // Field visualization does not need 50 Hz — throttle to every 5 loops.
+        field2dCounter++;
+        if (field2dCounter >= 5) {
+            field2dCounter = 0;
+            m_robotContainer.updateField2d();
+        }
+
+        // Publish tower tag identification + distance to Elastic (always-on)
+        m_robotContainer.updateTowerTagInfo();
     }
 
     @Override

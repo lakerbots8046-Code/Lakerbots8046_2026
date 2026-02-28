@@ -18,7 +18,7 @@ import com.ctre.phoenix6.configs.TalonFXConfiguration;
 import com.ctre.phoenix6.controls.MotionMagicVoltage;
 import com.ctre.phoenix6.hardware.TalonFX;
 
-//import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
@@ -41,8 +41,13 @@ public class Launcher extends SubsystemBase {
     private final TalonFX launcherMotor; 
     private final TalonFX hoodMotor; 
     
-  //Controls 
-    private final MotionMagicVoltage m_mmreq = new MotionMagicVoltage(0);
+  //Controls
+    // Separate MotionMagicVoltage objects for turret and hood.
+    // CTRE Phoenix 6 holds a reference to the request object — sharing one object
+    // between two motors means the last withPosition() call overwrites the previous
+    // one, causing the hood to receive the turret's target (and vice versa) every loop.
+    private final MotionMagicVoltage m_mmreqTurret = new MotionMagicVoltage(0);
+    private final MotionMagicVoltage m_mmreqHood   = new MotionMagicVoltage(0);
     private final VelocityVoltage m_VelocityVoltage = new VelocityVoltage(0).withSlot(0);
     private final VelocityTorqueCurrentFOC m_velocityTorque = new VelocityTorqueCurrentFOC(0).withSlot(0);
     private final NeutralOut m_brake = new NeutralOut();
@@ -70,14 +75,22 @@ public class Launcher extends SubsystemBase {
 
     /* ------------------------------LAUNCHER : VelocityClosedLoop -> --------------------------------- */
      /* Voltage-based velocity requires a velocity feed forward to account for the back-emf of the motor */
-    cfgLaunch.Slot0.kS = 0; // To account for friction, add 0.1 V of static feedforward
-    cfgLaunch.Slot0.kV = 0.0085; // Kraken X60 is a 500 kV motor, 500 rpm per V = 8.333 rps per V, 1/8.33 = 0.12 volts / rotation per second
-    cfgLaunch.Slot0.kP = 0.01; // An error of 1 rotation per second results in 0.11 V output
-    cfgLaunch.Slot0.kI = 0; // No output for integrated error
-    cfgLaunch.Slot0.kD = 0; // No output for error derivative
-    // Peak output of 8 volts
-    cfgLaunch.Voltage.withPeakForwardVoltage(Volts.of(8))
-      .withPeakReverseVoltage(Volts.of(-8));
+    cfgLaunch.Slot0.kS = 0;    // Static friction feedforward (V) — set to ~0.25 if motor stalls at low speeds
+    cfgLaunch.Slot0.kV = 0.12; // Kraken X60: 500 kV → 8.333 rps/V → kV = 1/8.333 = 0.12 V/rps
+                                // FIXED: was incorrectly set to 0.0085 (14× too low), causing
+                                // feedforward to produce ~0.5V instead of the ~7–10V needed.
+    // kP raised from 0.01 → 0.3 to enable active speed recovery when a ball loads the flywheel.
+    // kV handles steady-state (feedforward); kP handles transient drops.
+    // At kP=0.3: a 10 RPS drop (ball impact) produces 3 V of corrective output — enough to
+    // recover speed quickly without causing oscillation at steady state.
+    // Tune upward (0.4–0.6) if recovery is still too slow; downward if flywheel oscillates.
+    cfgLaunch.Slot0.kP = 0.3;  // 1 RPS error → 0.3 V correction
+    cfgLaunch.Slot0.kI = 0;    // No integral
+    cfgLaunch.Slot0.kD = 0;    // No derivative
+    // Peak output raised to 12 V so the motor can reach the highest lookup-table target
+    // (-85 RPS × 0.12 V/rps = 10.2 V feedforward — would have been clipped at the old 8 V cap).
+    cfgLaunch.Voltage.withPeakForwardVoltage(Volts.of(12))
+      .withPeakReverseVoltage(Volts.of(-12));
 
     /* Torque-based velocity does not require a velocity feed forward, as torque will accelerate the rotor up to the desired velocity by itself */
     cfgLaunch.Slot1.kS = 2.5; // To account for friction, add 2.5 A of static feedforward
@@ -97,44 +110,62 @@ public class Launcher extends SubsystemBase {
     // (Java defaults it to 0.0), which causes CTRE to divide by zero internally,
     // producing NaN/Infinity positions and severe motor oscillation. DO NOT use it here.
     cfgTurret.Feedback.SensorToMechanismRatio = 1.0;
+    
+    cfgTurret.SoftwareLimitSwitch.ForwardSoftLimitThreshold=18;
+    cfgTurret.SoftwareLimitSwitch.ForwardSoftLimitEnable=true;
+    cfgTurret.SoftwareLimitSwitch.ReverseSoftLimitThreshold=-18;
+    cfgTurret.SoftwareLimitSwitch.ReverseSoftLimitEnable=true;
 
     // Configure Motion Magic cruise/accel/jerk in raw motor rotations per second
     MotionMagicConfigs mmTurret = cfgTurret.MotionMagic;
-    mmTurret.withMotionMagicCruiseVelocity(RotationsPerSecond.of(10))
-      .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(10))
-      .withMotionMagicJerk(RotationsPerSecondPerSecond.per(Second).of(80));
+    mmTurret.withMotionMagicCruiseVelocity(RotationsPerSecond.of(40))
+      .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(20))
+      .withMotionMagicJerk(RotationsPerSecondPerSecond.per(Second).of(0));
 
     Slot0Configs slot0Turret = cfgTurret.Slot0;
-    slot0Turret.kS = 0.1;  // Static friction feedforward (V) — reduced from 0.25
-    slot0Turret.kV = 0.12; // Velocity feedforward: 1 rps → 0.12 V
-    slot0Turret.kA = 0.01; // Acceleration feedforward
+    // kS removed (set to 0.0): static friction feedforward was causing a 0.1 V kick
+    // every time the motor was commanded, which caused oscillation near the target.
+    // Same fix that resolved hood oscillation.
+    slot0Turret.kS = 0.0;
+    slot0Turret.kV = 8.8; // Velocity feedforward: 1 rps → 0.12 V was 0.12
+    slot0Turret.kA = 0.0; // Acceleration feedforward
     // kP is calibrated for RAW MOTOR ROTATIONS (SensorToMechanismRatio = 1.0).
     // Gear ratio = 115/3 ≈ 38.33 → 1 raw rotation ≈ 9.4°.
     // At kP=4: a 1-rotation error (~9.4°) produces 4 V output — conservative for first test.
-    // Increase toward 8–12 once oscillation is confirmed gone.
-    slot0Turret.kP = 4.0;
+    slot0Turret.kP = 50.0;
     slot0Turret.kI = 0;    // No integral
-    slot0Turret.kD = 1.5;  // Derivative damping — increased from 0.5 to reduce overshoot
+    // kD increased from 1.5 → 2.0 for more damping near the target position.
+    slot0Turret.kD = 2.0;
 
     // ============ CONFIGURE HOOD POSITION CONTROL ============ //
-    // Hood uses the same uninitialized constant (0.0) — keep ratio at 1.0 for now.
-    // Do NOT reference cfgTurret here; that would overwrite the turret ratio we just set.
+    // SensorToMechanismRatio = 1.0 → positions are in raw motor rotations.
+    // Physical range: 0.0 (22° launch) to 11.5 (62° launch) motor rotations.
     cfgHood.Feedback.SensorToMechanismRatio = 1.0;
 
-    //Configure Motion Magic
+    // Software limits — prevent the hood from travelling past its physical endpoints.
+    cfgHood.SoftwareLimitSwitch.ForwardSoftLimitEnable    = true;
+    cfgHood.SoftwareLimitSwitch.ForwardSoftLimitThreshold = LauncherConstants.kHoodMaxRotations; // 11.5 rot → 62°
+    cfgHood.SoftwareLimitSwitch.ReverseSoftLimitEnable    = true;
+    cfgHood.SoftwareLimitSwitch.ReverseSoftLimitThreshold = LauncherConstants.kHoodMinRotations; // 0.0 rot → 22°
+
+    // Configure Motion Magic for hood position control.
+    // v1: cruise=15, accel=15 — hood slammed and rang.
+    // v2: cruise=8,  accel=8  — still oscillating.
+    // v3: cruise=4,  accel=4  — still oscillating.
+    // v4: cruise=2,  accel=2  — very gentle; also fixed shared m_mmreq bug.
+    // v5 (current): cruise=12, accel=6, jerk=0 — faster profile, jerk limiting disabled.
     MotionMagicConfigs mmHood = cfgHood.MotionMagic;
-    mmHood.withMotionMagicCruiseVelocity(RotationsPerSecond.of(15))
-      .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(15))
-      .withMotionMagicJerk(RotationsPerSecondPerSecond.per(Second).of(100));
- 
+    mmHood.withMotionMagicCruiseVelocity(RotationsPerSecond.of(12))
+      .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(6))
+      .withMotionMagicJerk(RotationsPerSecondPerSecond.per(Second).of(0)); // 0 = jerk limiting disabled
 
     Slot0Configs slot0Hood = cfgHood.Slot0;
-    slot0Hood.kS = 0.25; // Add 0.25 V output to overcome static friction
-    slot0Hood.kV = 0.12; // A velocity target of 1 rps results in 0.12 V output
-    slot0Hood.kA = 0.01; // An acceleration of 1 rps/s requires 0.01 V output
-    slot0Hood.kP = 60; // A position error of 0.2 rotations results in 12 V output
-    slot0Hood.kI = 0; // No output for integrated error
-    slot0Hood.kD = 0.5; // A velocity error of 1 rps results in 0.5 V output
+    slot0Hood.kS = 0.1;  // Static friction feedforward: 0.1 V to overcome stiction
+    slot0Hood.kV = 8.4;  // Velocity feedforward: tuned for hood mechanism (replaces 0.12)
+    slot0Hood.kA = 0.0;  // Acceleration feedforward (not used)
+    slot0Hood.kP = 40.0; // Proportional gain: tuned for hood position control
+    slot0Hood.kI = 0;    // No integral
+    slot0Hood.kD = 0.0;  // No derivative (removed — kP=40 provides sufficient response)
 
 
     // Status Code for ALL
@@ -161,7 +192,7 @@ public class Launcher extends SubsystemBase {
    */
   public void setTurretPosition(double mechRotations) {
     lastTurretAngle = mechRotations;
-    turretMotor.setControl(m_mmreq.withPosition(mechRotations).withSlot(0));
+    turretMotor.setControl(m_mmreqTurret.withPosition(mechRotations).withSlot(0));
   }
   
   /**
@@ -204,7 +235,7 @@ public class Launcher extends SubsystemBase {
    */
   public void setHoodPosition(double mechRotations) {
     lastHoodAngle = mechRotations;
-    hoodMotor.setControl(m_mmreq.withPosition(mechRotations).withSlot(0));
+    hoodMotor.setControl(m_mmreqHood.withPosition(mechRotations).withSlot(0));
   }
   
   /**
@@ -232,21 +263,59 @@ public class Launcher extends SubsystemBase {
   }
   
   /**
-   * Checks if pivot is at the target position within tolerance
+   * Checks if hood is at the target position within tolerance.
+   * Uses {@link LauncherConstants#kHoodPositionToleranceRotations} (0.2 motor rotations).
    * @return True if at target position
    */
   public boolean isHoodAtTarget() {
-    return Math.abs(getHoodError()) < LauncherConstants.kHoodPositionTolerance;
+    return Math.abs(getHoodError()) < LauncherConstants.kHoodPositionToleranceRotations;
   }
 
   // ==================== COLLECTION VELOCITY CONTROL METHODS ====================
   
   /**
-   * Sets the collection motor velocity
-   * @param velocityRPS Velocity in rotations per second
+   * Sets the collection motor velocity using closed-loop VelocityVoltage control.
+   * Requires a working encoder. If the flywheel does not reach speed, use
+   * {@link #setCollectDutyCycle(double)} instead (open-loop, always works).
+   *
+   * @param velocityRPS Velocity in rotations per second (negative = shooting direction)
    */
   public void setCollectVelocity(double velocityRPS) {
+    lastLauncherVelocity = velocityRPS;
     launcherMotor.setControl(m_VelocityVoltage.withVelocity(velocityRPS));
+  }
+
+  /**
+   * Drives the flywheel open-loop using DutyCycleOut — the same control mode used by
+   * {@link #launchFromTowerLauncher()}, which is known to work on this robot.
+   *
+   * <p>The duty cycle is calculated from the target RPS assuming Kraken X60 free speed
+   * of 100 RPS at 12 V:  {@code dutyCycle = velocityRPS / 100.0}
+   *
+   * <p>Use this instead of {@link #setCollectVelocity(double)} when closed-loop velocity
+   * control is unreliable (e.g., encoder feedback issues).
+   *
+   * @param velocityRPS Target velocity in RPS (negative = shooting direction).
+   *                    Converted to duty cycle and clamped to [-1, 1].
+   */
+  public void setCollectDutyCycle(double velocityRPS) {
+    lastLauncherVelocity = velocityRPS;
+    // Kraken X60 free speed ≈ 100 RPS at 12 V → duty cycle = RPS / 100
+    double dutyCycle = velocityRPS / 100.0;
+    dutyCycle = Math.max(-1.0, Math.min(1.0, dutyCycle));
+    launcherMotor.setControl(m_dutyCycleOut.withOutput(dutyCycle));
+  }
+
+  /**
+   * Returns {@code true} if the flywheel is within ±5 RPS of its last commanded velocity.
+   * Uses absolute values so the check is sign-agnostic (works regardless of sensor polarity).
+   * Published to SmartDashboard as {@code "Launcher/Flywheel At Speed"} every periodic loop.
+   */
+  public boolean isFlywheelAtSpeed() {
+    if (Math.abs(lastLauncherVelocity) < 1.0) return false; // not commanded — treat as not at speed
+    double actual = Math.abs(getCollectVelocity());
+    double target = Math.abs(lastLauncherVelocity);
+    return Math.abs(actual - target) < frc.robot.Constants.ShootingArc.kLauncherVelocityTolerance;
   }
   
   /**
@@ -405,20 +474,34 @@ public class Launcher extends SubsystemBase {
 
   /**
    * LaunchFromTower launcher command.
-   * Runs the launcher motor at a fixed voltage for tower shooting.
-   *   - Launcher motor (CAN 8): +0.2 V  (temp test value; final value: +6 V)
+   * Runs the launcher flywheel at a fixed duty cycle and moves the hood to the
+   * configured tower-launch position while the button is held.
+   *
+   *   - Launcher motor (CAN 8): {@link TurretConstants#flywheelDutyCycleOut}
+   *   - Hood motor     (CAN 9): {@link TurretConstants#hoodTowerPosition} (motor rotations,
+   *                             Motion Magic position control)
    *
    * Designed to be used in parallel with Spindexer.launchFromTower().
-   * Runs while the button is held; launcher stops when the command ends.
+   * Runs while the button is held; flywheel stops on release and the default
+   * command (retractHood) automatically retracts the hood afterward.
    *
-   * @return Command that drives the launcher motor for tower shooting
+   * <p>To tune the hood angle, adjust {@link TurretConstants#hoodTowerPosition}:
+   * <ul>
+   *   <li>0.0  rot = 68° from horizontal (steepest — high arc)</li>
+   *   <li>11.5 rot = 28° from horizontal (flattest — low arc)</li>
+   * </ul>
+   *
+   * @return Command that drives the flywheel and positions the hood for tower shooting
    */
   public Command launchFromTowerLauncher() {
     return Commands.run(() -> {
-      // Launcher: TurretConstants.flywheelDutyCycleOut (temp: +0.2 | final: +1.0)
+      // Hood: move to tower launch position (Motion Magic position control)
+      setHoodPosition(TurretConstants.hoodTowerPosition);
+      // Launcher flywheel: fixed duty cycle output
       launcherMotor.setControl(m_dutyCycleOut.withOutput(TurretConstants.flywheelDutyCycleOut));
     }, this).finallyDo(() -> {
-      // Stop launcher when command ends (button released)
+      // Stop flywheel when command ends (button released).
+      // Hood retraction is handled automatically by the default command (retractHood()).
       launcherMotor.setControl(m_brake);
     });
   }
@@ -484,6 +567,43 @@ public class Launcher extends SubsystemBase {
   }
 
   /**
+   * Default command: retracts the hood to the stowed position then brakes.
+   *
+   * <p>Four-phase approach to avoid both "hood stays at shooting angle" and
+   * "motor oscillates/overheats":
+   * <ol>
+   *   <li>Phase 1 — send {@code setHoodPosition(0.5)} once via Motion Magic.
+   *       The hood moves from its current shooting angle back toward vertical.
+   *       (0.5 rot, not 0.0, to stay just above the reverse soft limit.)</li>
+   *   <li>Phase 2 — wait until the hood is within tolerance of 0.5 rot.</li>
+   *   <li>Phase 3 — switch to brake mode. The 93.25:1 gear ratio holds the
+   *       position without any motor output: zero current, zero oscillation.</li>
+   *   <li>Phase 4 — idle forever, holding the Launcher requirement.</li>
+   * </ol>
+   *
+   * <p>WPILib reschedules this command from the beginning whenever a shooting
+   * command ends, so the hood always retracts after each shot.
+   *
+   * @return Command that retracts the hood then brakes
+   */
+  public Command retractHood() {
+    return Commands.sequence(
+        // Phase 1: command retract position once
+        Commands.runOnce(() -> setHoodPosition(0.5), this),
+        // Phase 2: wait until hood arrives at 0.5 rot
+        Commands.waitUntil(this::isHoodAtTarget),
+        // Phase 3: brake hood — no active voltage, no oscillation, no heating
+        Commands.runOnce(() -> hoodMotor.setControl(m_brake), this),
+        // Phase 4: idle forever — spin flywheel at low speed to reduce spool-up time.
+        // Uses closed-loop VelocityVoltage (same as shooting) so the transition from
+        // idle to full shooting speed is seamless — no control-mode switch mid-shot.
+        // WPILib automatically stops all motors when the robot is disabled,
+        // so this is safe — the flywheel will not spin while disabled.
+        Commands.run(() -> setCollectVelocity(LauncherConstants.kFlywheelIdleRPS), this)
+    ).withName("RetractHood");
+  }
+
+  /**
    * Command to go to a specific pivot position and wait until reached
    * @param position Target position in rotations
    * @return Command that moves to position and finishes when reached
@@ -496,14 +616,21 @@ public class Launcher extends SubsystemBase {
 
   @Override
   public void periodic() {
-    // Update mechanism visualization every loop (needed for accurate animation)
-    m_mechanisms.update(hoodMotor.getPosition(), hoodMotor.getVelocity());
-    m_mechanisms.update(turretMotor.getPosition(), turretMotor.getVelocity());
-
-    // Throttle SmartDashboard updates to every 5 loops (~100ms) to reduce NT memory pressure
+    // Throttle SmartDashboard updates to every 5 loops (~100ms) to reduce NT memory pressure.
+    // Mechanism visualization is also throttled here — it only drives a Mechanism2d widget
+    // on the dashboard and does not need to update at 50 Hz.
     periodicCounter++;
     if (periodicCounter < 5) return;
     periodicCounter = 0;
+
+    // Update mechanism visualization (~10 Hz is plenty for dashboard display)
+    m_mechanisms.update(hoodMotor.getPosition(), hoodMotor.getVelocity());
+    m_mechanisms.update(turretMotor.getPosition(), turretMotor.getVelocity());
+
+    // Always-on flywheel status indicator for Elastic dashboard.
+    // Green = flywheel is within ±5 RPS of its commanded target.
+    // False when no velocity has been commanded (lastLauncherVelocity ≈ 0).
+    SmartDashboard.putBoolean("Launcher/Flywheel At Speed", isFlywheelAtSpeed());
 
     //String prefix = LauncherConstants.kSmartDashboardPrefix;
    /*

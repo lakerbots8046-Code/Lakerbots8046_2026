@@ -30,7 +30,14 @@ public class Telemetry {
      */
     public Telemetry(double maxSpeed) {
         MaxSpeed = maxSpeed;
-        SignalLogger.start();
+        // NOTE: SignalLogger.start() intentionally removed.
+        // Robot.java calls SignalLogger.stop() to prevent .hoot log files from
+        // filling the roboRIO's limited disk space (~62 MB free).
+        // Calling SignalLogger.start() here was overriding that stop, causing
+        // telemeterize() (called at 250 Hz from the CTRE odometry thread) to
+        // write 6 structs to disk every call — a major source of loop overruns.
+        // To re-enable for SysId characterization, uncomment SignalLogger.start()
+        // in Robot.java instead of here.
 
         /* Set up the module state Mechanism2d telemetry */
         for (int i = 0; i < 4; ++i) {

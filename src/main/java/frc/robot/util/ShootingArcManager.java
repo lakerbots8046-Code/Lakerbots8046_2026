@@ -25,14 +25,38 @@ import frc.robot.Constants;
 public class ShootingArcManager {
 
     // ── Tower tag ID arrays ───────────────────────────────────────────────────
-    public static final int[] RED_TOWER_TAGS  = {9, 10, 11};
-    public static final int[] BLUE_TOWER_TAGS = {19, 20, 21};
+    // All tags physically mounted on or around each tower (from Constants.ShootingArc).
+    // Expanded from {9,10,11} / {19,20,21} so any visible tower tag can be used
+    // for pose estimation and alliance identification.
+    public static final int[] RED_TOWER_TAGS  = Constants.ShootingArc.kRedTowerTagIds;   // {2,3,4,5,8,9,10,11}
+    public static final int[] BLUE_TOWER_TAGS = Constants.ShootingArc.kBlueTowerTagIds;  // {18,19,20,21,24,25,26,27}
 
-    // ── Fallback tower center positions (used if tag not in field layout) ─────
-    // Red tower: average of tags 9 (12.505, 3.666), 10 (12.505, 4.021), 11 (12.257, 4.625)
-    private static final Translation2d RED_TOWER_CENTER_FALLBACK  = new Translation2d(12.422, 4.021);
-    // Blue tower: average of tags 19 (5.215, 3.666), 20 (5.215, 4.021), 21 (4.612, 4.625)
-    private static final Translation2d BLUE_TOWER_CENTER_FALLBACK = new Translation2d(5.014, 4.021);
+    // ── Primary tower tag IDs (center of tower opening) ──────────────────────
+    // getTowerCenter() always returns the position of these tags so the turret
+    // aims at the center of the goal regardless of which side tag is visible.
+    private static final int RED_PRIMARY_TAG  = Constants.ShootingArc.kRedPrimaryTagId;  // 10
+    private static final int BLUE_PRIMARY_TAG = Constants.ShootingArc.kBluePrimaryTagId; // 20
+
+    // ── Goal center depth offset ──────────────────────────────────────────────
+    //
+    // The primary tags (10 for red, 20 for blue) are mounted on the FACE of the
+    // tower, not at the center of the goal opening. The actual goal center is
+    // 2 feet (0.6096 m) BEHIND the tag — i.e. in the −X direction, since both
+    // primary tags face +X (toward their respective alliance).
+    //
+    // Using the tag face position instead of the goal center causes the turret to
+    // aim ~9–10° too far toward the center of the field from every robot position,
+    // producing the "inside edge" miss pattern from both left and right sides.
+    //
+    // This constant is subtracted from the tag's X coordinate in getTowerCenter().
+    private static final double GOAL_CENTER_DEPTH_METERS = 2.0 * 0.3048; // 2 ft = 0.6096 m
+
+    // ── Fallback tower center positions (used if primary tag not in field layout) ─
+    // Corrected: tag face X − 0.6096 m (2 ft into the tower)
+    // Red  tag 10 face: x=12.505 → goal center x=12.505−0.6096=11.895
+    // Blue tag 20 face: x=5.215  → goal center x=5.215−0.6096=4.605
+    private static final Translation2d RED_TOWER_CENTER_FALLBACK  = new Translation2d(11.895, 4.021);//11.895
+    private static final Translation2d BLUE_TOWER_CENTER_FALLBACK = new Translation2d(4.605, 4.021);
 
     // Private constructor — static utility class only
     private ShootingArcManager() {}
@@ -42,23 +66,38 @@ public class ShootingArcManager {
     // =========================================================================
 
     /**
-     * Gets the tower center position from the field layout for a given tag ID.
-     * Falls back to hardcoded positions if the tag is not found in the layout.
+     * Gets the tower CENTER position (center of the goal opening) for a given tag ID.
      *
-     * @param tagId The AprilTag ID of any tower tag (9–11 for red, 19–21 for blue)
-     * @return Translation2d of the tower tag's position on the field
+     * <p>Always returns the position of the PRIMARY tower tag for the alliance
+     * (tag {@value Constants.ShootingArc#kRedPrimaryTagId} for red,
+     *  tag {@value Constants.ShootingArc#kBluePrimaryTagId} for blue),
+     * regardless of which specific tower tag was passed in.
+     *
+     * <p>This ensures the turret always aims at the center of the tower opening
+     * even when only a side tag (e.g. tag 9, tag 11, tag 2) is visible.
+     * The visible tag is used only to identify the alliance and improve the
+     * robot's pose estimate via the PhotonVision multi-tag PnP estimator.
+     *
+     * @param tagId Any tower tag ID (red: 2,3,4,5,8,9,10,11 — blue: 18,19,20,21,24,25,26,27)
+     * @return Translation2d of the PRIMARY tower tag's field position
      */
     public static Translation2d getTowerCenter(int tagId) {
+        // Determine which alliance this tag belongs to, then look up the PRIMARY tag.
+        int primaryTagId = isRedTowerTag(tagId) ? RED_PRIMARY_TAG : BLUE_PRIMARY_TAG;
         try {
-            var tagPose = Constants.Vision.kTagLayout.getTagPose(tagId);
+            var tagPose = Constants.Vision.kTagLayout.getTagPose(primaryTagId);
             if (tagPose.isPresent()) {
-                return new Translation2d(tagPose.get().getX(), tagPose.get().getY());
+                // Both primary tags (10 and 20) face +X, so the goal center is
+                // GOAL_CENTER_DEPTH_METERS behind the tag in the −X direction.
+                double goalX = tagPose.get().getX() - GOAL_CENTER_DEPTH_METERS;
+                double goalY = tagPose.get().getY();
+                return new Translation2d(goalX, goalY);
             }
         } catch (Exception e) {
-            System.err.println("ShootingArcManager: Could not get tag " + tagId
+            System.err.println("ShootingArcManager: Could not get primary tag " + primaryTagId
                     + " pose: " + e.getMessage());
         }
-        // Fallback
+        // Fallback to hardcoded goal-center positions (already offset by 2 ft)
         return isRedTowerTag(tagId) ? RED_TOWER_CENTER_FALLBACK : BLUE_TOWER_CENTER_FALLBACK;
     }
 
@@ -164,28 +203,90 @@ public class ShootingArcManager {
     }
 
     // =========================================================================
+    // Turret pivot position
+    // =========================================================================
+
+    /**
+     * Computes the turret pivot's actual field position by applying the
+     * robot-relative offset ({@link Constants.TurretConstants#kTurretOffsetX},
+     * {@link Constants.TurretConstants#kTurretOffsetY}) rotated by the robot's
+     * current heading.
+     *
+     * <p>The turret pivot is 5 inches behind the robot center (kTurretOffsetX = −0.127 m,
+     * kTurretOffsetY = 0). At side angles this offset shifts the turret laterally in
+     * field coordinates, causing a real aiming error if the robot center is used instead.
+     *
+     * @param robotPose Current robot pose on the field
+     * @return Field-relative position of the turret rotation axis
+     */
+    public static Translation2d getTurretFieldPosition(Pose2d robotPose) {
+        double heading  = robotPose.getRotation().getRadians();
+        double offsetX  = Constants.TurretConstants.kTurretOffsetX; // −0.127 m (5 in back)
+        double offsetY  = Constants.TurretConstants.kTurretOffsetY; // 0.0 m (centered)
+
+        // Rotate the robot-relative offset by the robot's heading to get field-relative offset
+        double fieldX = robotPose.getX() + offsetX * Math.cos(heading) - offsetY * Math.sin(heading);
+        double fieldY = robotPose.getY() + offsetX * Math.sin(heading) + offsetY * Math.cos(heading);
+
+        return new Translation2d(fieldX, fieldY);
+    }
+
+    // =========================================================================
     // Turret aiming
     // =========================================================================
 
     /**
-     * Calculates the turret angle (robot-relative, degrees) needed to aim at the tower.
+     * Calculates the turret angle (robot-relative, degrees) needed to aim at the tower,
+     * WITHOUT applying the {@code kTurretZeroOffsetDegrees} calibration constant.
      *
-     * <p>Uses field-relative robot pose for accurate calculation while moving.
-     * 0° = robot forward, positive = counterclockwise (left), negative = clockwise (right).
+     * <p>Uses the turret pivot's actual field position (not the robot center) so that
+     * the 5-inch rearward offset is correctly accounted for at all robot headings.
+     * At side angles the offset shifts the turret laterally, which would cause a
+     * measurable aiming error if the robot center were used instead.
+     *
+     * <p>0° = robot forward, positive = CCW (left), negative = CW (right).
+     *
+     * @param robotPose Current robot pose on the field
+     * @param towerPos  Tower center position on the field
+     * @return Turret angle in degrees, normalized to [−180, 180], no offset applied
+     */
+    public static double calculateTurretAngleRaw(Pose2d robotPose, Translation2d towerPos) {
+        // Use the turret pivot's actual field position, not the robot center
+        Translation2d turretPos = getTurretFieldPosition(robotPose);
+
+        // Angle from turret pivot to tower in field coordinates (radians)
+        double fieldAngle = Math.atan2(
+                towerPos.getY() - turretPos.getY(),
+                towerPos.getX() - turretPos.getX());
+
+        // Subtract robot heading to get robot-relative turret angle
+        double robotHeading   = robotPose.getRotation().getRadians();
+        double turretAngleDeg = Math.toDegrees(fieldAngle - robotHeading);
+
+        // Normalize to [−180, 180]
+        while (turretAngleDeg >  180.0) turretAngleDeg -= 360.0;
+        while (turretAngleDeg < -180.0) turretAngleDeg += 360.0;
+
+        return turretAngleDeg;
+    }
+
+    /**
+     * Calculates the turret angle (robot-relative, degrees) needed to aim at the tower,
+     * applying the compiled {@link frc.robot.Constants.TurretConstants#kTurretZeroOffsetDegrees}
+     * calibration constant.
+     *
+     * <p>Prefer {@link #calculateTurretAngleRaw} + a dashboard-adjustable offset when
+     * tuning on the robot, so the offset can be changed without redeploying code.
      *
      * @param robotPose Current robot pose on the field
      * @param towerPos  Tower center position on the field
      * @return Turret angle in degrees, normalized to [−180, 180]
      */
     public static double calculateTurretAngle(Pose2d robotPose, Translation2d towerPos) {
-        // Angle from robot to tower in field coordinates (radians)
-        double fieldAngle = Math.atan2(
-                towerPos.getY() - robotPose.getY(),
-                towerPos.getX() - robotPose.getX());
+        double turretAngleDeg = calculateTurretAngleRaw(robotPose, towerPos);
 
-        // Subtract robot heading to get robot-relative turret angle
-        double robotHeading   = robotPose.getRotation().getRadians();
-        double turretAngleDeg = Math.toDegrees(fieldAngle - robotHeading);
+        // Apply physical zero-offset calibration.
+        turretAngleDeg -= frc.robot.Constants.TurretConstants.kTurretZeroOffsetDegrees;
 
         // Normalize to [−180, 180]
         while (turretAngleDeg >  180.0) turretAngleDeg -= 360.0;
@@ -199,14 +300,17 @@ public class ShootingArcManager {
     // =========================================================================
 
     /**
-     * Calculates the Euclidean distance from the robot to the tower center.
+     * Calculates the Euclidean distance from the turret pivot to the tower center.
+     *
+     * <p>Uses the turret pivot's actual field position (not the robot center) so that
+     * the flywheel RPS and hood angle lookup tables receive the correct launch distance.
      *
      * @param robotPose Current robot pose
      * @param towerPos  Tower center position
-     * @return Distance in meters
+     * @return Distance in meters from turret pivot to tower center
      */
     public static double calculateDistance(Pose2d robotPose, Translation2d towerPos) {
-        return robotPose.getTranslation().getDistance(towerPos);
+        return getTurretFieldPosition(robotPose).getDistance(towerPos);
     }
 
     /**

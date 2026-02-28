@@ -35,6 +35,9 @@ public class DriveToAprilTag extends Command {
     
     private Pose2d targetPose;
     private boolean hasValidTarget = false;
+
+    /** Throttle counter — SmartDashboard writes every 5 execute() calls (~100 ms). */
+    private int dashboardCounter = 0;
     
     /**
      * Creates a new DriveToAprilTag command.
@@ -101,13 +104,13 @@ public class DriveToAprilTag extends Command {
     public void initialize() {
         SmartDashboard.putString("DriveToTag/Status", "Initializing");
         SmartDashboard.putNumber("DriveToTag/Target Tag", targetTagId);
-        
-        // Reset PID controllers
+
         xController.reset();
         yController.reset();
         rotationController.reset();
-        
+
         hasValidTarget = false;
+        dashboardCounter = 0;
     }
     
     @Override
@@ -170,27 +173,28 @@ public class DriveToAprilTag extends Command {
         ySpeed = Math.max(-maxSpeed, Math.min(maxSpeed, ySpeed));
         rotSpeed = Math.max(-maxRotSpeed, Math.min(maxRotSpeed, rotSpeed));
         
-        // Apply the drive request
+        // Apply the drive request (unthrottled — motor control every loop)
         drivetrain.setControl(
             driveRequest
                 .withVelocityX(xSpeed)
                 .withVelocityY(ySpeed)
                 .withRotationalRate(rotSpeed)
         );
-        
-        // Publish debug info
-        SmartDashboard.putString("DriveToTag/Status", "Driving");
-        SmartDashboard.putNumber("DriveToTag/X Error", xError);
-        SmartDashboard.putNumber("DriveToTag/Y Error", yError);
-        SmartDashboard.putNumber("DriveToTag/Rotation Error (deg)", Math.toDegrees(rotationError));
-        SmartDashboard.putNumber("DriveToTag/Distance to Target", 
-            Math.sqrt(xError * xError + yError * yError));
-        SmartDashboard.putBoolean("DriveToTag/At Target", isFinished());
-        
-        // Publish target pose
-        SmartDashboard.putNumber("DriveToTag/Target X", targetPose.getX());
-        SmartDashboard.putNumber("DriveToTag/Target Y", targetPose.getY());
-        SmartDashboard.putNumber("DriveToTag/Target Rotation", targetPose.getRotation().getDegrees());
+
+        // Throttled dashboard writes (~10 Hz)
+        dashboardCounter++;
+        if (dashboardCounter >= 5) {
+            dashboardCounter = 0;
+            SmartDashboard.putString( "DriveToTag/Status",               "Driving");
+            SmartDashboard.putNumber( "DriveToTag/X Error",              xError);
+            SmartDashboard.putNumber( "DriveToTag/Y Error",              yError);
+            SmartDashboard.putNumber( "DriveToTag/Rotation Error (deg)", Math.toDegrees(rotationError));
+            SmartDashboard.putNumber( "DriveToTag/Distance to Target",   Math.sqrt(xError * xError + yError * yError));
+            SmartDashboard.putBoolean("DriveToTag/At Target",            isFinished());
+            SmartDashboard.putNumber( "DriveToTag/Target X",             targetPose.getX());
+            SmartDashboard.putNumber( "DriveToTag/Target Y",             targetPose.getY());
+            SmartDashboard.putNumber( "DriveToTag/Target Rotation",      targetPose.getRotation().getDegrees());
+        }
     }
     
     @Override

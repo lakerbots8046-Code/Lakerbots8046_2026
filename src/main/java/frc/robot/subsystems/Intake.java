@@ -64,8 +64,9 @@ public class Intake extends SubsystemBase {
     cfgRollers.Slot0.kI = 0; // No output for integrated error
     cfgRollers.Slot0.kD = 0; // No output for error derivative
     // Peak output of 8 volts
-    cfgRollers.Voltage.withPeakForwardVoltage(Volts.of(8))
-      .withPeakReverseVoltage(Volts.of(-8));
+    cfgRollers.Voltage.withPeakForwardVoltage(Volts.of(12))
+      .withPeakReverseVoltage(Volts.of(-12));
+    cfgRollers.CurrentLimits.withStatorCurrentLimit(Amps.of(60)); // Limit current to 40 A to prevent breaker trips and motor damage
 
     /* Torque-based velocity does not require a velocity feed forward, as torque will accelerate the rotor up to the desired velocity by itself */
     cfgRollers.Slot1.kS = 2.5; // To account for friction, add 2.5 A of static feedforward
@@ -89,20 +90,20 @@ public class Intake extends SubsystemBase {
 
     //Configure Motion Magic
     MotionMagicConfigs mm = cfgPivot.MotionMagic;
-    mm.withMotionMagicCruiseVelocity(RotationsPerSecond.of(.6))
-      .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(.9))
-      .withMotionMagicJerk(RotationsPerSecondPerSecond.per(Second).of(100));
+    mm.withMotionMagicCruiseVelocity(RotationsPerSecond.of(4.8))
+      .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(4.8))
+      .withMotionMagicJerk(RotationsPerSecondPerSecond.per(Second).of(0));
  
 
     Slot0Configs slot0 = cfgPivot.Slot0;
     slot0.kS = 0.25; // Add 0.25 V output to overcome static friction
     slot0.kV = 13.0; // A velocity target of 1 rps results in 13 V output
     slot0.kA = 0.01; // An acceleration of 1 rps/s requires 0.01 V output
-    slot0.kP = 20; // A position error of 0.2 rotations results in 12 V output
+    slot0.kP = 70; // A position error of 0.2 rotations results in 12 V output
     slot0.kI = 0; // No output for integrated error
-    slot0.kD = 0.5; // A velocity error of 1 rps results in 0.5 V output
+    slot0.kD = 0; // A velocity error of 1 rps results in 0.5 V output
 
-    // Software limits — prevent pivot from travelling outside safe range
+    // Software limits prevent pivot from travelling outside safe range
     // Upper limit: kPivotHomePosition (0.0) — pivot cannot raise above home/stowed
     // Lower limit: kPivotDeployCollectPosition (-1.36) — pivot cannot lower past deploy position
     cfgPivot.SoftwareLimitSwitch.ForwardSoftLimitEnable = true;
@@ -244,26 +245,7 @@ public class Intake extends SubsystemBase {
     }, this);
   }
   
-  /**
-   * Command to move pivot to high scoring position
-   * @return Command that positions intake for high scoring
-   */
-  public Command positionForScoreHigh() {
-    return Commands.runOnce(() -> {
-      setPivotPosition(IntakeConstants.kPivotScoreHighPosition);
-    }, this);
-  }
-  
-  /**
-   * Command to move pivot to low scoring position
-   * @return Command that positions intake for low scoring
-   */
-  public Command positionForScoreLow() {
-    return Commands.runOnce(() -> {
-      setPivotPosition(IntakeConstants.kPivotScoreLowPosition);
-    }, this);
-  }
-  
+ 
   public Command setIntakeRollersVoltage(double speed){
     return Commands.run(() -> {
       intakeRollers.set(speed);
@@ -326,7 +308,19 @@ public class Intake extends SubsystemBase {
       setPivotPosition(position);
     }, this).andThen(Commands.waitUntil(this::isPivotAtTarget));
   }
-
+public Command AutoIntakeDeployCollect() {
+    return Commands.runOnce(() -> rollersEnabled = true, this)
+      .andThen(Commands.run(() -> {
+        setPivotPosition(IntakeConstants.kPivotDeployCollectPosition);
+        if (rollersEnabled) {
+          //setIntakeRollersVoltage(IntakeConstants.kIntakeVoltage);
+          setRollersVelocity(IntakeConstants.kRollersIntakeVelocity);
+        } else {
+          stopRollers();
+        }
+        rollersEnabled = true;
+      }, this)).withTimeout(3);
+  }
   /**
    * Command to deploy the intake pivot to -1.2 rotations (Motion Magic) and start
    * the intake rollers. Designed for toggleOnTrue():
@@ -340,6 +334,7 @@ public class Intake extends SubsystemBase {
       .andThen(Commands.run(() -> {
         setPivotPosition(IntakeConstants.kPivotDeployCollectPosition);
         if (rollersEnabled) {
+          //setIntakeRollersVoltage(IntakeConstants.kIntakeVoltage);
           setRollersVelocity(IntakeConstants.kRollersIntakeVelocity);
         } else {
           stopRollers();
@@ -367,6 +362,28 @@ public class Intake extends SubsystemBase {
   }
 
   /**
+   * Immediately stops the intake rollers and prevents {@link #intakeDeployCollect()}
+   * from restarting them. Safe to call from outside a command (no subsystem requirement).
+   *
+   * <p>Call this when another mechanism (e.g. shoot-on-arc) needs the rollers off.
+   * Pair with {@link #enableRollers()} to restore normal roller behaviour afterward.
+   */
+  public void stopRollersDirect() {
+    rollersEnabled = false;
+    intakeRollers.setControl(m_brake);
+  }
+
+  /**
+   * Allows {@link #intakeDeployCollect()} to resume spinning the rollers on its next loop.
+   * Has no effect if {@link #intakeDeployCollect()} is not currently running.
+   *
+   * <p>Call this when the mechanism that called {@link #stopRollersDirect()} has finished.
+   */
+  public void enableRollers() {
+    rollersEnabled = true;
+  }
+
+  /**
    * Manually lowers the intake pivot while the button is held (X button).
    * Runs the pivot motor at -kPivotManualSpeed (downward) continuously.
    * On release: stops the motor and holds the current position via Motion Magic.
@@ -388,6 +405,24 @@ public class Intake extends SubsystemBase {
   public Command raiseIntakeManual() {
     return Commands.run(() -> intakePivot.set(IntakeConstants.kPivotManualSpeed), this)
         .finallyDo(() -> setPivotPosition(getPivotPosition())); // hold wherever it stopped
+  }
+
+  /**
+   * Lifts the intake pivot to the dump position (-0.75 rotations), holds it there
+   * for 0.5 seconds, then returns to the deploy/collect position.
+   *
+   * <p>Intended to be bound to a button with {@code onTrue()} so it runs once per press.
+   * Requires the intake subsystem — will interrupt {@link #intakeDeployCollect()} if running.
+   * After this command finishes, re-press the deploy/collect button to resume normal intake.
+   *
+   * @return Command that performs the dump-and-return sequence
+   */
+  public Command dumpAndReturn() {
+    return Commands.sequence(
+        goToPivotPosition(-0.75),                                                          // lift to dump position and wait until there
+        Commands.waitSeconds(0.5),                                                         // hold at dump position for 0.5 s
+        Commands.runOnce(() -> setPivotPosition(IntakeConstants.kPivotDeployCollectPosition), this) // return to collect position
+    );
   }
 
   /**

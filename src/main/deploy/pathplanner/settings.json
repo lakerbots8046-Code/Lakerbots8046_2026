@@ -1,6 +1,6 @@
 {
-  "robotWidth": 0.86,
-  "robotLength": 0.81,
+  "robotWidth": 0.9271,
+  "robotLength": 0.8509,
   "holonomicMode": true,
   "pathFolders": [
     "leftNeutralFeed",

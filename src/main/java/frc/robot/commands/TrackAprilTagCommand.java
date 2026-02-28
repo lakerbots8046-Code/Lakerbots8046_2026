@@ -21,6 +21,9 @@ public class TrackAprilTagCommand extends Command {
     private boolean isLockedOn = false;
     private boolean isWrappingAround = false;
     private double wrapAroundTarget = 0.0;
+
+    /** Throttle counter — SmartDashboard writes every 5 execute() calls (~100 ms). */
+    private int dashboardCounter = 0;
     
     /**
      * Creates a new TrackAprilTagCommand.
@@ -62,7 +65,8 @@ public class TrackAprilTagCommand extends Command {
         pidController.reset();
         isLockedOn = false;
         isWrappingAround = false;
-        
+        dashboardCounter = 0;
+
         // Publish initial status
         SmartDashboard.putBoolean(TurretConstants.kSmartDashboardPrefix + TurretConstants.kTrackingLockedKey, false);
     }
@@ -83,59 +87,64 @@ public class TrackAprilTagCommand extends Command {
         if (!visionSubsystem.isAnyTargetVisible()) {
             turretSubsystem.setSpeed(0.0);
             isLockedOn = false;
-            SmartDashboard.putBoolean(TurretConstants.kSmartDashboardPrefix + TurretConstants.kTrackingLockedKey, false);
-            SmartDashboard.putString(TurretConstants.kSmartDashboardPrefix + TurretConstants.kStatusKey, 
-                                    "Tracking: No Target");
+            // Throttled dashboard writes
+            dashboardCounter++;
+            if (dashboardCounter >= 5) {
+                dashboardCounter = 0;
+                SmartDashboard.putBoolean(TurretConstants.kSmartDashboardPrefix + TurretConstants.kTrackingLockedKey, false);
+                SmartDashboard.putString(TurretConstants.kSmartDashboardPrefix + TurretConstants.kStatusKey,
+                                        "Tracking: No Target");
+            }
             return;
         }
-        
+
         // Get target yaw from the best available camera.
         // Priority: camera with larger target area (closer/more confident).
         // Automatically falls back to whichever single camera still sees the tag.
         double targetYaw = visionSubsystem.getBestTargetYaw();
-        
+
         // Calculate desired turret angle
-        // The turret needs to rotate to align with the target
-        // Positive yaw means target is to the right, so turret should rotate right (positive)
         double currentAngle = turretSubsystem.getAngle();
         double desiredAngle = currentAngle + targetYaw;
-        
+
         // Check if we need to wrap around
         if (turretSubsystem.needsWrapAround(desiredAngle)) {
             initiateWrapAround(desiredAngle);
             return;
         }
-        
+
         // Calculate PID output
-        double pidOutput = pidController.calculate(0, -targetYaw); // Negative because we want to minimize error
-        
+        double pidOutput = pidController.calculate(0, -targetYaw);
+
         // Clamp output to max tracking speed
-        pidOutput = Math.max(-TurretConstants.kMaxTrackingSpeed, 
+        pidOutput = Math.max(-TurretConstants.kMaxTrackingSpeed,
                            Math.min(TurretConstants.kMaxTrackingSpeed, pidOutput));
-        
+
         // Apply minimum output to overcome friction (only if not at setpoint)
         if (!pidController.atSetpoint() && Math.abs(pidOutput) < TurretConstants.kMinTrackingOutput) {
             pidOutput = Math.copySign(TurretConstants.kMinTrackingOutput, pidOutput);
         }
-        
-        // Apply speed to turret
+
+        // Apply speed to turret (unthrottled — motor control must run every loop)
         turretSubsystem.setSpeed(pidOutput);
-        
+
         // Update locked-on status
         isLockedOn = pidController.atSetpoint();
-        
-        // Update dashboard
-        SmartDashboard.putBoolean(TurretConstants.kSmartDashboardPrefix + TurretConstants.kTrackingLockedKey, isLockedOn);
-        SmartDashboard.putNumber(TurretConstants.kSmartDashboardPrefix + TurretConstants.kTrackingErrorKey, targetYaw);
-        SmartDashboard.putNumber(TurretConstants.kSmartDashboardPrefix + TurretConstants.kCurrentAngleKey, currentAngle);
-        
-        // Report active camera and lock status to dashboard
-        String activeCamera = visionSubsystem.getActiveCameraName();
-        String status = isLockedOn
-            ? "Tracking: LOCKED [" + activeCamera + "]"
-            : String.format("Tracking: Error %.1f° [%s]", targetYaw, activeCamera);
-        SmartDashboard.putString(TurretConstants.kSmartDashboardPrefix + TurretConstants.kStatusKey, status);
-        SmartDashboard.putString(TurretConstants.kSmartDashboardPrefix + "Active Camera", activeCamera);
+
+        // Throttle dashboard writes to every 5 loops (~100 ms)
+        dashboardCounter++;
+        if (dashboardCounter >= 5) {
+            dashboardCounter = 0;
+            String activeCamera = visionSubsystem.getActiveCameraName();
+            String status = isLockedOn
+                ? "Tracking: LOCKED [" + activeCamera + "]"
+                : String.format("Tracking: Error %.1f° [%s]", targetYaw, activeCamera);
+            SmartDashboard.putBoolean(TurretConstants.kSmartDashboardPrefix + TurretConstants.kTrackingLockedKey, isLockedOn);
+            SmartDashboard.putNumber(TurretConstants.kSmartDashboardPrefix + TurretConstants.kTrackingErrorKey, targetYaw);
+            SmartDashboard.putNumber(TurretConstants.kSmartDashboardPrefix + TurretConstants.kCurrentAngleKey, currentAngle);
+            SmartDashboard.putString(TurretConstants.kSmartDashboardPrefix + TurretConstants.kStatusKey, status);
+            SmartDashboard.putString(TurretConstants.kSmartDashboardPrefix + "Active Camera", activeCamera);
+        }
     }
     
     /**
@@ -145,15 +154,16 @@ public class TrackAprilTagCommand extends Command {
      */
     private void initiateWrapAround(double desiredAngle) {
         isWrappingAround = true;
-        
+
         // Calculate wrap-around target (opposite side)
         if (turretSubsystem.isNearMaxLimit()) {
             wrapAroundTarget = -TurretConstants.kWrapAroundTargetOffset;
         } else {
             wrapAroundTarget = TurretConstants.kWrapAroundTargetOffset;
         }
-        
-        SmartDashboard.putString(TurretConstants.kSmartDashboardPrefix + TurretConstants.kStatusKey, 
+
+        // Single write on state change — not in the hot execute() path
+        SmartDashboard.putString(TurretConstants.kSmartDashboardPrefix + TurretConstants.kStatusKey,
                                 "Tracking: Wrapping Around");
     }
     
@@ -162,22 +172,26 @@ public class TrackAprilTagCommand extends Command {
      */
     private void handleWrapAround() {
         double currentAngle = turretSubsystem.getAngle();
-        
+
         // Check if we've reached the wrap-around target
         if (turretSubsystem.atAngle(wrapAroundTarget, TurretConstants.kPositionToleranceDegrees)) {
             isWrappingAround = false;
             pidController.reset();
             return;
         }
-        
-        // Continue rotating toward wrap-around target
+
+        // Continue rotating toward wrap-around target (motor control — unthrottled)
         double error = wrapAroundTarget - currentAngle;
         double speed = Math.copySign(TurretConstants.kWrapAroundSpeed, error);
         turretSubsystem.setSpeed(speed);
-        
-        // Update dashboard
-        SmartDashboard.putString(TurretConstants.kSmartDashboardPrefix + TurretConstants.kStatusKey, 
-                                String.format("Wrapping: %.1f° -> %.1f°", currentAngle, wrapAroundTarget));
+
+        // Throttle dashboard write (shares dashboardCounter with execute())
+        dashboardCounter++;
+        if (dashboardCounter >= 5) {
+            dashboardCounter = 0;
+            SmartDashboard.putString(TurretConstants.kSmartDashboardPrefix + TurretConstants.kStatusKey,
+                                    String.format("Wrapping: %.1f° -> %.1f°", currentAngle, wrapAroundTarget));
+        }
     }
     
     @Override

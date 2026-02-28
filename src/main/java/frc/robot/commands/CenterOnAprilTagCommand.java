@@ -50,6 +50,9 @@ public class CenterOnAprilTagCommand extends Command {
     // Yaw tolerance in degrees for "centered" check
     private static final double kYawToleranceDegrees = 2.0;
 
+    /** Throttle counter — SmartDashboard writes every 5 execute() calls (~100 ms). */
+    private int dashboardCounter = 0;
+
     /**
      * Creates a CenterOnAprilTagCommand with a custom target distance.
      *
@@ -98,52 +101,49 @@ public class CenterOnAprilTagCommand extends Command {
     public void initialize() {
         strafeController.reset();
         driveController.reset();
+        dashboardCounter = 0;
         SmartDashboard.putString("CenterOnTag/Status", "Initializing");
         SmartDashboard.putBoolean("CenterOnTag/Centered", false);
         SmartDashboard.putBoolean("CenterOnTag/Command Active", true);
-        // Log which tag we're looking for
         SmartDashboard.putNumber("CenterOnTag/Looking For Tag", visionSubsystem.getSelectedTagId());
     }
 
     @Override
     public void execute() {
-        // Always publish diagnostic info so we can see what's happening
         boolean bfVisible = visionSubsystem.isTargetVisibleBF();
         boolean ffVisible = visionSubsystem.isTargetVisibleFF();
-        SmartDashboard.putBoolean("CenterOnTag/BF Sees Tag", bfVisible);
-        SmartDashboard.putBoolean("CenterOnTag/FF Sees Tag", ffVisible);
-        SmartDashboard.putBoolean("CenterOnTag/Command Active", true);
-        SmartDashboard.putNumber("CenterOnTag/Looking For Tag", visionSubsystem.getSelectedTagId());
 
         // ── No target visible ────────────────────────────────────────────────
         if (!visionSubsystem.isAnyTargetVisible()) {
-            SmartDashboard.putString("CenterOnTag/Status",
-                "No Target Visible – BF:" + bfVisible + " FF:" + ffVisible
-                + " Tag:" + visionSubsystem.getSelectedTagId());
-            SmartDashboard.putBoolean("CenterOnTag/Centered", false);
+            // Throttled dashboard writes — no motor output needed when no target
+            dashboardCounter++;
+            if (dashboardCounter >= 5) {
+                dashboardCounter = 0;
+                SmartDashboard.putBoolean("CenterOnTag/BF Sees Tag", bfVisible);
+                SmartDashboard.putBoolean("CenterOnTag/FF Sees Tag", ffVisible);
+                SmartDashboard.putBoolean("CenterOnTag/Command Active", true);
+                SmartDashboard.putNumber("CenterOnTag/Looking For Tag", visionSubsystem.getSelectedTagId());
+                SmartDashboard.putString("CenterOnTag/Status",
+                    "No Target Visible – BF:" + bfVisible + " FF:" + ffVisible
+                    + " Tag:" + visionSubsystem.getSelectedTagId());
+                SmartDashboard.putBoolean("CenterOnTag/Centered", false);
+            }
             return;
         }
 
         // ── Read best-camera measurements ────────────────────────────────────
-        double targetYaw      = visionSubsystem.getBestTargetYaw();
-        double currentDist    = visionSubsystem.getBestTargetDistance();
-        String activeCamera   = visionSubsystem.getActiveCameraName();
-        double distanceError  = currentDist - targetDistance;
+        double targetYaw     = visionSubsystem.getBestTargetYaw();
+        double currentDist   = visionSubsystem.getBestTargetDistance();
+        String activeCamera  = visionSubsystem.getActiveCameraName();
+        double distanceError = currentDist - targetDistance;
 
         // ── Strafe control (yaw → 0) ─────────────────────────────────────────
-        // Cameras face backward (~180°):
-        //   positive yaw = tag to camera's right = robot's LEFT → strafe left (+Y)
-        // calculate(measurement=0, setpoint=targetYaw) → output = kP * targetYaw
-        //   targetYaw > 0 → positive output → +Y velocity → strafe left ✓
         double strafeSpeed = strafeController.calculate(0, targetYaw);
 
         // ── Drive control (distance → targetDistance) ────────────────────────
-        // Cameras face backward: to reduce distance, drive backward (-X).
-        // calculate(currentDist, targetDistance) → output = kP*(targetDistance - currentDist)
-        //   currentDist > targetDistance → output < 0 → -X velocity → drive backward ✓
         double driveSpeed = driveController.calculate(currentDist, targetDistance);
 
-        // ── Clamp to slower centering speeds (safe for testing) ───────────────
+        // ── Clamp to slower centering speeds ─────────────────────────────────
         double maxDrive  = TunerConstants.kSpeedAt12Volts.in(Units.MetersPerSecond)
                            * Constants.Vision.kMaxCenteringDriveSpeed;
         double maxStrafe = TunerConstants.kSpeedAt12Volts.in(Units.MetersPerSecond)
@@ -152,48 +152,53 @@ public class CenterOnAprilTagCommand extends Command {
         strafeSpeed = Math.max(-maxStrafe, Math.min(maxStrafe, strafeSpeed));
         driveSpeed  = Math.max(-maxDrive,  Math.min(maxDrive,  driveSpeed));
 
-        // ── Apply drive request ───────────────────────────────────────────────
+        // ── Apply drive request (unthrottled — motor control every loop) ──────
         drivetrain.setControl(
             driveRequest
-                .withVelocityX(driveSpeed)   // forward/backward (negative = toward tag)
-                .withVelocityY(strafeSpeed)  // left/right centering
-                .withRotationalRate(0)       // hold current heading
+                .withVelocityX(driveSpeed)
+                .withVelocityY(strafeSpeed)
+                .withRotationalRate(0)
         );
 
-        // ── Dashboard ─────────────────────────────────────────────────────────
-        boolean centered = strafeController.atSetpoint() && driveController.atSetpoint();
+        // ── Throttled dashboard writes (~10 Hz) ───────────────────────────────
+        dashboardCounter++;
+        if (dashboardCounter >= 5) {
+            dashboardCounter = 0;
 
-        // Simple camera label: "BF", "FF", or "Both"
-        String cameraLabel;
-        if (visionSubsystem.isTargetVisibleBF() && visionSubsystem.isTargetVisibleFF()) {
-            cameraLabel = activeCamera.contains("Back") ? "BF (Primary)" : "FF (Primary)";
-        } else if (visionSubsystem.isTargetVisibleBF()) {
-            cameraLabel = "BF";
-        } else {
-            cameraLabel = "FF";
+            boolean centered = strafeController.atSetpoint() && driveController.atSetpoint();
+
+            String cameraLabel;
+            if (visionSubsystem.isTargetVisibleBF() && visionSubsystem.isTargetVisibleFF()) {
+                cameraLabel = activeCamera.contains("Back") ? "BF (Primary)" : "FF (Primary)";
+            } else if (visionSubsystem.isTargetVisibleBF()) {
+                cameraLabel = "BF";
+            } else {
+                cameraLabel = "FF";
+            }
+
+            SmartDashboard.putBoolean("CenterOnTag/BF Sees Tag",        bfVisible);
+            SmartDashboard.putBoolean("CenterOnTag/FF Sees Tag",        ffVisible);
+            SmartDashboard.putBoolean("CenterOnTag/Command Active",     true);
+            SmartDashboard.putNumber( "CenterOnTag/Looking For Tag",    visionSubsystem.getSelectedTagId());
+            SmartDashboard.putString( "Vision/Centering Camera",        cameraLabel);
+            SmartDashboard.putNumber( "Vision/Tag Distance (ft)",       currentDist * 3.28084);
+            SmartDashboard.putNumber( "Vision/Tag Distance (m)",        currentDist);
+            SmartDashboard.putBoolean("Vision/Centered",                centered);
+            SmartDashboard.putString( "CenterOnTag/Active Camera",      activeCamera);
+            SmartDashboard.putNumber( "CenterOnTag/Yaw Error (deg)",    targetYaw);
+            SmartDashboard.putNumber( "CenterOnTag/Distance (m)",       currentDist);
+            SmartDashboard.putNumber( "CenterOnTag/Distance (ft)",      currentDist * 3.28084);
+            SmartDashboard.putNumber( "CenterOnTag/Distance Error",     distanceError);
+            SmartDashboard.putBoolean("CenterOnTag/Centered",           centered);
+            SmartDashboard.putNumber( "CenterOnTag/Strafe Speed",       strafeSpeed);
+            SmartDashboard.putNumber( "CenterOnTag/Drive Speed",        driveSpeed);
+
+            String status = centered
+                ? "CENTERED [" + cameraLabel + "] @ " + String.format("%.1f ft", currentDist * 3.28084)
+                : String.format("Centering – Yaw: %.1f° | %.1f ft [%s]",
+                                targetYaw, currentDist * 3.28084, cameraLabel);
+            SmartDashboard.putString("CenterOnTag/Status", status);
         }
-
-        // Top-level simple keys for Elastic widgets
-        SmartDashboard.putString("Vision/Centering Camera",     cameraLabel);
-        SmartDashboard.putNumber("Vision/Tag Distance (ft)",    currentDist * 3.28084); // meters → feet
-        SmartDashboard.putNumber("Vision/Tag Distance (m)",     currentDist);
-        SmartDashboard.putBoolean("Vision/Centered",            centered);
-
-        // Detailed keys for debugging
-        SmartDashboard.putString("CenterOnTag/Active Camera",   activeCamera);
-        SmartDashboard.putNumber("CenterOnTag/Yaw Error (deg)", targetYaw);
-        SmartDashboard.putNumber("CenterOnTag/Distance (m)",    currentDist);
-        SmartDashboard.putNumber("CenterOnTag/Distance (ft)",   currentDist * 3.28084);
-        SmartDashboard.putNumber("CenterOnTag/Distance Error",  distanceError);
-        SmartDashboard.putBoolean("CenterOnTag/Centered",       centered);
-        SmartDashboard.putNumber("CenterOnTag/Strafe Speed",    strafeSpeed);
-        SmartDashboard.putNumber("CenterOnTag/Drive Speed",     driveSpeed);
-
-        String status = centered
-            ? "CENTERED [" + cameraLabel + "] @ " + String.format("%.1f ft", currentDist * 3.28084)
-            : String.format("Centering – Yaw: %.1f° | %.1f ft [%s]",
-                            targetYaw, currentDist * 3.28084, cameraLabel);
-        SmartDashboard.putString("CenterOnTag/Status", status);
     }
 
     @Override

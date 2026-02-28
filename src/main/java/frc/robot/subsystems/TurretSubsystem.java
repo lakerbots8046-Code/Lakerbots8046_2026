@@ -61,14 +61,17 @@ public class TurretSubsystem extends SubsystemBase {
 
     @Override
     public void periodic() {
-        // Check dashboard buttons and apply motor speed every loop
-        checkDashboardControls();
+        // Apply motor speed every loop (must stay unthrottled for responsive control)
         turretMotor.set(targetSpeed);
 
-        // Throttle SmartDashboard updates to every 5 loops (~100ms)
+        // Throttle all NT reads/writes to every 5 loops (~100 ms).
+        // Dashboard buttons only need to be checked at 10 Hz — checking at 50 Hz
+        // generates 150 unnecessary NT reads/sec with no benefit.
         periodicCounter++;
         if (periodicCounter < 5) return;
         periodicCounter = 0;
+
+        checkDashboardControls();
         updateDashboard();
     }
     

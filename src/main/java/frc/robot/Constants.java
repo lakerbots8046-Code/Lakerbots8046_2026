@@ -70,6 +70,52 @@ public class Constants {
         public static final int kLauncherMotorID = 8;
         public static final int kHoodMotorID = 9;
         public static final int kTurretMotorID = 7;
+
+        // ── Hood physical constants ───────────────────────────────────────────
+        /** Total gear reduction from motor to hood mechanism. */
+        public static final double kHoodGearRatio = 93.25;
+        /** Minimum motor position (rotations). */
+        public static final double kHoodMinRotations = 0.0;
+        /** Maximum motor position (rotations). */
+        public static final double kHoodMaxRotations = 11.5;
+
+        // ── IMPORTANT: Motor direction is INVERTED ────────────────────────────
+        // Confirmed on robot (measured physically):
+        //   0 rotations   = 22° from straight up = 68° from horizontal (steepest)
+        //   11.5 rotations = 62° from straight up = 28° from horizontal (flattest)
+        // Higher motor position = FLATTER shot (lower arc).
+        // Lower motor position  = STEEPER shot (higher arc).
+        /** Launch angle (degrees from horizontal) when motor is at kHoodMinRotations (0 rot). */
+        public static final double kHoodMinAngleDeg = 68.0;   // 22° from vertical = steepest
+        /** Launch angle (degrees from horizontal) when motor is at kHoodMaxRotations (11.5 rot). */
+        public static final double kHoodMaxAngleDeg = 28.0;   // 62° from vertical = flattest
+
+        /**
+         * Converts a desired launch angle (degrees from horizontal) to motor rotations.
+         * Motor is inverted: 0 rot = 68° (steep), 11.5 rot = 28° (flat).
+         * Formula: rotations = (kHoodMinAngleDeg - angleDeg) / (kHoodMinAngleDeg - kHoodMaxAngleDeg) * kHoodMaxRotations
+         */
+        public static double hoodAngleToRotations(double angleDeg) {
+            return (kHoodMinAngleDeg - angleDeg)
+                    / (kHoodMinAngleDeg - kHoodMaxAngleDeg)
+                    * kHoodMaxRotations;
+        }
+        /** Position tolerance for hood "at target" check (motor rotations). */
+        public static final double kHoodPositionToleranceRotations = 0.2;
+
+        /**
+         * Flywheel idle speed (RPS) while the robot is enabled but not actively shooting.
+         * Keeping the flywheel spinning at low speed reduces spool-up time when a shot
+         * is requested. Negative = shooting direction (same sign as kLauncherRPSLookup).
+         *
+         * <p>At -15 RPS the flywheel draws minimal current (~5-10% of stall) but already
+         * has meaningful rotational inertia. Increase toward -25 RPS for faster spool-up;
+         * decrease toward -5 RPS to reduce heat/noise during long idle periods.
+         *
+         * <p>Set to 0.0 to disable idle spinning entirely.
+         */
+        public static final double kFlywheelIdleRPS = -15.0;
+
         public static double kSensorToMechanismRatio;
         public static double kHoodStowedPosition;
         public static double kHoodCollectPosition;
@@ -152,12 +198,77 @@ public class Constants {
         // degrees of the hard stop. Prevents the turret from slamming into the physical stop.
         public static final double kNearLimitBuffer = 5.0; // degrees of buffer before hard stop
 
+        // ── Turret zero calibration offset ────────────────────────────────────
+        //
+        // The TalonFX encoder resets to 0 wherever the turret physically is at
+        // power-on. If the turret was NOT pointing along the robot's forward
+        // direction (+X) when powered on, every angle command will be off by
+        // that amount. This offset compensates for that physical misalignment.
+        //
+        // HOW TO TUNE:
+        //   1. Place the robot directly in front of the tower (robot facing tower).
+        //   2. Run ShootFromPointCommand (left trigger hard press).
+        //   3. Watch "ShootFromPoint/Turret Error (deg)" on the dashboard.
+        //   4. If the turret overshoots CCW (left), increase this value.
+        //      If the turret overshoots CW (right), decrease this value.
+        //   5. Repeat until front shots are centred, then verify side shots.
+        //
+        // Sign convention:
+        //   Positive = turret physical zero is CCW (left) of robot forward.
+        //   Negative = turret physical zero is CW  (right) of robot forward.
+        // ── Tuning history ────────────────────────────────────────────────────
+        // v0: 0.0  — shots consistently miss to the INSIDE EDGE of the hub from
+        //            both left and right sides.
+        // v1: 5.0  — still 3-5° CCW per driver feedback (inside edge, less severe).
+        // v2: 9.0  — (+4° from v1) — appeared to fix the issue.
+        //
+        // ROOT CAUSE FOUND: The "inside edge" error was NOT a physical turret
+        // misalignment. It was caused by ShootingArcManager.getTowerCenter() using
+        // the TAG FACE position (x=12.505) as the goal center instead of the actual
+        // goal center, which is 2 ft (0.6096 m) BEHIND the tag (x=11.895).
+        // This caused a ~9–10° CCW aiming error from every robot position.
+        // The previous non-zero offsets (5.0, 9.0) were compensating for this bug.
+        //
+        // FIXED IN: ShootingArcManager.java — GOAL_CENTER_DEPTH_METERS = 0.6096 m
+        //           now subtracted from the tag X coordinate in getTowerCenter().
+        //
+        // RESET TO: 0.0 — with the correct goal center, no offset should be needed.
+        //           If shots are still slightly off after deploying the hub-center fix,
+        //           tune this value using "ShootFromPoint/Turret Zero Offset (deg)"
+        //           on the dashboard (no redeploy needed), then update this constant.
+        //
+        // TUNING PROCEDURE (if still needed after hub-center fix):
+        //   1. Place robot directly in front of the tower (robot facing tower, ~2m away).
+        //   2. Hold left trigger hard (ShootFromPointCommand).
+        //   3. Watch "ShootFromPoint/Turret Error (deg)" on dashboard — should read ~0.
+        //   4. If shots miss to the INSIDE EDGE  → increase this value (+2° at a time).
+        //      If shots miss to the OUTSIDE EDGE → decrease this value (-2° at a time).
+        //   5. Verify from both left and right sides of the alliance zone.
+        public static final double kTurretZeroOffsetDegrees = 6.0;
+
+        // ── Turret pivot offset from robot center ─────────────────────────────
+        //
+        // The turret rotation axis is NOT at the robot center.
+        // Measured physically: 5 inches behind the robot center, centered left-right.
+        //
+        // This offset is used by ShootingArcManager to compute the turret's actual
+        // field position for accurate angle and distance calculations, especially
+        // at side angles where the offset shifts the turret laterally.
+        //
+        // Sign convention (robot-relative, WPILib):
+        //   +X = robot forward,  -X = robot backward
+        //   +Y = robot left,     -Y = robot right
+        /** Turret pivot offset along robot X axis (meters). Negative = behind robot center. */
+        public static final double kTurretOffsetX = -Units.inchesToMeters(5.0); // 5 in behind center
+        /** Turret pivot offset along robot Y axis (meters). Zero = centered left-right. */
+        public static final double kTurretOffsetY = 0.0;
+
         // kWrapAroundThreshold kept for API compatibility — wrap-around is DISABLED.
         // With ±169° range the turret does not need to wrap around.
         public static final double kWrapAroundThreshold = 177.0; // unused
         
         // AprilTag Tracking
-        public static final double kTrackingP = 0.02; // Proportional gain for tracking
+        public static final double kTrackingP = 20.0; // Proportional gain for tracking
         public static final double kTrackingI = 0.0;  // Integral gain
         public static final double kTrackingD = 0.001; // Derivative gain
         public static final double kTrackingToleranceDegrees = 3.0; // Tolerance for "locked in" state
@@ -173,7 +284,11 @@ public class Constants {
         public static final double spindexerDutyCycleOut = -0.6;  // Spindexer (CAN 4): temp -0.2 | final: -1.0
         public static final double starFeederDutyCycleOut = -0.1;  // StarFeeder (CAN 5): temp -0.2 | final: -1.0
         public static final double feederDutyCycleOut = 0.6;     // Feeder (CAN 6):     temp -0.2 | final: -0.5
-        public static final double flywheelDutyCycleOut = -0.75;    // Launcher (CAN 8):   temp -0.2 | final: -1.0
+        public static final double flywheelDutyCycleOut = -0.65;    //-0.75  // Launcher (CAN 8):   temp -0.2 | final: -1.0
+        // Hood position (motor rotations) during Launch from Tower.
+        // Range: 0.0 rot = 68° from horizontal (steepest) → 11.5 rot = 28° from horizontal (flattest).
+        // TUNE ON ROBOT: increase toward 11.5 to flatten the shot; decrease toward 0.0 to steepen it.
+        public static final double hoodTowerPosition = 1.0; // TESTED on robot
 
         // SmartDashboard Keys
         public static final String kSmartDashboardPrefix = "Turret/";
@@ -203,11 +318,12 @@ public class Constants {
         // Intake Pivot Position Setpoints (in rotations)
         public static final double kPivotStowedPosition = 0.0;           // Fully retracted/stowed
         public static final double kPivotCollectPosition = 0.25;         // Extended for collecting game pieces
-        public static final double kPivotScoreHighPosition = 0.15;       // Position for high scoring
-        public static final double kPivotScoreLowPosition = 0.05;        // Position for low scoring
-        public static final double kPivotDeployCollectPosition = -1.375; // Deploy position for intake_deploy_collect
+       // public static final double kPivotScoreHighPosition = 0.15;       // Position for high scoring
+       // public static final double kPivotScoreLowPosition = 0.05;        // Position for low scoring
+        public static final double kPivotDeployCollectPosition = -1.34; // Deploy position for intake_deploy_collect -1.36 to -1.25 to 1.304
         public static final double kPivotHomePosition = 0.0;            // Retract/home position after collecting
-        
+        public static final double kPivotDumpPosition = -0.75;          // This is used to flip the remaining fuel back into the hopper while launching. 
+
         // Intake Collection Velocities (in rotations per second
         public static final double kCollectIntakeVelocity = 30.0;   // Speed when intaking game pieces
         public static final double kCollectOuttakeVelocity = -20.0; // Speed when ejecting game pieces
@@ -232,7 +348,8 @@ public class Constants {
         public static final String kPivotTempKey = "Pivot Temp (C)";
         public static final String kCollectTempKey = "Collect Temp (C)";
         public static final String kStatusKey = "Status";
-        public static final double kRollersIntakeVelocity = -75.0;  // Speed when intaking game pieces (rps) — negative = correct intake direction
+        public static final double kIntakeVoltage = -9.0;
+        public static final double kRollersIntakeVelocity = -100.0; //-85.0 // Speed when intaking game pieces (rps) — negative = correct intake direction, (100 rps max?)
         public static final double kRollersOuttakeVelocity = -20.0; // Speed when ejecting game pieces (rps)
         public static final double kRollersHoldVelocity = 5.0;      // Low speed to hold game piece (rps)
         public static String kRollersVelocityKey;
@@ -244,6 +361,53 @@ public class Constants {
         public static final double kPivotManualSpeed = 0.1; // 10% — reduced to prevent slamming into limits
     }
     
+    /**
+     * Constants for the FeedFromCenter command.
+     *
+     * <p>The robot aims the turret at the midpoint between two feed-station AprilTags
+     * (offset a fixed depth behind the midpoint) and spins the flywheel to feed
+     * game pieces into the feed station.
+     *
+     * <p>Tag pairs (one pair per side of each alliance's feed station):
+     * <ul>
+     *   <li>Red  pair A: tags 1 &amp; 3</li>
+     *   <li>Red  pair B: tags 4 &amp; 6</li>
+     *   <li>Blue pair A: tags 17 &amp; 19</li>
+     *   <li>Blue pair B: tags 20 &amp; 22</li>
+     * </ul>
+     * The command automatically selects whichever pair is closer to the robot.
+     */
+    public static class FeedFromCenter {
+
+        // ── Hood position ─────────────────────────────────────────────────────
+        /**
+         * Hood position (motor rotations) for feed-from-center shots.
+         * 0.0 rot = 68° from horizontal (steepest), 11.5 rot = 28° (flattest).
+         * TUNE ON ROBOT.
+         */
+        public static final double kHoodPosition = 5.0;
+
+        // ── Target depth offset ───────────────────────────────────────────────
+        /**
+         * Distance (meters) to offset the aiming target BEHIND the tag-pair midpoint,
+         * in the direction from the robot toward the midpoint.
+         * "A few feet behind" the midpoint = 0.6096 m (2 ft). TUNE ON ROBOT.
+         */
+        public static final double kFeedTargetDepthMeters = 0.6096; // 2 ft
+
+        // ── Red alliance feed-station tag pairs ───────────────────────────────
+        /** Red alliance feed station — one side (tags 1 and 3). */
+        public static final int[] kRedPairA = {1, 3};
+        /** Red alliance feed station — other side (tags 4 and 6). */
+        public static final int[] kRedPairB = {4, 6};
+
+        // ── Blue alliance feed-station tag pairs ──────────────────────────────
+        /** Blue alliance feed station — one side (tags 17 and 19). */
+        public static final int[] kBluePairA = {17, 19};
+        /** Blue alliance feed station — other side (tags 20 and 22). */
+        public static final int[] kBluePairB = {20, 22};
+    }
+
     /**
      * Constants for the shoot-on-arc feature.
      *
@@ -261,8 +425,8 @@ public class Constants {
         public static final int kBluePrimaryTagId = 20;  // Blue tower: x=5.215,  y=4.021
 
         // ── All tower tag ID arrays ───────────────────────────────────────────
-        public static final int[] kRedTowerTagIds  = {9, 10, 11};
-        public static final int[] kBlueTowerTagIds = {19, 20, 21};
+        public static final int[] kRedTowerTagIds  = {2, 3, 4, 5, 8, 9, 10, 11};
+        public static final int[] kBlueTowerTagIds = {18, 19, 20, 21, 24, 25, 26, 27};
 
         // ── Shooting arc geometry ─────────────────────────────────────────────
         /** Preferred radius of the shooting arc from the tower center (meters).
@@ -309,32 +473,93 @@ public class Constants {
 
         // ── Launcher velocity lookup table ────────────────────────────────────
         // Format: { {distance_m, velocity_RPS}, ... }  — sorted ascending by distance
-        // NEGATIVE values = correct flywheel spin direction (matches launchFromTowerLauncher()
-        // which uses flywheelDutyCycleOut = -0.75).
-        // Kraken X60 free speed ≈ 100 RPS at 12V → -0.75 duty ≈ -75 RPS.
-        // PLACEHOLDER VALUES — tune on robot
+        // NEGATIVE values = correct flywheel spin direction.
+        // Kraken X60 free speed ≈ 100 RPS at 12V.
+        //
+        // RPS values are set ~10% ABOVE the ideal single-shot value to compensate for
+        // flywheel speed drop during rapid-fire (multiple balls in quick succession
+        // temporarily load the motor and reduce actual RPS by ~5-10%).
+        //
+        // Tuning history:
+        //   v1: -55 to -85 RPS — balls landing short.
+        //   v2: -65 to -95 RPS — +10 RPS across the board.
+        //   v3: 2.0m reduced to -70 RPS — was overshooting.
+        //   v4: +10% rapid-fire compensation; hood angles recalculated.
+        //   v5: -5 RPS across all distances — power reduced slightly per driver feedback.
+        //   v6: -10 RPS across all distances — too much velocity per driver feedback.
+        //   v7: PHYSICALLY TESTED on robot. Duty cycle values converted to RPS (DC × 100).
+        //       2.0m: DC -0.500 → -50.0 RPS  |  2.5m: DC -0.525 → -52.5 RPS
+        //       3.0m: DC -0.575 → -57.5 RPS  |  3.5m: DC -0.575 → -57.5 RPS
+        //       1.0m, 1.5m, 4.0m, 4.5m: extrapolated from tested trend.
+        //   v8: +5 RPS across all distances — shots landing a bit short.
+
+        // v10: -5 RPS again — still overshooting after v9 reduction.
         public static final double[][] kLauncherRPSLookup = {
-            {1.0, -55.0},
-            {1.5, -60.0},
-            {2.0, -65.0},
-            {3.0, -72.0},
-            {4.0, -80.0},
-            {4.5, -85.0}
+            {1.0,  -45.0},  // was -50.0
+            {1.5,  -45.5},  // was -50.5
+            {2.0,  -48.0},  // was -53.0
+            {2.5,  -50.5},  // was -55.5
+            {3.0,  -53.5},  // was -58.5
+            {3.5,  -56.5},  // was -61.5
+            {4.0,  -69.5},  // was -74.5
+            {4.5,  -75.5}   // was -80.5
         };
 
         // ── Hood angle lookup table ───────────────────────────────────────────
-        // Format: { {distance_m, hood_rotations}, ... }  — sorted ascending by distance
-        // PLACEHOLDER VALUES — tune on robot
+        // Format: { {distance_m, hood_motor_rotations}, ... }  — sorted ascending by distance
+        //
+        // MOTOR DIRECTION: 0 rot = ~85° (steep/vertical), 11.5 rot = ~5° (flat/horizontal)
+        // → LOW rotation values = steep angle = high arc trajectory
+        // → HIGH rotation values = flat angle  = low arc trajectory
+        //
+        // Physics: v_exit = 0.18617 * RPS (m/s)
+        //          target h = 1.372 m above launch point
+        //          Angle formula: θ = lower root of  g·x²·tan²θ - 2v²·x·tanθ + (2v²·h + g·x²) = 0
+        //
+        // TUNE ON ROBOT: decrease a value (steeper) if ball arcs too low / lands short;
+        //                increase a value (flatter) if ball arcs too high / overshoots.
+        //
+        // ── Physical angle limits (confirmed on robot) ────────────────────────
+        //   0.0 rot  = 68° from horizontal (22° from vertical) — steepest possible
+        //   11.5 rot = 28° from horizontal (62° from vertical) — flattest possible
+        //
+        // ── Physics (recalculated with correct angle range) ───────────────────
+        //   v_exit = 0.18617 × |RPS|  (m/s, Kraken X60)
+        //   target height above launch = 1.372 m  (6 ft goal − 1.5 ft launch height)
+        //   g = 9.81 m/s²
+        //
+        //   Quadratic in tan(θ):  a·t² − x·t + (h + a) = 0
+        //   where a = g·x²/(2·v²)
+        //   Lower root = low-arc (achievable); upper root always exceeds 68° limit.
+        //
+        //   Low-arc angles and rotation values (0 rot=68°, 11.5 rot=28°):
+        //     rotations = (68° − angle°) / 40° × 11.5
+        //
+        //   1.0 m  v=12.47 m/s  → 55.8°  → 3.51 rot
+        //   1.5 m  v=13.40 m/s  → 44.9°  → 6.64 rot
+        //   2.0 m  v=13.40 m/s  → 37.7°  → 8.71 rot
+        //   3.0 m  v=15.82 m/s  → 28.1°  → 11.47 rot  (near flat limit)
+        //   4.0 m  v=16.76 m/s  → 23.0°  → clamped to 28° → 11.5 rot
+        //   4.5 m  v=17.69 m/s  → 21.1°  → clamped to 28° → 11.5 rot
+        //
+        // Tuning history:
+        //   v1–v6: used wrong angle constants (85°/5°) — all angle comments were wrong.
+        //   v7–v9: iterative tuning — still too low.
+        //   v10: PHYSICALLY TESTED on robot. Hood positions confirmed working.
+        //        2.0m: hood=0  |  2.5m: hood=0  |  3.0m: hood=0  |  3.5m: hood=1
+        //        1.0m, 1.5m: extrapolated at 0 (steepest, same as close-range tested).
+        //        4.0m, 4.5m: extrapolated (+1 rot per 0.5m beyond 3.5m).
         public static final double[][] kHoodAngleLookup = {
-            {1.5, 0.08},
-            {2.0, 0.10},
-            {3.0, 0.15},
-            {4.0, 0.20},
-            {5.0, 0.25},
-            {5.5, 0.28}
+            {1.0,  0.0},   // extrapolated — steepest (68° from horizontal)
+            {1.5,  0.0},   // extrapolated
+            {2.0,  0.0},   // TESTED: hood position 0
+            {2.5,  0.0},   // TESTED: hood position 0
+            {3.0,  1.0},   // TESTED: hood position 0 0         2
+            {3.5,  2.0},   // TESTED: hood position 1 1         3
+            {4.0,  3.0},   // extrapolated (+1 rot per 0.5m)1   3
+            {4.5,  3.5}    // extrapolated (+1 rot per 0.5m) 2  3.5
         };
     }
-
     public static class Vision {
         // Camera names — must match exactly what is configured in PhotonVision
         public static final String kCameraNameBF = "CAM_BF";   // Back Facing camera
@@ -364,20 +589,31 @@ public class Constants {
                                 Units.degreesToRadians(187.502))); // Yaw: 180° facing back + 7.502° toed inward toward left
 
         // Transform from robot center to Front Facing camera
-        // Measured position: X=-5.90" (back), Y=+12.938" (left side), Z=17.655" (from ground)
-        // Rotation: Roll=0°, Yaw=0° (facing forward), Pitch=+22° (camera leans back 22° from vertical/forward,
-        //   lens tilts upward 22° above horizontal — positive pitch in WPILib = nose up)
+        // Measured position: X=-7.069" (back), Y=+11.75" (left side), Z=20.4" (from ground)
+        // Rotation: Roll=0°, Pitch=+22° (camera leans back 22° from vertical, lens tilts upward)
+        //
+        // ── Yaw sign convention (viewed from above) ───────────────────────────
+        // This camera is on the LEFT side of the robot (+Y).
+        //   Yaw =   0 deg          -> faces straight forward
+        //   Yaw = +2 to +10 deg    -> faces slightly LEFT  (away from center) -- use if toed outward
+        //   Yaw = -2 to -10 deg    -> faces slightly RIGHT (toward center)    -- use if toed inward
+        //   (negative yaw can also be written as 350-358 deg)
+        //
+        // TUNE: place a tag directly in front of the robot. If PhotonVision reports
+        // a non-zero yaw when the tag is centered in the image, adjust this value
+        // until the reported yaw reads ~0 deg for a perfectly centered tag.
         public static final Transform3d kRobotToCamFF =
                 new Transform3d(
                         new Translation3d(
-                                Units.inchesToMeters(-5.90),   // Backward (negative X = behind robot center)
-                                Units.inchesToMeters(12.938),  // Left side (positive Y = left in WPILib)
-                                Units.inchesToMeters(17.655)   // Up (positive Z, measured from ground)
+                                Units.inchesToMeters(-7.069),   // Backward (negative X = behind robot center)
+                                Units.inchesToMeters(11.75),    // Left side (positive Y = left in WPILib)
+                                Units.inchesToMeters(20.4)      // Up (positive Z, measured from ground)
                         ),
                         new Rotation3d(
-                                Units.degreesToRadians(0),     // Roll
-                                Units.degreesToRadians(22),    // Pitch: +22° = lens tilts up (camera leans back 22° from forward)
-                                Units.degreesToRadians(0)));   // Yaw: facing forward (0°)
+                                Units.degreesToRadians(0),      // Roll
+                                Units.degreesToRadians(22),     // Pitch: +22° = lens tilts up (camera leans back 22° from forward)
+                                Units.degreesToRadians(0)));    // Yaw: +2 deg = slightly away from center (LEFT of forward)
+                                                                // Camera is on the left side and toed outward -- positive yaw is correct
 
         // The layout of the AprilTags on the field
         // Using custom 2026 Rebuilt field layout loaded from JSON file
@@ -408,6 +644,41 @@ public class Constants {
         public static final Matrix<N3, N1> kSingleTagStdDevs = VecBuilder.fill(4, 4, 8);
         // Multiple tags are more reliable, so lower standard deviation
         public static final Matrix<N3, N1> kMultiTagStdDevs = VecBuilder.fill(0.5, 0.5, 1);
+
+        /**
+         * Distance-based scaling factor applied to vision standard deviations.
+         *
+         * <p>Standard deviations are multiplied by {@code (1 + avgDist² × kDistanceScaleFactor)},
+         * so a camera seeing tags at 1 m gets tighter (more trusted) std devs than one
+         * seeing tags at 3 m. The camera with the closer tag therefore has higher weight
+         * in the drivetrain Kalman filter automatically.
+         *
+         * <p>At the default value of 0.1:
+         * <ul>
+         *   <li>1 m → ×1.1  (10% looser than base)</li>
+         *   <li>2 m → ×1.4  (40% looser)</li>
+         *   <li>3 m → ×1.9  (90% looser)</li>
+         *   <li>4 m → ×2.6  (160% looser)</li>
+         * </ul>
+         * Increase to trust close tags even more aggressively; decrease to flatten the curve.
+         */
+        public static final double kDistanceScaleFactor = 0.1;
+
+        /**
+         * Maximum acceptable pose ambiguity for a single-tag detection (range 0.0–1.0).
+         *
+         * <p>PhotonVision's {@code getPoseAmbiguity()} returns a ratio of how similar the
+         * two possible 3-D poses are for a single tag. A value close to 0 means one pose
+         * is clearly better (trustworthy); a value close to 1 means both poses are nearly
+         * identical (untrustworthy — the estimator cannot tell which is correct).
+         *
+         * <p>Any vision measurement where a target reports ambiguity strictly above this
+         * threshold is discarded before being fed into the drivetrain Kalman filter.
+         * Multi-tag PnP results return {@code -1} and are always accepted.
+         *
+         * <p>0.3 is the widely-recommended FRC threshold (PhotonVision docs).
+         */
+        public static final double kMaxAmbiguity = 0.3;
         
         // AprilTag driving parameters
         public static final double kTargetDistanceMeters = 1.524; // Target distance from tag (5 feet = 1.524 meters)

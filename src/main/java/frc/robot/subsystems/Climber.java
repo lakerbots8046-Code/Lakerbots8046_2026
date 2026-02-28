@@ -65,7 +65,7 @@ public class Climber extends SubsystemBase {
 
     /* leader and follower motors */
     private final CANBus kCANBus = new CANBus("Rio");     //change to Rio once on actual robot
-    private final TalonFX leadClimberMotor = new TalonFX(9, kCANBus);
+    private final TalonFX leadClimberMotor = new TalonFX(10, kCANBus);
 
     /* device status signals */
     private final StatusSignal<Angle> leadClimberMotorPosition = leadClimberMotor.getPosition(false);

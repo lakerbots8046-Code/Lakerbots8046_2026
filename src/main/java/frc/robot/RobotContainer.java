@@ -23,16 +23,19 @@ import edu.wpi.first.wpilibj2.command.button.RobotModeTriggers;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
 
 import frc.robot.generated.TunerConstants;
+import frc.robot.Constants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.VisionSubsystem;
 import frc.robot.subsystems.TurretSubsystem;
 import frc.robot.subsystems.Intake;
 import frc.robot.subsystems.Launcher;
 import frc.robot.subsystems.Spindexer;
-import frc.robot.commands.AimTurretAuto;
+import frc.robot.commands.AutoDeployIntake;
 import frc.robot.commands.CenterOnAprilTagCommand;
 import frc.robot.commands.DriveToAprilTag;
 import frc.robot.commands.DriveToAprilTagWithPathPlanner;
+import frc.robot.commands.FeedFromCenterCommand;
+import frc.robot.commands.ShootFromPointCommand;
 import frc.robot.commands.ShootOnMoveCommand;
 import frc.robot.commands.TrackAprilTagCommand;
 import frc.robot.util.ShootingArcManager;
@@ -84,9 +87,20 @@ public class RobotContainer {
 
     public final CommandSwerveDrivetrain drivetrain = TunerConstants.createDrivetrain();
 
+    /** Throttle counter for vision status string puts (updated every 5 calls ≈ 100 ms). */
+    private int visionStatusCounter = 0;
+
+    /** Throttle counter for tower tag info puts (updated every 5 calls ≈ 100 ms). */
+    private int towerTagCounter = 0;
+
     public RobotContainer() {
         registerNamedCommands();
         configureBindings();
+
+        // Hood default command: retract to position 0 (22° / stowed) whenever no
+        // shooting command is active. WPILib automatically resumes this command
+        // whenever ShootOnMoveCommand or ShootFromPointCommand ends.
+        launcher.setDefaultCommand(launcher.retractHood());
         
         // Initialize autonomous chooser
         autoChooser = buildAutoChooser();
@@ -96,7 +110,7 @@ public class RobotContainer {
 
         // Publish autonomous chooser to SmartDashboard
         SmartDashboard.putData("Auto Chooser", autoChooser);
-
+/* 
         // ================= INTAKE COLLECT testing buttons =================
         SmartDashboard.putData("Run Intake Collect Positive Voltage", intake.setIntakeRollersVoltage(2));
         SmartDashboard.putData("Run Intake Collect Negative Voltage", intake.setIntakeRollersVoltage(-2));
@@ -136,49 +150,95 @@ public class RobotContainer {
         SmartDashboard.putData("Run Hood Positive Voltage", launcher.setHoodVoltage(1));
         SmartDashboard.putData("Run Hood Negative Voltage", launcher.setHoodVoltage(-1));
         SmartDashboard.putData("Stop Hood Voltage", launcher.setHoodVoltage(0));
-
+*/
     }
 
     private void registerNamedCommands() {
-        NamedCommands.registerCommand("AimTurretAuto",
-            new AimTurretAuto(turretSubsystem));
+        NamedCommands.registerCommand("AutoDeployIntake",
+            new AutoDeployIntake(intake));
+
+        NamedCommands.registerCommand("ShootFromPointCommand",
+             new ShootFromPointCommand(
+                drivetrain,
+                launcher,
+                spindexer,
+                this::getActiveTowerTagId,
+                () -> {
+                    int pov = joystick.getHID().getPOV();
+                    if (pov == 270) return  1.0; // POV Left  → nudge CCW
+                    if (pov == 90)  return -1.0; // POV Right → nudge CW
+                    return 0.0;
+                },
+                intake
+             ));
+
+        NamedCommands.registerCommand("IntakeCollectCommand",
+            intake.intakeDeployCollect());
+
+        NamedCommands.registerCommand("toggleIntakeRollers", 
+            intake.toggleRollers());
+
+        NamedCommands.registerCommand("FeedFromCenterCommand",
+            new FeedFromCenterCommand(drivetrain, launcher, spindexer));
+
+        NamedCommands.registerCommand("AutoIntakeDeployCollect",
+            intake.AutoIntakeDeployCollect());
+
+        NamedCommands.registerCommand("DumpAndReturn", 
+            intake.dumpAndReturn());
+
+    
     }
     
     /**
-     * Builds the autonomous chooser with available autonomous routines.
-     * 
-     * @return SendableChooser with autonomous command options
+     * Builds the autonomous chooser with all PathPlanner auto routines found in
+     * {@code src/main/deploy/pathplanner/autos/}.
+     *
+     * <p>Auto file names (without .auto extension) must match exactly what
+     * PathPlanner saved. Each entry is wrapped in a try/catch so a single
+     * missing or broken file does not prevent the others from loading.
+     *
+     * <p>Available autos (as of last update):
+     * <ul>
+     *   <li>centerDepotClimb  — start center, score depot, climb</li>
+     *   <li>leftNeutralFeed   — start left, neutral zone feed</li>
+     *   <li>leftNeutralScore  — start left, neutral zone score</li>
+     *   <li>rightNeutralFeed  — start right, neutral zone feed</li>
+     *   <li>rightNeutralScore — start right, neutral zone score</li>
+     *   <li>rightOutpostScore — start right, outpost score</li>
+     * </ul>
+     *
+     * @return SendableChooser populated with all available autonomous commands
      */
     private SendableChooser<Command> buildAutoChooser() {
         SendableChooser<Command> chooser = new SendableChooser<>();
-        
-        // Default option: Simple drive forward
-        chooser.setDefaultOption("Drive Forward", getDriveForwardAuto());
-        
-        // PathPlanner autonomous routines
-        // Center Auto: Center Part 1 -> AimTurretAuto -> Center Part 2
-        try {
-            Command centerAuto = AutoBuilder.buildAuto("Center Auto");
-            chooser.addOption("Center Auto (PathPlanner)", centerAuto);
-        } catch (Exception e) {
-            System.err.println("Failed to load PathPlanner auto 'Center Auto': " + e.getMessage());
-            // Add a fallback option if PathPlanner auto fails to load
-            chooser.addOption("Center Auto (PathPlanner) - FAILED TO LOAD", Commands.none());
+
+        // ── Safe fallbacks (always available) ────────────────────────────────
+        chooser.setDefaultOption("Do Nothing", Commands.none());
+        chooser.addOption("Drive Forward", getDriveForwardAuto());
+
+        // ── PathPlanner autos ─────────────────────────────────────────────────
+        // Auto names must match the .auto file names in deploy/pathplanner/autos/
+        String[] autoNames = {
+            "centerDepotClimb",
+            "leftNeutralFeed",
+            "leftNeutralScore",
+            "rightNeutralFeed",
+            "rightNeutralScore",
+            "rightOutpostScore"
+        };
+
+        for (String autoName : autoNames) {
+            try {
+                Command auto = AutoBuilder.buildAuto(autoName);
+                chooser.addOption(autoName, auto);
+                System.out.println("Auto loaded: " + autoName);
+            } catch (Exception e) {
+                System.err.println("Failed to load auto '" + autoName + "': " + e.getMessage());
+                chooser.addOption(autoName + " (FAILED)", Commands.none());
+            }
         }
-        
-        // Left Side Auto: AimTurretAuto -> Left Side Part 1
-        try {
-            Command leftSideAuto = AutoBuilder.buildAuto("Left Side Auto");
-            chooser.addOption("Left Side Auto (PathPlanner)", leftSideAuto);
-        } catch (Exception e) {
-            System.err.println("Failed to load PathPlanner auto 'Left Side Auto': " + e.getMessage());
-            // Add a fallback option if PathPlanner auto fails to load
-            chooser.addOption("Left Side Auto (PathPlanner) - FAILED TO LOAD", Commands.none());
-        }
-        
-        // Do nothing option (useful for testing)
-        chooser.addOption("Do Nothing", Commands.none());
-        
+
         return chooser;
     }
     
@@ -249,7 +309,7 @@ public class RobotContainer {
         joystick.start().and(joystick.x()).whileTrue(drivetrain.sysIdQuasistatic(Direction.kReverse));
 
         // View (Back) button: resets field-centric heading
-        joystick.back().onTrue(drivetrain.runOnce(() -> {
+        joystick.start().onTrue(drivetrain.runOnce(() -> {
             drivetrain.seedFieldCentric();
             Pose2d currentPose = drivetrain.getState().Pose;
             visionSubsystem.setReferencePose(currentPose);
@@ -259,41 +319,99 @@ public class RobotContainer {
         // Left bumper: Toggle intake deploy/collect.
         // First press: deploys pivot to -1.2 rot (Motion Magic) and starts rollers.
         // Second press: stops rollers and retracts pivot to home (-0.1 rot).
-        joystick.leftBumper().toggleOnTrue(intake.intakeDeployCollect());
+        joystick.rightBumper().toggleOnTrue(intake.intakeDeployCollect());
 
-        // Right bumper: Toggle intake rollers on/off independently of pivot.
+        // Left bumper: Dump-and-return sequence.
+        // Lifts the intake pivot to the dump position (-0.75 rot), holds for 0.5 s,
+        // then returns to the deploy/collect position (-1.35 rot).
+        // Requires the intake subsystem — will interrupt intakeDeployCollect() while running.
+        // Re-press right bumper after this command finishes to resume normal intake.
+        joystick.leftBumper().onTrue(intake.dumpAndReturn());
+
+        // X button: Toggle intake rollers on/off independently of pivot.
         // First press stops rollers; second press starts them again.
         // Uses no-subsystem command so it does NOT interrupt the pivot control.
-        joystick.rightBumper().onTrue(intake.toggleRollers());
+        joystick.x().onTrue(intake.toggleRollers());
 
-        // Left trigger: Center on selected tag using live camera data (vision-based centering).
-        // Uses whichever camera (BL or BR) currently has the best view of the tag.
+        // Left trigger (light press, 0.3–0.75): Center on selected tag using live camera data.
+        // Uses whichever camera currently has the best view of the tag.
         // Strafes to make yaw=0 and drives backward to reach target distance.
-        joystick.leftTrigger(0.5).whileTrue(
+        // NOTE: Gated to BELOW 0.75 so it does NOT run when ShootFromPointCommand
+        // is active (0.75+). Without the negate() gate both commands would run
+        // simultaneously at hard-press, causing the robot to drive unexpectedly.
+        joystick.leftTrigger(0.3).and(joystick.leftTrigger(0.75).negate()).whileTrue(
             new CenterOnAprilTagCommand(drivetrain, visionSubsystem)
         );
 
-        // Right trigger: Drive to selected tag using basic PID (odometry-based, fallback/simple mode)
-        joystick.rightTrigger(0.5).whileTrue(
-            new DriveToAprilTag(drivetrain, visionSubsystem, visionSubsystem.getSelectedTagId())
+        // Left trigger (hard press, 0.75+): Shoot from current field position.
+        // Aims turret, sets hood angle, spins flywheel — all based on distance to tower.
+        // Fires (LaunchSequenceOneCommand) once turret aimed + hood at target + flywheel at speed.
+        // Robot does NOT move — drivetrain is untouched.
+        //
+        // POV manual turret override (active ONLY while this command is running):
+        //   POV Left  (270°) → nudge turret CCW (left)  at 0.5°/loop = 25°/s
+        //   POV Right  (90°) → nudge turret CW  (right) at 0.5°/loop = 25°/s
+        //   Offset accumulates up to ±30° and resets to 0 on each trigger press.
+        //   Watch "ShootFromPoint/Turret Manual Offset (deg)" on Elastic to see the live value.
+        joystick.leftTrigger(0.75).whileTrue(
+            new ShootFromPointCommand(
+                drivetrain,
+                launcher,
+                spindexer,
+                this::getActiveTowerTagId,
+                () -> {
+                    int pov = joystick.getHID().getPOV();
+                    if (pov == 270) return  1.0; // POV Left  → nudge CCW
+                    if (pov == 90)  return -1.0; // POV Right → nudge CW
+                    return 0.0;
+                },
+                intake
+            )
         );
 
-        // X button: Drive to Tag 10 (Tower), aim turret, then fire.
-        // Sequence: PathPlanner → aim turret (3s) → launchFromTower (2s)
-        joystick.x().onTrue(buildTag10ShootCommand());
-        
-        // POV buttons for specific tags using PathPlanner (for quick access to common tags)
-        // POV Up (0°): Drive to tag 14 (common scoring position)
+        // Right trigger: Drive to selected tag using basic PID (odometry-based, fallback/simple mode)
+       
+        /*joystick.rightTrigger(0.5).whileTrue(
+            new DriveToAprilTag(drivetrain, visionSubsystem, visionSubsystem.getSelectedTagId())
+        );
+        */
+
+
+        // Right trigger (hard press, 0.75+): Feed from center.
+        // Aims turret at the midpoint between the closer feed-station tag pair
+        // (offset 2 ft behind the midpoint), sets hood to FeedFromCenter.kHoodPosition,
+        // spins flywheel, and fires via LaunchSequenceOneCommand once at speed.
+        // Robot does NOT move — drivetrain is untouched.
+        joystick.rightTrigger(0.75).whileTrue(
+            new FeedFromCenterCommand(drivetrain, launcher, spindexer)
+        );
+
+
+        // POV buttons for specific tags using PathPlanner (for quick access to common tags).
+        //
+        // POV Left (270°) and POV Right (90°) are DUAL-PURPOSE:
+        //   • While left trigger < 0.75 (NOT shooting): drive to tag as normal.
+        //   • While left trigger ≥ 0.75 (ShootFromPointCommand active): the POV input
+        //     is consumed by the ShootFromPointCommand's povNudgeSupplier (see above)
+        //     to nudge the turret angle. The DriveToAprilTag binding is gated off so
+        //     the robot does NOT accidentally drive while shooting.
+        //
+        // POV Up (0°) and POV Down (180°) are NOT used for turret nudge — they keep
+        // their drive-to-tag bindings unconditionally.
+
+        // POV Up (0°): Drive to tag 14 (always active)
         joystick.pov(0).whileTrue(new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, 14));
-        
-        // POV Right (90°): Drive to tag 15
-        joystick.pov(90).whileTrue(new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, 15));
-        
-        // POV Down (180°): Drive to tag 16
+
+        // POV Right (90°): Drive to tag 15 — only when NOT shooting
+        joystick.pov(90).and(joystick.leftTrigger(0.75).negate())
+            .whileTrue(new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, 15));
+
+        // POV Down (180°): Drive to tag 16 (always active)
         joystick.pov(180).whileTrue(new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, 16));
-        
-        // POV Left (270°): Drive to tag 13
-        joystick.pov(270).whileTrue(new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, 13));
+
+        // POV Left (270°): Drive to tag 13 — only when NOT shooting
+        joystick.pov(270).and(joystick.leftTrigger(0.75).negate())
+            .whileTrue(new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, 13));
 
         // ── Y button: Shoot-on-Arc ────────────────────────────────────────────
         // Phase 1: PathPlanner drives to the nearest shooting position on the arc
@@ -353,48 +471,187 @@ public class RobotContainer {
     }
 
     /**
-     * Updates the drivetrain's pose estimator with vision measurements.
-     * This should be called periodically (e.g., from Robot.robotPeriodic()).
+     * Publishes tower tag identification and distance info to SmartDashboard/Elastic.
+     *
+     * <p>Published under the {@code Tower/} namespace so the widgets are always
+     * visible in Elastic regardless of whether a shooting command is active.
+     * Throttled to every 5 calls (~100 ms) to reduce NetworkTables load.
+     *
+     * <p>Call this from {@code Robot.robotPeriodic()}.
+     *
+     * <h3>Elastic widget suggestions</h3>
+     * <ul>
+     *   <li>{@code Tower/Tag Info}     — Text Display (shows "Tag 10 (Red Tower ★)")</li>
+     *   <li>{@code Tower/Alliance}     — Text Display with conditional color</li>
+     *   <li>{@code Tower/Distance (m)} — Number Display or Gauge</li>
+     *   <li>{@code Tower/In Zone}      — Boolean Box (green = in range)</li>
+     * </ul>
+     */
+    public void updateTowerTagInfo() {
+        towerTagCounter++;
+        if (towerTagCounter < 5) return;
+        towerTagCounter = 0;
+
+        int           tagId      = getActiveTowerTagId();
+        var           robotPose  = drivetrain.getState().Pose;
+        var           tower      = ShootingArcManager.getTowerCenter(tagId);
+        double        distance   = ShootingArcManager.calculateDistance(robotPose, tower);
+        boolean       inZone     = ShootingArcManager.isInShootingZone(robotPose, tagId);
+
+        String tagAlliance = ShootingArcManager.isRedTowerTag(tagId)  ? "Red"
+                           : ShootingArcManager.isBlueTowerTag(tagId) ? "Blue"
+                           : "Unknown";
+        boolean isPrimary  = (tagId == Constants.ShootingArc.kRedPrimaryTagId)
+                           || (tagId == Constants.ShootingArc.kBluePrimaryTagId);
+        // e.g. "Tag 10 (Red Tower ★)" or "Tag 9 (Red Tower)"
+        String tagInfo     = String.format("Tag %d (%s Tower%s)",
+                                tagId, tagAlliance, isPrimary ? " \u2605" : "");
+
+        SmartDashboard.putNumber( "Tower/Tag ID",        tagId);
+        SmartDashboard.putString( "Tower/Tag Info",      tagInfo);
+        SmartDashboard.putString( "Tower/Alliance",      tagAlliance);
+        SmartDashboard.putNumber( "Tower/Distance (m)",  distance);
+        SmartDashboard.putBoolean("Tower/In Zone",       inZone);
+    }
+
+    /**
+     * Updates the drivetrain's pose estimator with vision measurements from both cameras.
+     *
+     * <p>Both the Back-Facing (BF) and Front-Facing (FF) cameras contribute pose estimates
+     * to the drivetrain's Kalman filter. This is critical for {@link ShootFromPointCommand}:
+     * the BF camera faces the tower and sees the tower AprilTags directly, giving the most
+     * accurate distance and angle data for turret aiming. The FF camera faces forward and
+     * provides pose corrections from other field tags.
+     *
+     * <p>Measurements are rejected if ANY target in the result reports a pose ambiguity
+     * above {@link Constants.Vision#kMaxAmbiguity} (0.3). Multi-tag PnP results return
+     * {@code -1} for ambiguity and are always accepted. This prevents high-ambiguity
+     * single-tag detections from injecting bad poses into the Kalman filter and causing
+     * the autonomous path planner to generate erratic paths.
+     *
+     * <p>Standard deviations are tighter (more trusted) for multi-tag estimates and looser
+     * for single-tag estimates, matching the reliability of each measurement.
+     *
+     * <p>This should be called periodically (e.g., from Robot.robotPeriodic()).
      */
     public void updateVisionMeasurements() {
-        // ── Back Facing camera: pose estimation DISABLED for now ─────────────
-        // BF camera is reserved for target tracking/measurements only.
-        // Re-enable this block when BF camera pose estimation is needed.
-        // var poseBF = visionSubsystem.getEstimatedGlobalPoseBF();
-        // if (poseBF.isPresent()) {
-        //     var estimatedPose = poseBF.get();
-        //     Pose2d pose2d = estimatedPose.estimatedPose.toPose2d();
-        //     var stdDevs = estimatedPose.targetsUsed.size() >= 2
-        //         ? Constants.Vision.kMultiTagStdDevs
-        //         : Constants.Vision.kSingleTagStdDevs;
-        //     drivetrain.addVisionMeasurement(pose2d, estimatedPose.timestampSeconds, stdDevs);
-        //     SmartDashboard.putString("Vision/BF/Measurement Status", "Applied");
-        // } else {
-        //     SmartDashboard.putString("Vision/BF/Measurement Status", "No Pose");
-        // }
-        SmartDashboard.putString("Vision/BF/Measurement Status", "Disabled (FF only mode)");
+        // ── Keep PhotonPoseEstimator reference pose current ───────────────────
+        // MULTI_TAG_PNP_ON_COPROCESSOR falls back to single-tag 3-D PnP when only
+        // one tag is visible. The fallback strategy CLOSEST_TO_REFERENCE_POSE picks
+        // the less-ambiguous of the two possible 3-D poses by comparing each candidate
+        // against the current odometry estimate. Without this update the reference
+        // stays wherever it was last set, causing large pose jumps during auto.
+        visionSubsystem.setReferencePose(drivetrain.getState().Pose);
 
-        // ── Front Facing camera: ACTIVE pose estimator ───────────────────────
+        // ── Back Facing camera: tower-facing pose estimator ──────────────────
+        // The BF camera (Yaw ≈ 187°) faces the tower during ShootFromPointCommand.
+        // Enabling this estimate allows all visible tower tags to correct the robot's
+        // pose, giving accurate distance and turret angle calculations.
+        var poseBF = visionSubsystem.getEstimatedGlobalPoseBF();
+        String bfStatus;
+        if (poseBF.isPresent()) {
+            var estimatedPose = poseBF.get();
+
+            // ── Ambiguity filter ──────────────────────────────────────────────
+            // Reject the entire measurement if ANY target in the result has a valid
+            // (non-negative) ambiguity score above the threshold. Multi-tag PnP
+            // results return -1 and always pass this check.
+            boolean tooAmbiguousBF = estimatedPose.targetsUsed.stream()
+                .anyMatch(t -> {
+                    double amb = t.getPoseAmbiguity();
+                    return amb >= 0.0 && amb > Constants.Vision.kMaxAmbiguity;
+                });
+
+            if (tooAmbiguousBF) {
+                bfStatus = "Rejected (High Ambiguity)";
+            } else {
+                Pose2d pose2d = estimatedPose.estimatedPose.toPose2d();
+
+                // ── Distance-priority std devs ────────────────────────────────
+                // Average camera-to-tag distance for all tags used in this estimate.
+                // getBestCameraToTarget().getTranslation().getNorm() = 3-D Euclidean
+                // distance from the camera lens to the tag center (meters).
+                double avgDistBF = estimatedPose.targetsUsed.stream()
+                    .mapToDouble(t -> t.getBestCameraToTarget().getTranslation().getNorm())
+                    .average()
+                    .orElse(0.0);
+
+                // Scale factor grows quadratically with distance so the camera seeing
+                // closer tags gets tighter (smaller) std devs and higher Kalman weight.
+                //   1 m → ×1.1  |  2 m → ×1.4  |  3 m → ×1.9  |  4 m → ×2.6
+                double distScaleBF = 1.0 + (avgDistBF * avgDistBF
+                                            * Constants.Vision.kDistanceScaleFactor);
+
+                var baseStdDevsBF = estimatedPose.targetsUsed.size() >= 2
+                    ? Constants.Vision.kMultiTagStdDevs
+                    : Constants.Vision.kSingleTagStdDevs;
+
+                var stdDevs = baseStdDevsBF.times(distScaleBF);
+
+                // Feed BF pose estimate into the drivetrain Kalman filter
+                drivetrain.addVisionMeasurement(
+                    pose2d,
+                    estimatedPose.timestampSeconds,
+                    stdDevs
+                );
+                bfStatus = String.format("Applied (%.1fm)", avgDistBF);
+            }
+        } else {
+            bfStatus = "No Pose";
+        }
+
+        // ── Front Facing camera: forward-facing pose estimator ───────────────
         var poseFF = visionSubsystem.getEstimatedGlobalPoseFF();
+        String ffStatus;
         if (poseFF.isPresent()) {
             var estimatedPose = poseFF.get();
-            Pose2d pose2d = estimatedPose.estimatedPose.toPose2d();
 
-            // Use tighter std devs for multi-tag, looser for single tag
-            var stdDevs = estimatedPose.targetsUsed.size() >= 2
-                ? Constants.Vision.kMultiTagStdDevs
-                : Constants.Vision.kSingleTagStdDevs;
+            // ── Ambiguity filter ──────────────────────────────────────────────
+            boolean tooAmbiguousFF = estimatedPose.targetsUsed.stream()
+                .anyMatch(t -> {
+                    double amb = t.getPoseAmbiguity();
+                    return amb >= 0.0 && amb > Constants.Vision.kMaxAmbiguity;
+                });
 
-            // Feed FF pose estimate into the drivetrain Kalman filter
-            drivetrain.addVisionMeasurement(
-                pose2d,
-                estimatedPose.timestampSeconds,
-                stdDevs
-            );
+            if (tooAmbiguousFF) {
+                ffStatus = "Rejected (High Ambiguity)";
+            } else {
+                Pose2d pose2d = estimatedPose.estimatedPose.toPose2d();
 
-            SmartDashboard.putString("Vision/FF/Measurement Status", "Applied");
+                // ── Distance-priority std devs ────────────────────────────────
+                double avgDistFF = estimatedPose.targetsUsed.stream()
+                    .mapToDouble(t -> t.getBestCameraToTarget().getTranslation().getNorm())
+                    .average()
+                    .orElse(0.0);
+
+                double distScaleFF = 1.0 + (avgDistFF * avgDistFF
+                                            * Constants.Vision.kDistanceScaleFactor);
+
+                var baseStdDevsFF = estimatedPose.targetsUsed.size() >= 2
+                    ? Constants.Vision.kMultiTagStdDevs
+                    : Constants.Vision.kSingleTagStdDevs;
+
+                var stdDevs = baseStdDevsFF.times(distScaleFF);
+
+                // Feed FF pose estimate into the drivetrain Kalman filter
+                drivetrain.addVisionMeasurement(
+                    pose2d,
+                    estimatedPose.timestampSeconds,
+                    stdDevs
+                );
+                ffStatus = String.format("Applied (%.1fm)", avgDistFF);
+            }
         } else {
-            SmartDashboard.putString("Vision/FF/Measurement Status", "No Pose");
+            ffStatus = "No Pose";
+        }
+
+        // Throttle status string puts to every 5 calls (~100 ms) — these are
+        // informational only and do not need to update at 50 Hz.
+        visionStatusCounter++;
+        if (visionStatusCounter >= 5) {
+            visionStatusCounter = 0;
+            SmartDashboard.putString("Vision/BF/Measurement Status", bfStatus);
+            SmartDashboard.putString("Vision/FF/Measurement Status", ffStatus);
         }
     }
     
@@ -543,6 +800,12 @@ public class RobotContainer {
         );
 
         return Commands.sequence(
+            // ── Stop intake rollers for the duration of the arc shoot ─────────
+            // Prevents game pieces from being fed into the launcher during shooting.
+            // intake.stopRollersDirect() sets rollersEnabled=false so intakeDeployCollect()
+            // will not restart the rollers until enableRollers() is called in finallyDo().
+            Commands.runOnce(() -> intake.stopRollersDirect()),
+
             // ── Phase 1: Drive to nearest arc position ────────────────────────
             Commands.runOnce(() -> {
                 SmartDashboard.putString("ShootArc/Status", "Phase 1: Driving to Arc");
@@ -601,6 +864,10 @@ public class RobotContainer {
             launcher.stopLauncher();
             spindexer.stopFeedMotorsDirect();
             drivetrain.setControl(new SwerveRequest.Idle());
+            // Re-enable intake rollers now that the flywheel has stopped.
+            // If intakeDeployCollect() is still running, it will resume spinning
+            // the rollers on its next loop. If it is not running, this is a no-op.
+            intake.enableRollers();
             SmartDashboard.putBoolean("ShootArc/Firing", false);
             SmartDashboard.putString("ShootArc/Status", "Stopped (Y released)");
         });
@@ -630,27 +897,51 @@ public class RobotContainer {
     }
 
     /**
-     * Scans both cameras for any currently-visible tower tag.
+     * Scans both cameras for any currently-visible tower tag that belongs to
+     * the alliance currently selected in the DriverStation.
      *
-     * @return The first tower tag ID found, or {@code -1} if none are visible.
+     * <p>Only tags for the active alliance are considered — a red-alliance robot
+     * will never accidentally lock onto a blue tower tag even if one is visible.
+     * If the alliance is not yet reported by the DriverStation (e.g. during
+     * simulation or before FMS connection), both alliances are searched as a
+     * safe fallback.
+     *
+     * <p>Back-Facing camera is checked first (typically has a better view of
+     * the tower when the robot is approaching). Front-Facing camera is the fallback.
+     *
+     * @return The first alliance-matching tower tag ID found, or {@code -1} if none.
      */
     private int getVisibleTowerTag() {
-        // All tower tag IDs across both alliances
-        int[] allTowerTags = {9, 10, 11, 19, 20, 21};
-
-        // Check Back-Facing camera first
         int bfTag = visionSubsystem.getDetectedTagIdBF();
-        for (int tag : allTowerTags) {
-            if (tag == bfTag) return tag;
-        }
-
-        // Check Front-Facing camera
         int ffTag = visionSubsystem.getDetectedTagIdFF();
-        for (int tag : allTowerTags) {
-            if (tag == ffTag) return tag;
+
+        var alliance = DriverStation.getAlliance();
+
+        // Determine which tag arrays to search based on the DriverStation alliance.
+        // If alliance is unknown, search both so the robot is never completely blind.
+        boolean checkRed  = !alliance.isPresent() || alliance.get() == Alliance.Red;
+        boolean checkBlue = !alliance.isPresent() || alliance.get() == Alliance.Blue;
+
+        // BF camera first, then FF camera — for each alliance set
+        if (checkRed) {
+            for (int tag : Constants.ShootingArc.kRedTowerTagIds) {
+                if (tag == bfTag) return tag;
+            }
+            for (int tag : Constants.ShootingArc.kRedTowerTagIds) {
+                if (tag == ffTag) return tag;
+            }
         }
 
-        return -1; // No tower tag visible
+        if (checkBlue) {
+            for (int tag : Constants.ShootingArc.kBlueTowerTagIds) {
+                if (tag == bfTag) return tag;
+            }
+            for (int tag : Constants.ShootingArc.kBlueTowerTagIds) {
+                if (tag == ffTag) return tag;
+            }
+        }
+
+        return -1; // No alliance-matching tower tag visible
     }
 
     // =========================================================================

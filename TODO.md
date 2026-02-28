@@ -1,27 +1,23 @@
-# Shoot-On-Arc Feature TODO
+# Vision Ambiguity Filter + 3D Processing Fix
 
-## Overview
-Implement a "shoot-on-the-move" system using AprilTag tower positions.
-- Button press → robot drives to nearest arc position around tower
-- Turret continuously aims using field-relative pose (not camera yaw)
-- Launcher pre-spins to distance-based velocity during drive
-- Left/right joystick slides robot along arc while shooting
-- Fires automatically when turret is aimed AND launcher is at speed
+## Task
+Filter out AprilTag detections with ambiguity score > 0.3 from the pose estimator
+to prevent the autonomous path planner from going wild on bad tag readings.
+Also ensure 3D (PnP) processing is explicitly configured for single-tag fallback.
 
 ## Steps
 
-- [x] 1. Read and understand all relevant source files
-- [x] 2. Add `ShootingArc` constants class to `Constants.java`
-- [x] 3. Create `src/main/java/frc/robot/util/ShootingArcManager.java`
-- [x] 4. Create `src/main/java/frc/robot/commands/ShootOnMoveCommand.java`
-- [x] 5. Add direct motor control methods to `Spindexer.java`
-- [x] 6. Update `RobotContainer.java` — Y button binding + alliance-aware tag selection
-- [ ] 7. Test and tune on robot (lookup tables, PID gains, distances)
-
-## Tuning Notes (post-deploy)
-- `Constants.ShootingArc.kLauncherRPSLookup` — tune flywheel RPS per distance
-- `Constants.ShootingArc.kHoodAngleLookup`   — tune hood rotations per distance
-- `Constants.ShootingArc.kPreferredShootingDistance` — adjust arc radius
-- `Constants.ShootingArc.kArcSlideSpeed`     — adjust left/right slide speed
-- `Constants.ShootingArc.kArcRotationP`      — tune tower-facing rotation response
-- `TurretConstants.kTrackingP/D`             — tune turret aim PID
+- [x] Read and understand VisionSubsystem.java, RobotContainer.java, Constants.java
+- [x] **Step 1** — `Constants.java`: Add `kMaxAmbiguity = 0.3` constant to `Vision` class
+- [x] **Step 2** — `VisionSubsystem.java`:
+    - Set `CLOSEST_TO_REFERENCE_POSE` as the multi-tag fallback strategy on both
+      pose estimators (ensures best 3D single-tag pose is used when multi-tag fails)
+    - Add `bestAmbiguityBF` / `bestAmbiguityFF` fields
+    - Populate ambiguity fields from the selected target each loop
+    - Publish `BF Best Ambiguity` / `FF Best Ambiguity` to SmartDashboard (throttled)
+- [x] **Step 3** — `RobotContainer.java` → `updateVisionMeasurements()`:
+    - For BF camera: reject measurement if ANY target in `targetsUsed` has
+      `getPoseAmbiguity() >= 0 && > Constants.Vision.kMaxAmbiguity`
+    - For FF camera: same check
+    - Update SmartDashboard status to show `"Rejected (High Ambiguity)"` when filtered
+- [x] **Step 4** — Verify build compiles cleanly — BUILD SUCCESSFUL (11 pre-existing deprecation warnings, 0 errors)

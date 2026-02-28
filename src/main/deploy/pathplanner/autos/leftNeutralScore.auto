@@ -11,9 +11,22 @@
           }
         },
         {
-          "type": "path",
+          "type": "parallel",
           "data": {
-            "pathName": "leftNeutralScore_Part2"
+            "commands": [
+              {
+                "type": "named",
+                "data": {
+                  "name": "AutoIntakeDeployCollect"
+                }
+              },
+              {
+                "type": "path",
+                "data": {
+                  "pathName": "leftNeutralScore_Part2"
+                }
+              }
+            ]
           }
         },
         {
@@ -23,9 +36,122 @@
           }
         },
         {
-          "type": "named",
+          "type": "path",
           "data": {
-            "name": "AimTurretAuto"
+            "pathName": "leftNeutralScore_Part4"
+          }
+        },
+        {
+          "type": "deadline",
+          "data": {
+            "commands": [
+              {
+                "type": "sequential",
+                "data": {
+                  "commands": [
+                    {
+                      "type": "wait",
+                      "data": {
+                        "waitTime": 3.0
+                      }
+                    },
+                    {
+                      "type": "named",
+                      "data": {
+                        "name": "DumpAndReturn"
+                      }
+                    },
+                    {
+                      "type": "wait",
+                      "data": {
+                        "waitTime": 3.0
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "named",
+                "data": {
+                  "name": "ShootFromPointCommand"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "LeftNeutralScore_Part5"
+          }
+        },
+        {
+          "type": "parallel",
+          "data": {
+            "commands": [
+              {
+                "type": "named",
+                "data": {
+                  "name": "AutoIntakeDeployCollect"
+                }
+              },
+              {
+                "type": "path",
+                "data": {
+                  "pathName": "leftNeutralScore_Part2"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "leftNeutralScore_Part3"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "leftNeutralScore_Part4"
+          }
+        },
+        {
+          "type": "deadline",
+          "data": {
+            "commands": [
+              {
+                "type": "sequential",
+                "data": {
+                  "commands": [
+                    {
+                      "type": "wait",
+                      "data": {
+                        "waitTime": 3.0
+                      }
+                    },
+                    {
+                      "type": "named",
+                      "data": {
+                        "name": "DumpAndReturn"
+                      }
+                    },
+                    {
+                      "type": "wait",
+                      "data": {
+                        "waitTime": 3.0
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "named",
+                "data": {
+                  "name": "ShootFromPointCommand"
+                }
+              }
+            ]
           }
         }
       ]
