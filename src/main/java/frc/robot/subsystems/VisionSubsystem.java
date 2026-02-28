@@ -11,6 +11,9 @@ import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Pose3d;
 import frc.robot.Constants;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 public class VisionSubsystem extends SubsystemBase {
@@ -38,6 +41,8 @@ public class VisionSubsystem extends SubsystemBase {
     private int detectedTagIdBF = -1;
     private boolean targetVisibleBF = false;
     private int totalTargetsBF = 0;
+    /** All tag IDs currently visible to the BF camera (updated every loop). */
+    private List<Integer> allDetectedTagIdsBF = new ArrayList<>();
 
     // Front Facing Camera data
     private double targetYawFF = 0.0;
@@ -47,6 +52,8 @@ public class VisionSubsystem extends SubsystemBase {
     private int detectedTagIdFF = -1;
     private boolean targetVisibleFF = false;
     private int totalTargetsFF = 0;
+    /** All tag IDs currently visible to the FF camera (updated every loop). */
+    private List<Integer> allDetectedTagIdsFF = new ArrayList<>();
 
     private int selectedTagId = 14; // Default tag ID
 
@@ -159,9 +166,15 @@ public class VisionSubsystem extends SubsystemBase {
             targetDistanceBF = 0.0; detectedTagIdBF = -1;
             targetVisibleBF = false; totalTargetsBF = 0;
             bestAmbiguityBF = -1.0;
+            allDetectedTagIdsBF = Collections.emptyList();
         } else {
             var targetsBF = latestBF.getTargets();
             totalTargetsBF = targetsBF.size();
+            // Build the full list of all visible tag IDs for tower-tag scanning
+            List<Integer> idsBF = new ArrayList<>(targetsBF.size());
+            for (PhotonTrackedTarget t : targetsBF) { idsBF.add(t.getFiducialId()); }
+            allDetectedTagIdsBF = idsBF;
+            // Track the selectedTagId target for yaw/pitch/area telemetry
             PhotonTrackedTarget selBF = null;
             for (PhotonTrackedTarget t : targetsBF) {
                 if (t.getFiducialId() == selectedTagId) { selBF = t; break; }
@@ -185,9 +198,15 @@ public class VisionSubsystem extends SubsystemBase {
             targetDistanceFF = 0.0; detectedTagIdFF = -1;
             targetVisibleFF = false; totalTargetsFF = 0;
             bestAmbiguityFF = -1.0;
+            allDetectedTagIdsFF = Collections.emptyList();
         } else {
             var targetsFF = latestFF.getTargets();
             totalTargetsFF = targetsFF.size();
+            // Build the full list of all visible tag IDs for tower-tag scanning
+            List<Integer> idsFF = new ArrayList<>(targetsFF.size());
+            for (PhotonTrackedTarget t : targetsFF) { idsFF.add(t.getFiducialId()); }
+            allDetectedTagIdsFF = idsFF;
+            // Track the selectedTagId target for yaw/pitch/area telemetry
             PhotonTrackedTarget selFF = null;
             for (PhotonTrackedTarget t : targetsFF) {
                 if (t.getFiducialId() == selectedTagId) { selFF = t; break; }
@@ -385,11 +404,23 @@ public class VisionSubsystem extends SubsystemBase {
     public boolean isTargetVisibleBF()  { return targetVisibleBF; }
     public int getDetectedTagIdBF()     { return detectedTagIdBF; }
     public double getTargetDistanceBF() { return targetDistanceBF; }
+    /**
+     * Returns all AprilTag IDs currently visible to the Back-Facing camera.
+     * Unlike {@link #getDetectedTagIdBF()} (which only tracks the dashboard-selected tag),
+     * this list contains EVERY tag the camera sees — used for tower-tag identification.
+     */
+    public List<Integer> getAllDetectedTagIdsBF() { return allDetectedTagIdsBF; }
 
     public double getTargetYawFF()      { return targetYawFF; }
     public boolean isTargetVisibleFF()  { return targetVisibleFF; }
     public int getDetectedTagIdFF()     { return detectedTagIdFF; }
     public double getTargetDistanceFF() { return targetDistanceFF; }
+    /**
+     * Returns all AprilTag IDs currently visible to the Front-Facing camera.
+     * Unlike {@link #getDetectedTagIdFF()} (which only tracks the dashboard-selected tag),
+     * this list contains EVERY tag the camera sees — used for tower-tag identification.
+     */
+    public List<Integer> getAllDetectedTagIdsFF() { return allDetectedTagIdsFF; }
 
     public int getSelectedTagId() { return selectedTagId; }
 

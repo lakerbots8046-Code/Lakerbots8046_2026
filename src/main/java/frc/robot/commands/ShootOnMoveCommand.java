@@ -1,4 +1,4 @@
- package frc.robot.commands;
+package frc.robot.commands;
 
 import java.util.function.DoubleSupplier;
 import java.util.function.IntSupplier;
@@ -7,6 +7,7 @@ import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
 import com.ctre.phoenix6.swerve.SwerveRequest;
 
 import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
@@ -104,6 +105,16 @@ public class ShootOnMoveCommand extends Command {
      */
     private static final double kHoodDeadbandRotations = 0.1;
 
+    // ── Tag locking ───────────────────────────────────────────────────────────
+    /** Tower tag locked in on initialize(). Prevents oscillation when multiple tags visible. */
+    private int lockedTagId = -1;
+    /** Candidate replacement tag being evaluated for stability before switching. */
+    private int pendingTagId = -1;
+    /** Consecutive loops the supplier has returned pendingTagId instead of lockedTagId. */
+    private int pendingTagCounter = 0;
+    /** Loops a different tag must be consistently returned before switching (~500 ms). */
+    private static final int TAG_SWITCH_STABILITY_LOOPS = 25;
+
     // ── State ─────────────────────────────────────────────────────────────────
     private boolean isFiring = false;
 
@@ -162,16 +173,42 @@ public class ShootOnMoveCommand extends Command {
         dashboardCounter        = 0;
         flywheelStartTimestamp       = -1.0;
         lastCommandedHoodRotations   = Double.MAX_VALUE; // force update on first execute()
+        // Lock the tower tag on command start — prevents oscillation when multiple
+        // tower tags (e.g. 5 and 10) are simultaneously visible.
+        lockedTagId       = towerTagIdSupplier.getAsInt();
+        pendingTagId      = -1;
+        pendingTagCounter = 0;
+
+        // Publish locked tag immediately so Elastic shows it before the first throttled block.
+        SmartDashboard.putNumber(DASH + "Locked Tag ID", lockedTagId);
+
         SmartDashboard.putString(DASH + "Status",  "Shooting on Arc");
         SmartDashboard.putBoolean(DASH + "Firing", false);
     }
 
     @Override
     public void execute() {
-        // ── 0. Gather context ─────────────────────────────────────────────────
-        int           towerTagId  = towerTagIdSupplier.getAsInt();
-        Translation2d towerCenter = ShootingArcManager.getTowerCenter(towerTagId);
+        // ── 0. Gather context — tag locking with stability ────────────────────
+        int currentBestTag = towerTagIdSupplier.getAsInt();
+        if (currentBestTag == lockedTagId) {
+            pendingTagId      = -1;
+            pendingTagCounter = 0;
+        } else {
+            if (currentBestTag == pendingTagId) {
+                pendingTagCounter++;
+                if (pendingTagCounter >= TAG_SWITCH_STABILITY_LOOPS) {
+                    lockedTagId       = pendingTagId;
+                    pendingTagId      = -1;
+                    pendingTagCounter = 0;
+                }
+            } else {
+                pendingTagId      = currentBestTag;
+                pendingTagCounter = 1;
+            }
+        }
+        int           towerTagId  = lockedTagId;
         var           robotPose   = drivetrain.getState().Pose;
+        Translation3d towerCenter = ShootingArcManager.getTowerCenter(robotPose, towerTagId);
 
         // ── 1. Distance-based shooting parameters ─────────────────────────────
         double distance            = ShootingArcManager.calculateDistance(robotPose, towerCenter);
@@ -301,8 +338,7 @@ public class ShootOnMoveCommand extends Command {
         // ── 6. Arc sliding — left/right joystick ─────────────────────────────
         double        lateralInput = lateralInputSupplier.getAsDouble();
         Translation2d arcVelocity  = ShootingArcManager.calculateArcVelocity(
-                robotPose, towerCenter, lateralInput);
-
+                robotPose, towerCenter, lateralInput); // returns Translation2d (2D velocity vector)
         // ── 7. Rotation — lock robot heading to face tower ────────────────────
         double targetHeading  = ShootingArcManager.calculateTargetHeading(robotPose, towerCenter);
         double currentHeading = robotPose.getRotation().getRadians();
@@ -339,6 +375,7 @@ public class ShootOnMoveCommand extends Command {
                                     towerTagId, tagAlliance, isPrimary ? " \u2605" : "");
             boolean inZone      = ShootingArcManager.isInShootingZone(robotPose, towerTagId);
 
+            SmartDashboard.putNumber( DASH + "Locked Tag ID",       lockedTagId);
             SmartDashboard.putNumber( DASH + "Tower Tag ID",        towerTagId);
             SmartDashboard.putString( DASH + "Tower Tag Info",      tagInfo);
             SmartDashboard.putString( DASH + "Tag Alliance",        tagAlliance);
@@ -396,8 +433,8 @@ public class ShootOnMoveCommand extends Command {
 
     /** Returns {@code true} if the turret is currently within aim tolerance. */
     public boolean isTurretAimed() {
-        int           towerTagId  = towerTagIdSupplier.getAsInt();
-        Translation2d towerCenter = ShootingArcManager.getTowerCenter(towerTagId);
+        int           towerTagId  = (lockedTagId > 0) ? lockedTagId : towerTagIdSupplier.getAsInt();
+        Translation3d towerCenter = ShootingArcManager.getTowerCenter(drivetrain.getState().Pose, towerTagId);
         double        targetAngle = ShootingArcManager.calculateTurretAngle(
                 drivetrain.getState().Pose, towerCenter);
         double        error       = Math.abs(targetAngle - launcher.getTurretPositionDegrees());

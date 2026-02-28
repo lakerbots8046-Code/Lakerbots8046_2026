@@ -116,6 +116,19 @@ public class Constants {
          */
         public static final double kFlywheelIdleRPS = -15.0;
 
+        /**
+         * Toggle to enable or disable flywheel idling between shots.
+         *
+         * <p>When {@code true}  — the flywheel spins at {@link #kFlywheelIdleRPS} while
+         *    the robot is enabled but not actively shooting (reduces spool-up time).
+         * <p>When {@code false} — the flywheel is fully stopped between shots
+         *    (useful for testing or when idle noise/heat is undesirable).
+         *
+         * <p>Flip this value to quickly enable/disable idle spinning without touching
+         * any other code.
+         */
+        public static final boolean kFlywheelIdleEnabled = true; // ← set true to re-enable idling
+
         public static double kSensorToMechanismRatio;
         public static double kHoodStowedPosition;
         public static double kHoodCollectPosition;
@@ -244,7 +257,12 @@ public class Constants {
         //   4. If shots miss to the INSIDE EDGE  → increase this value (+2° at a time).
         //      If shots miss to the OUTSIDE EDGE → decrease this value (-2° at a time).
         //   5. Verify from both left and right sides of the alliance zone.
-        public static final double kTurretZeroOffsetDegrees = 6.0;
+        // RESET TO 0.0 — the previous 6.0 was compensating for the wrong goal center
+        // calculation in getTowerCenter() (goal center was drifting with robot position).
+        // That bug is now fixed: getTowerCenter() uses a fixed -X offset from the primary
+        // tag. Re-tune this value on the robot using "ShootFromPoint/Turret Zero Offset (deg)"
+        // on the Elastic dashboard (no redeploy needed), then update this constant.
+        public static final double kTurretZeroOffsetDegrees = 0.0;
 
         // ── Turret pivot offset from robot center ─────────────────────────────
         //
@@ -262,6 +280,8 @@ public class Constants {
         public static final double kTurretOffsetX = -Units.inchesToMeters(5.0); // 5 in behind center
         /** Turret pivot offset along robot Y axis (meters). Zero = centered left-right. */
         public static final double kTurretOffsetY = 0.0;
+        /** Turret pivot height above the floor (meters). Measured: 14 in from floor to pivot. */
+        public static final double kTurretOffsetZ = Units.inchesToMeters(14.0); // 14 in = 0.3556 m
 
         // kWrapAroundThreshold kept for API compatibility — wrap-around is DISABLED.
         // With ±169° range the turret does not need to wrap around.
@@ -320,7 +340,7 @@ public class Constants {
         public static final double kPivotCollectPosition = 0.25;         // Extended for collecting game pieces
        // public static final double kPivotScoreHighPosition = 0.15;       // Position for high scoring
        // public static final double kPivotScoreLowPosition = 0.05;        // Position for low scoring
-        public static final double kPivotDeployCollectPosition = -1.34; // Deploy position for intake_deploy_collect -1.36 to -1.25 to 1.304
+        public static final double kPivotDeployCollectPosition = -1.36; // Deploy position for intake_deploy_collect -1.36 to -1.25 to 1.304
         public static final double kPivotHomePosition = 0.0;            // Retract/home position after collecting
         public static final double kPivotDumpPosition = -0.75;          // This is used to flip the remaining fuel back into the hopper while launching. 
 
@@ -359,6 +379,10 @@ public class Constants {
         // Manual pivot control speed (duty cycle, 0.0–1.0)
         // X button lowers at -kPivotManualSpeed, Y button raises at +kPivotManualSpeed
         public static final double kPivotManualSpeed = 0.1; // 10% — reduced to prevent slamming into limits
+
+        // POV bump factor for adjusting intake pivot position (in rotations)
+        // POV Up (0) increases position, POV Down (180) decreases position
+        public static final double kPivotBumpFactor = 0.01;
     }
     
     /**
@@ -495,14 +519,14 @@ public class Constants {
 
         // v10: -5 RPS again — still overshooting after v9 reduction.
         public static final double[][] kLauncherRPSLookup = {
-            {1.0,  -45.0},  // was -50.0
-            {1.5,  -45.5},  // was -50.5
-            {2.0,  -48.0},  // was -53.0
-            {2.5,  -50.5},  // was -55.5
-            {3.0,  -53.5},  // was -58.5
-            {3.5,  -56.5},  // was -61.5
-            {4.0,  -69.5},  // was -74.5
-            {4.5,  -75.5}   // was -80.5
+            {1.0,  -43.0},  // was -50.0
+            {1.5,  -43.5},  // was -50.5
+            {2.0,  -46.0},  // was -53.0
+            {2.5,  -48.5},  // was -55.5
+            {3.0,  -51.5},  // was -58.5
+            {3.5,  -54.5},  // was -61.5
+            {4.0,  -67.5},  // was -74.5
+            {4.5,  -73.5}   // was -80.5
         };
 
         // ── Hood angle lookup table ───────────────────────────────────────────
@@ -555,9 +579,9 @@ public class Constants {
             {2.0,  0.0},   // TESTED: hood position 0
             {2.5,  0.0},   // TESTED: hood position 0
             {3.0,  1.0},   // TESTED: hood position 0 0         2
-            {3.5,  2.0},   // TESTED: hood position 1 1         3
-            {4.0,  3.0},   // extrapolated (+1 rot per 0.5m)1   3
-            {4.5,  3.5}    // extrapolated (+1 rot per 0.5m) 2  3.5
+            {3.5,  1.0},   // TESTED: hood position 1 1         3
+            {4.0,  2.0},   // extrapolated (+1 rot per 0.5m)1   3
+            {4.5,  2.5}    // extrapolated (+1 rot per 0.5m) 2  3.5
         };
     }
     public static class Vision {

@@ -66,7 +66,7 @@ public class Intake extends SubsystemBase {
     // Peak output of 8 volts
     cfgRollers.Voltage.withPeakForwardVoltage(Volts.of(12))
       .withPeakReverseVoltage(Volts.of(-12));
-    cfgRollers.CurrentLimits.withStatorCurrentLimit(Amps.of(60)); // Limit current to 40 A to prevent breaker trips and motor damage
+    //    cfgRollers.CurrentLimits.withStatorCurrentLimit(Amps.of(60)); // Limit current to 40 A to prevent breaker trips and motor damage
 
     /* Torque-based velocity does not require a velocity feed forward, as torque will accelerate the rotor up to the desired velocity by itself */
     cfgRollers.Slot1.kS = 2.5; // To account for friction, add 2.5 A of static feedforward
@@ -74,8 +74,8 @@ public class Intake extends SubsystemBase {
     cfgRollers.Slot1.kI = 0; // No output for integrated error
     cfgRollers.Slot1.kD = 0; // No output for error derivative
     // Peak output of 40 A
-    cfgRollers.TorqueCurrent.withPeakForwardTorqueCurrent(Amps.of(40))
-      .withPeakReverseTorqueCurrent(Amps.of(-40));
+    cfgRollers.TorqueCurrent.withPeakForwardTorqueCurrent(Amps.of(60))
+      .withPeakReverseTorqueCurrent(Amps.of(-60));
      /* Retry config apply up to 5 times, report if failure */
     
  
@@ -405,6 +405,52 @@ public Command AutoIntakeDeployCollect() {
   public Command raiseIntakeManual() {
     return Commands.run(() -> intakePivot.set(IntakeConstants.kPivotManualSpeed), this)
         .finallyDo(() -> setPivotPosition(getPivotPosition())); // hold wherever it stopped
+  }
+
+  /**
+   * Bumps the intake pivot position up by kPivotBumpFactor.
+   * Used with POV Up (0°) button to incrementally raise the intake.
+   * Saves and restores rollersEnabled to prevent roller stop when interrupting.
+   * @return Command that bumps pivot position upward
+   */
+  public Command bumpPivotUp() {
+    return Commands.runOnce(() -> {
+      // Save current roller state
+      boolean savedRollersEnabled = rollersEnabled;
+      // Perform the bump
+      double newPosition = getPivotPosition() + IntakeConstants.kPivotBumpFactor;
+      // Clamp to stowed position (0.0) as upper limit
+      newPosition = Math.min(newPosition, IntakeConstants.kPivotStowedPosition);
+      setPivotPosition(newPosition);
+      // Restore rollers immediately in case finallyDo was triggered
+      if (savedRollersEnabled) {
+        setRollersVelocity(IntakeConstants.kRollersIntakeVelocity);
+      }
+      rollersEnabled = savedRollersEnabled;
+    }, this);
+  }
+
+  /**
+   * Bumps the intake pivot position down by kPivotBumpFactor.
+   * Used with POV Down (180°) button to incrementally lower the intake.
+   * Saves and restores rollersEnabled to prevent roller stop when interrupting.
+   * @return Command that bumps pivot position downward
+   */
+  public Command bumpPivotDown() {
+    return Commands.runOnce(() -> {
+      // Save current roller state
+      boolean savedRollersEnabled = rollersEnabled;
+      // Perform the bump
+      double newPosition = getPivotPosition() - IntakeConstants.kPivotBumpFactor;
+      // Clamp to deploy position as lower limit
+      newPosition = Math.max(newPosition, IntakeConstants.kPivotDeployCollectPosition);
+      setPivotPosition(newPosition);
+      // Restore rollers immediately in case finallyDo was triggered
+      if (savedRollersEnabled) {
+        setRollersVelocity(IntakeConstants.kRollersIntakeVelocity);
+      }
+      rollersEnabled = savedRollersEnabled;
+    }, this);
   }
 
   /**

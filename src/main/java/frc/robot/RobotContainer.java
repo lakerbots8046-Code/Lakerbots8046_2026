@@ -400,18 +400,28 @@ public class RobotContainer {
         // their drive-to-tag bindings unconditionally.
 
         // POV Up (0°): Drive to tag 14 (always active)
-        joystick.pov(0).whileTrue(new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, 14));
+        //joystick.pov(0).whileTrue(new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, 14));
 
         // POV Right (90°): Drive to tag 15 — only when NOT shooting
         joystick.pov(90).and(joystick.leftTrigger(0.75).negate())
             .whileTrue(new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, 15));
 
         // POV Down (180°): Drive to tag 16 (always active)
-        joystick.pov(180).whileTrue(new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, 16));
+        //joystick.pov(180).whileTrue(new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, 16));
 
         // POV Left (270°): Drive to tag 13 — only when NOT shooting
         joystick.pov(270).and(joystick.leftTrigger(0.75).negate())
             .whileTrue(new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, 13));
+
+        // POV Up (0°): Bump intake pivot position up by kPivotBumpFactor
+        // Active only when NOT shooting (same gate as other POV drive commands)
+        joystick.pov(0).and(joystick.leftTrigger(0.75).negate())
+            .onTrue(intake.bumpPivotUp());
+
+        // POV Down (180°): Bump intake pivot position down by kPivotBumpFactor
+        // Note: This overrides the commented-out drive to tag 16
+        joystick.pov(180).and(joystick.leftTrigger(0.75).negate())
+            .onTrue(intake.bumpPivotDown());
 
         // ── Y button: Shoot-on-Arc ────────────────────────────────────────────
         // Phase 1: PathPlanner drives to the nearest shooting position on the arc
@@ -494,7 +504,7 @@ public class RobotContainer {
 
         int           tagId      = getActiveTowerTagId();
         var           robotPose  = drivetrain.getState().Pose;
-        var           tower      = ShootingArcManager.getTowerCenter(tagId);
+        var           tower      = ShootingArcManager.getTowerCenter(robotPose, tagId);
         double        distance   = ShootingArcManager.calculateDistance(robotPose, tower);
         boolean       inZone     = ShootingArcManager.isInShootingZone(robotPose, tagId);
 
@@ -512,6 +522,46 @@ public class RobotContainer {
         SmartDashboard.putString( "Tower/Alliance",      tagAlliance);
         SmartDashboard.putNumber( "Tower/Distance (m)",  distance);
         SmartDashboard.putBoolean("Tower/In Zone",       inZone);
+
+        // ── Pre-seed locked tag widgets so they appear in Elastic immediately ─
+        // When no shooting command is active, these show the tag that WOULD be
+        // locked if the trigger were pressed right now. The commands overwrite
+        // these values with the actual locked tag once they start running.
+        SmartDashboard.putNumber("ShootFromPoint/Locked Tag ID", tagId);
+        SmartDashboard.putNumber("ShootArc/Locked Tag ID",       tagId);
+
+        // ── Turret zero offset — always visible for runtime tuning ────────────
+        // Published here so the widget appears in Elastic even before
+        // ShootFromPointCommand runs. ShootFromPointCommand reads this value
+        // every ~100 ms and applies it to the raw turret angle.
+        // Change this number in Elastic to nudge the turret without redeploying.
+        // Positive = nudge CCW (left), Negative = nudge CW (right).
+        // The value is seeded from kTurretZeroOffsetDegrees on first boot;
+        // after that, whatever you type in Elastic is used live.
+        double liveOffset = SmartDashboard.getNumber(
+                "ShootFromPoint/Turret Zero Offset (deg)",
+                Constants.TurretConstants.kTurretZeroOffsetDegrees);
+        SmartDashboard.putNumber("ShootFromPoint/Turret Zero Offset (deg)", liveOffset);
+
+        // ── Always-on turret monitoring ───────────────────────────────────────
+        // These mirror the ShootFromPoint/ widgets so they are visible in Elastic
+        // at all times — even when ShootFromPointCommand is not running.
+        // Useful for pre-shot verification and live tuning while driving.
+        double rawAngle = ShootingArcManager.calculateTurretAngleRaw(robotPose, tower);
+        double targetAngle = rawAngle - liveOffset;
+        while (targetAngle >  180.0) targetAngle -= 360.0;
+        while (targetAngle < -180.0) targetAngle += 360.0;
+        double currentTurretDeg = launcher.getTurretPositionDegrees();
+        double turretError = targetAngle - currentTurretDeg;
+        while (turretError >  180.0) turretError -= 360.0;
+        while (turretError < -180.0) turretError += 360.0;
+
+        SmartDashboard.putNumber("ShootFromPoint/Turret Raw Angle (deg)", rawAngle);
+        SmartDashboard.putNumber("ShootFromPoint/Turret Error (deg)",     turretError);
+        SmartDashboard.putNumber("ShootFromPoint/Distance (m)",           distance);
+        SmartDashboard.putString("ShootFromPoint/Tower Tag Info",         tagInfo);
+        SmartDashboard.putNumber("ShootFromPoint/Turret Target (deg)",    targetAngle);
+        SmartDashboard.putNumber("ShootFromPoint/Turret Position (deg)",  currentTurretDeg);
     }
 
     /**
@@ -827,8 +877,8 @@ public class RobotContainer {
                 // to avoid a subsystem conflict between two parallel commands.
                 Commands.run(() -> {
                     int tagId = getActiveTowerTagId();
-                    var tower = ShootingArcManager.getTowerCenter(tagId);
                     var robotPose = drivetrain.getState().Pose;
+                    var tower = ShootingArcManager.getTowerCenter(robotPose, tagId);
                     double dist = ShootingArcManager.calculateDistance(robotPose, tower);
 
                     // Pre-spin flywheel to distance-based target RPS
@@ -912,8 +962,12 @@ public class RobotContainer {
      * @return The first alliance-matching tower tag ID found, or {@code -1} if none.
      */
     private int getVisibleTowerTag() {
-        int bfTag = visionSubsystem.getDetectedTagIdBF();
-        int ffTag = visionSubsystem.getDetectedTagIdFF();
+        // Use ALL detected tag IDs from each camera — not just the dashboard-selected tag.
+        // Previously, getDetectedTagIdBF/FF() only returned the tag matching the
+        // SmartDashboard chooser (default: tag 14), so tower tags were never found
+        // and getActiveTowerTagId() always fell back to the primary tag (10/20).
+        var bfTags = visionSubsystem.getAllDetectedTagIdsBF();
+        var ffTags = visionSubsystem.getAllDetectedTagIdsFF();
 
         var alliance = DriverStation.getAlliance();
 
@@ -922,22 +976,23 @@ public class RobotContainer {
         boolean checkRed  = !alliance.isPresent() || alliance.get() == Alliance.Red;
         boolean checkBlue = !alliance.isPresent() || alliance.get() == Alliance.Blue;
 
-        // BF camera first, then FF camera — for each alliance set
+        // BF camera first (faces tower during shooting), then FF camera — for each alliance set.
+        // Return the first tower tag found so the pair-midpoint goal center is correct.
         if (checkRed) {
             for (int tag : Constants.ShootingArc.kRedTowerTagIds) {
-                if (tag == bfTag) return tag;
+                if (bfTags.contains(tag)) return tag;
             }
             for (int tag : Constants.ShootingArc.kRedTowerTagIds) {
-                if (tag == ffTag) return tag;
+                if (ffTags.contains(tag)) return tag;
             }
         }
 
         if (checkBlue) {
             for (int tag : Constants.ShootingArc.kBlueTowerTagIds) {
-                if (tag == bfTag) return tag;
+                if (bfTags.contains(tag)) return tag;
             }
             for (int tag : Constants.ShootingArc.kBlueTowerTagIds) {
-                if (tag == ffTag) return tag;
+                if (ffTags.contains(tag)) return tag;
             }
         }
 

@@ -3,6 +3,7 @@ package frc.robot.util;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.math.geometry.Translation3d;
 import frc.robot.Constants;
 
 /**
@@ -13,7 +14,7 @@ import frc.robot.Constants;
  * aim at the tower, and the launcher can shoot the ball in.
  *
  * <p>All calculations use field-relative coordinates from the robot's pose estimator,
- * which fuses odometry with AprilTag vision measurements for accurate positioning
+ * which fuses odometry with ApriloTag vision measurements for accurate positioning
  * even while the robot is moving.
  *
  * <h3>Tower tag layout (2026 Rebuilt field)</h3>
@@ -40,23 +41,20 @@ public class ShootingArcManager {
     // ── Goal center depth offset ──────────────────────────────────────────────
     //
     // The primary tags (10 for red, 20 for blue) are mounted on the FACE of the
-    // tower, not at the center of the goal opening. The actual goal center is
-    // 2 feet (0.6096 m) BEHIND the tag — i.e. in the −X direction, since both
-    // primary tags face +X (toward their respective alliance).
+    // tower. Both primary tags have identity rotation (W=1, X=Y=Z=0), meaning
+    // their normal points in the +X direction. The goal center is this many
+    // meters BEHIND the tag face in the −X direction.
     //
-    // Using the tag face position instead of the goal center causes the turret to
-    // aim ~9–10° too far toward the center of the field from every robot position,
-    // producing the "inside edge" miss pattern from both left and right sides.
-    //
-    // This constant is subtracted from the tag's X coordinate in getTowerCenter().
-    private static final double GOAL_CENTER_DEPTH_METERS = 2.0 * 0.3048; // 2 ft = 0.6096 m
+    // 2 ft = 0.6096 m — matches the fallback constants below.
+    // TUNE: increase if shots miss outside edge; decrease if shots miss inside edge.
+    private static final double GOAL_CENTER_DEPTH_METERS = 0.6096; // 2 ft behind tag face
 
     // ── Fallback tower center positions (used if primary tag not in field layout) ─
-    // Corrected: tag face X − 0.6096 m (2 ft into the tower)
-    // Red  tag 10 face: x=12.505 → goal center x=12.505−0.6096=11.895
-    // Blue tag 20 face: x=5.215  → goal center x=5.215−0.6096=4.605
-    private static final Translation2d RED_TOWER_CENTER_FALLBACK  = new Translation2d(11.895, 4.021);//11.895
-    private static final Translation2d BLUE_TOWER_CENTER_FALLBACK = new Translation2d(4.605, 4.021);
+    // Red  tag 10 face: x=12.505156 → goal center x=12.505156−0.6096=11.895556
+    // Blue tag 20 face: x=5.215153  → goal center x=5.215153−0.6096=4.605553
+    // Z = 1.12395 m — tower tag height from 2026-rebuilt.json (tags 10 & 20)
+    private static final Translation3d RED_TOWER_CENTER_FALLBACK  = new Translation3d(11.8956, 4.0214, 1.12395);
+    private static final Translation3d BLUE_TOWER_CENTER_FALLBACK = new Translation3d(4.6056, 4.0214, 1.12395);
 
     // Private constructor — static utility class only
     private ShootingArcManager() {}
@@ -68,36 +66,39 @@ public class ShootingArcManager {
     /**
      * Gets the tower CENTER position (center of the goal opening) for a given tag ID.
      *
-     * <p>Always returns the position of the PRIMARY tower tag for the alliance
-     * (tag {@value Constants.ShootingArc#kRedPrimaryTagId} for red,
-     *  tag {@value Constants.ShootingArc#kBluePrimaryTagId} for blue),
-     * regardless of which specific tower tag was passed in.
+     * <p>The goal center is a <em>fixed field point</em> — it does not depend on the
+     * robot's position. It is computed once from the primary tag's field position
+     * (tag 10 for red, tag 20 for blue) by subtracting {@link #GOAL_CENTER_DEPTH_METERS}
+     * in the −X direction (both primary tags have identity rotation, so their face
+     * normal points in +X and the goal interior is in the −X direction).
      *
-     * <p>This ensures the turret always aims at the center of the tower opening
-     * even when only a side tag (e.g. tag 9, tag 11, tag 2) is visible.
-     * The visible tag is used only to identify the alliance and improve the
-     * robot's pose estimate via the PhotonVision multi-tag PnP estimator.
+     * <p>Using a fixed goal center ensures the turret aims at the same point regardless
+     * of where the robot is on the field, eliminating the "goal center drifts with robot
+     * position" bug that caused outside-edge misses when approaching from an angle.
      *
-     * @param tagId Any tower tag ID (red: 2,3,4,5,8,9,10,11 — blue: 18,19,20,21,24,25,26,27)
-     * @return Translation2d of the PRIMARY tower tag's field position
+     * @param robotPose Current robot pose (used only to determine alliance via tagId;
+     *                  the returned position does NOT depend on robotPose)
+     * @param tagId     Any tower tag ID — used only to determine red vs blue alliance
+     * @return Translation3d of the fixed goal center position (X, Y, Z)
      */
-    public static Translation2d getTowerCenter(int tagId) {
-        // Determine which alliance this tag belongs to, then look up the PRIMARY tag.
+    public static Translation3d getTowerCenter(Pose2d robotPose, int tagId) {
         int primaryTagId = isRedTowerTag(tagId) ? RED_PRIMARY_TAG : BLUE_PRIMARY_TAG;
+
         try {
             var tagPose = Constants.Vision.kTagLayout.getTagPose(primaryTagId);
             if (tagPose.isPresent()) {
-                // Both primary tags (10 and 20) face +X, so the goal center is
-                // GOAL_CENTER_DEPTH_METERS behind the tag in the −X direction.
-                double goalX = tagPose.get().getX() - GOAL_CENTER_DEPTH_METERS;
-                double goalY = tagPose.get().getY();
-                return new Translation2d(goalX, goalY);
+                double tagX = tagPose.get().getX();
+                double tagY = tagPose.get().getY();
+                double tagZ = tagPose.get().getZ();
+                // Both primary tags (10 & 20) have identity rotation → face +X.
+                // Goal center is GOAL_CENTER_DEPTH_METERS behind the face in the −X direction.
+                return new Translation3d(tagX - GOAL_CENTER_DEPTH_METERS, tagY, tagZ);
             }
         } catch (Exception e) {
-            System.err.println("ShootingArcManager: Could not get primary tag " + primaryTagId
-                    + " pose: " + e.getMessage());
+            System.err.println("ShootingArcManager: Error getting primary tag "
+                    + primaryTagId + ": " + e.getMessage());
         }
-        // Fallback to hardcoded goal-center positions (already offset by 2 ft)
+
         return isRedTowerTag(tagId) ? RED_TOWER_CENTER_FALLBACK : BLUE_TOWER_CENTER_FALLBACK;
     }
 
@@ -137,11 +138,12 @@ public class ShootingArcManager {
      * @return Pose2d of the nearest shooting position (preferred distance, facing tower)
      */
     public static Pose2d getNearestShootingPose(Pose2d robotPose, int towerTagId) {
-        Translation2d towerCenter = getTowerCenter(towerTagId);
+        Translation3d towerCenter   = getTowerCenter(robotPose, towerTagId);
+        Translation2d towerCenter2d = towerCenter.toTranslation2d(); // 2D for path planning
         double preferredDist = Constants.ShootingArc.kPreferredShootingDistance;
 
-        // Direction from tower to robot
-        Translation2d toRobot = robotPose.getTranslation().minus(towerCenter);
+        // Direction from tower to robot (2D — robot drives on a flat field)
+        Translation2d toRobot = robotPose.getTranslation().minus(towerCenter2d);
         double currentDist = toRobot.getNorm();
 
         if (currentDist < 0.01) {
@@ -154,12 +156,12 @@ public class ShootingArcManager {
 
         // Normalize direction and scale to preferred distance
         Translation2d normalizedDir = toRobot.div(currentDist);
-        Translation2d shootingPos   = towerCenter.plus(normalizedDir.times(preferredDist));
+        Translation2d shootingPos   = towerCenter2d.plus(normalizedDir.times(preferredDist));
 
         // Robot heading: face the tower
         double angleToTower = Math.atan2(
-                towerCenter.getY() - shootingPos.getY(),
-                towerCenter.getX() - shootingPos.getX());
+                towerCenter2d.getY() - shootingPos.getY(),
+                towerCenter2d.getX() - shootingPos.getX());
 
         return new Pose2d(shootingPos, new Rotation2d(angleToTower));
     }
@@ -176,9 +178,9 @@ public class ShootingArcManager {
      * @return Translation2d with field-relative X and Y velocity components (m/s)
      */
     public static Translation2d calculateArcVelocity(
-            Pose2d robotPose, Translation2d towerPos, double lateralInput) {
+            Pose2d robotPose, Translation3d towerPos, double lateralInput) {
 
-        Translation2d toRobot    = robotPose.getTranslation().minus(towerPos);
+        Translation2d toRobot    = robotPose.getTranslation().minus(towerPos.toTranslation2d());
         double        currentAngle = Math.atan2(toRobot.getY(), toRobot.getX());
 
         // Clockwise tangent at angle θ: (sin θ, −cos θ)
@@ -196,7 +198,7 @@ public class ShootingArcManager {
      * @param towerPos  Tower center position
      * @return Target heading in radians (field-relative)
      */
-    public static double calculateTargetHeading(Pose2d robotPose, Translation2d towerPos) {
+    public static double calculateTargetHeading(Pose2d robotPose, Translation3d towerPos) {
         return Math.atan2(
                 towerPos.getY() - robotPose.getY(),
                 towerPos.getX() - robotPose.getX());
@@ -219,7 +221,7 @@ public class ShootingArcManager {
      * @param robotPose Current robot pose on the field
      * @return Field-relative position of the turret rotation axis
      */
-    public static Translation2d getTurretFieldPosition(Pose2d robotPose) {
+    public static Translation3d getTurretFieldPosition(Pose2d robotPose) {
         double heading  = robotPose.getRotation().getRadians();
         double offsetX  = Constants.TurretConstants.kTurretOffsetX; // −0.127 m (5 in back)
         double offsetY  = Constants.TurretConstants.kTurretOffsetY; // 0.0 m (centered)
@@ -227,8 +229,9 @@ public class ShootingArcManager {
         // Rotate the robot-relative offset by the robot's heading to get field-relative offset
         double fieldX = robotPose.getX() + offsetX * Math.cos(heading) - offsetY * Math.sin(heading);
         double fieldY = robotPose.getY() + offsetX * Math.sin(heading) + offsetY * Math.cos(heading);
+        double fieldZ = Constants.TurretConstants.kTurretOffsetZ; // 14 in = 0.3556 m above floor
 
-        return new Translation2d(fieldX, fieldY);
+        return new Translation3d(fieldX, fieldY, fieldZ);
     }
 
     // =========================================================================
@@ -250,9 +253,9 @@ public class ShootingArcManager {
      * @param towerPos  Tower center position on the field
      * @return Turret angle in degrees, normalized to [−180, 180], no offset applied
      */
-    public static double calculateTurretAngleRaw(Pose2d robotPose, Translation2d towerPos) {
+    public static double calculateTurretAngleRaw(Pose2d robotPose, Translation3d towerPos) {
         // Use the turret pivot's actual field position, not the robot center
-        Translation2d turretPos = getTurretFieldPosition(robotPose);
+        Translation3d turretPos = getTurretFieldPosition(robotPose);
 
         // Angle from turret pivot to tower in field coordinates (radians)
         double fieldAngle = Math.atan2(
@@ -282,7 +285,7 @@ public class ShootingArcManager {
      * @param towerPos  Tower center position on the field
      * @return Turret angle in degrees, normalized to [−180, 180]
      */
-    public static double calculateTurretAngle(Pose2d robotPose, Translation2d towerPos) {
+    public static double calculateTurretAngle(Pose2d robotPose, Translation3d towerPos) {
         double turretAngleDeg = calculateTurretAngleRaw(robotPose, towerPos);
 
         // Apply physical zero-offset calibration.
@@ -309,7 +312,9 @@ public class ShootingArcManager {
      * @param towerPos  Tower center position
      * @return Distance in meters from turret pivot to tower center
      */
-    public static double calculateDistance(Pose2d robotPose, Translation2d towerPos) {
+    public static double calculateDistance(Pose2d robotPose, Translation3d towerPos) {
+        // True 3D Euclidean distance: accounts for height difference between
+        // turret pivot (kTurretOffsetZ = 0.3556 m) and tower center (1.12395 m).
         return getTurretFieldPosition(robotPose).getDistance(towerPos);
     }
 
@@ -320,7 +325,7 @@ public class ShootingArcManager {
      * @param towerTagId Tower AprilTag ID
      */
     public static boolean isInShootingZone(Pose2d robotPose, int towerTagId) {
-        double dist = calculateDistance(robotPose, getTowerCenter(towerTagId));
+        double dist = calculateDistance(robotPose, getTowerCenter(robotPose, towerTagId));
         return dist >= Constants.ShootingArc.kMinShootingDistance
                 && dist <= Constants.ShootingArc.kMaxShootingDistance;
     }

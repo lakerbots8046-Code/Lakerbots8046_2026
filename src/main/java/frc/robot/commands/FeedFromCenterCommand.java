@@ -1,6 +1,7 @@
 package frc.robot.commands;
 
 import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.wpilibj.Timer;
@@ -206,7 +207,10 @@ public class FeedFromCenterCommand extends Command {
         // ── 8. Aim turret at adjusted target ──────────────────────────────────
         // Uses calculateTurretAngleRaw() (no compiled offset) then applies the
         // compiled zero-offset constant. Same approach as ShootFromPointCommand.
-        double rawTurretAngle     = ShootingArcManager.calculateTurretAngleRaw(robotPose, target);
+        // calculateTurretAngleRaw now takes Translation3d. The feed-station target is a
+        // 2D field position; Z=0.0 is safe here because the angle calculation only uses X/Y.
+        double rawTurretAngle     = ShootingArcManager.calculateTurretAngleRaw(
+                robotPose, new Translation3d(target.getX(), target.getY(), 0.0));
         double adjustedTurretAngle = rawTurretAngle - TurretConstants.kTurretZeroOffsetDegrees;
         while (adjustedTurretAngle >  180.0) adjustedTurretAngle -= 360.0;
         while (adjustedTurretAngle < -180.0) adjustedTurretAngle += 360.0;

@@ -11,9 +11,12 @@ import com.ctre.phoenix6.controls.NeutralOut;
 import com.ctre.phoenix6.controls.VelocityTorqueCurrentFOC;
 import com.ctre.phoenix6.controls.VelocityVoltage;
 import com.ctre.phoenix6.controls.DutyCycleOut;
+import com.ctre.phoenix6.controls.DynamicMotionMagicTorqueCurrentFOC;
+import com.ctre.phoenix6.controls.MotionMagicTorqueCurrentFOC;
 import com.ctre.phoenix6.configs.FeedbackConfigs;
 import com.ctre.phoenix6.configs.MotionMagicConfigs;
 import com.ctre.phoenix6.configs.Slot0Configs;
+import com.ctre.phoenix6.configs.Slot1Configs;
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
 import com.ctre.phoenix6.controls.MotionMagicVoltage;
 import com.ctre.phoenix6.hardware.TalonFX;
@@ -46,8 +49,15 @@ public class Launcher extends SubsystemBase {
     // CTRE Phoenix 6 holds a reference to the request object — sharing one object
     // between two motors means the last withPosition() call overwrites the previous
     // one, causing the hood to receive the turret's target (and vice versa) every loop.
+    // Slot 0 — original MotionMagicVoltage (retained for reference / easy rollback)
     private final MotionMagicVoltage m_mmreqTurret = new MotionMagicVoltage(0);
+    // Slot 1 — DynamicMotionMagicTorqueCurrentFOC (active control mode)
+    // Constructor: (Position rots, CruiseVelocity rps, Acceleration rps/s) — Jerk defaults to 0.0 (disabled).
+    // Starting very slow: 2 rps cruise, 2 rps/s accel. Raise once motion is confirmed safe on the robot.
+    private final DynamicMotionMagicTorqueCurrentFOC m_dynMMTorqueTurret =
+        new DynamicMotionMagicTorqueCurrentFOC(0.0, 2.0, 2.0).withSlot(1);
     private final MotionMagicVoltage m_mmreqHood   = new MotionMagicVoltage(0);
+
     private final VelocityVoltage m_VelocityVoltage = new VelocityVoltage(0).withSlot(0);
     private final VelocityTorqueCurrentFOC m_velocityTorque = new VelocityTorqueCurrentFOC(0).withSlot(0);
     private final NeutralOut m_brake = new NeutralOut();
@@ -118,6 +128,7 @@ public class Launcher extends SubsystemBase {
 
     // Configure Motion Magic cruise/accel/jerk in raw motor rotations per second
     MotionMagicConfigs mmTurret = cfgTurret.MotionMagic;
+    //MotionMagicConfigs mmTurret = cfgTurret
     mmTurret.withMotionMagicCruiseVelocity(RotationsPerSecond.of(40))
       .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(20))
       .withMotionMagicJerk(RotationsPerSecondPerSecond.per(Second).of(0));
@@ -136,6 +147,30 @@ public class Launcher extends SubsystemBase {
     slot0Turret.kI = 0;    // No integral
     // kD increased from 1.5 → 2.0 for more damping near the target position.
     slot0Turret.kD = 2.0;
+
+    // ── Slot 1: DynamicMotionMagicTorqueCurrentFOC ──────────────────────────
+    // Gains are in Amps (not Volts). Profile (cruise/accel/jerk) is set per-request
+    // in m_dynMMTorqueTurret above — no MotionMagic config block needed here.
+    //
+    // Starting values are intentionally very conservative (slow & low current).
+    // Tuning guide:
+    //   kS — increase if motor doesn't move at all (overcome static friction).
+    //   kP — increase if turret is slow to reach target; decrease if it overshoots.
+    //   kD — increase if turret oscillates near target.
+    //   Peak current — raise gradually once motion looks safe (max ~80 A for Kraken X60).
+    //   CruiseVelocity / Acceleration — raise in m_dynMMTorqueTurret once speed is confirmed safe.
+    Slot1Configs slot1Turret = cfgTurret.Slot1;
+    slot1Turret.kS = 2.0;   // Static friction feedforward (A) — small kick to overcome stiction
+    slot1Turret.kV = 0.0;   // Velocity feedforward (A per rps) — start at 0; add if motor lags
+    slot1Turret.kA = 0.0;   // Acceleration feedforward (A per rps/s) — not needed initially
+    slot1Turret.kP = 5.0;   // 1 rotation error → 5 A correction (conservative)
+    slot1Turret.kI = 0.0;   // No integral
+    slot1Turret.kD = 0.1;   // Damping: 1 rps velocity error → 0.1 A correction
+
+    // Peak torque current limits for turret — conservative for initial testing.
+    // Raise toward 40–60 A once motion is confirmed safe and gains are tuned.
+    cfgTurret.TorqueCurrent.withPeakForwardTorqueCurrent(Amps.of(20))
+        .withPeakReverseTorqueCurrent(Amps.of(-20));
 
     // ============ CONFIGURE HOOD POSITION CONTROL ============ //
     // SensorToMechanismRatio = 1.0 → positions are in raw motor rotations.
@@ -187,12 +222,22 @@ public class Launcher extends SubsystemBase {
   }
   
   /**
-   * Sets the pivot to a specific position in rotations
-   * @param mechRotations Target position in mechanism rotations
+   * Sets the turret to a specific position using DynamicMotionMagicTorqueCurrentFOC (Slot 1).
+   *
+   * <p>Profile: CruiseVelocity=2 rps, Acceleration=2 rps/s — intentionally very slow.
+   * Increase these values in {@code m_dynMMTorqueTurret} once motion is confirmed safe.
+   *
+   * <p>The original MotionMagicVoltage (Slot 0) config is retained in {@code m_mmreqTurret}
+   * and {@code cfgTurret.Slot0} for easy rollback — simply swap the setControl() call below.
+   *
+   * @param mechRotations Target position in raw motor rotations
    */
   public void setTurretPosition(double mechRotations) {
     lastTurretAngle = mechRotations;
-    turretMotor.setControl(m_mmreqTurret.withPosition(mechRotations).withSlot(0));
+    // Slot 1 — DynamicMotionMagicTorqueCurrentFOC (active)
+    turretMotor.setControl(m_dynMMTorqueTurret.withPosition(mechRotations));
+    // Slot 0 rollback (MotionMagicVoltage) — uncomment and comment line above to revert:
+    // turretMotor.setControl(m_mmreqTurret.withPosition(mechRotations).withSlot(0));
   }
   
   /**
@@ -594,12 +639,17 @@ public class Launcher extends SubsystemBase {
         Commands.waitUntil(this::isHoodAtTarget),
         // Phase 3: brake hood — no active voltage, no oscillation, no heating
         Commands.runOnce(() -> hoodMotor.setControl(m_brake), this),
-        // Phase 4: idle forever — spin flywheel at low speed to reduce spool-up time.
-        // Uses closed-loop VelocityVoltage (same as shooting) so the transition from
-        // idle to full shooting speed is seamless — no control-mode switch mid-shot.
-        // WPILib automatically stops all motors when the robot is disabled,
-        // so this is safe — the flywheel will not spin while disabled.
-        Commands.run(() -> setCollectVelocity(LauncherConstants.kFlywheelIdleRPS), this)
+        // Phase 4: idle forever.
+        // Toggle: set LauncherConstants.kFlywheelIdleEnabled = true to spin the flywheel
+        // at kFlywheelIdleRPS between shots (reduces spool-up time).
+        // Set to false (current) to keep the flywheel fully stopped between shots.
+        Commands.run(() -> {
+            if (LauncherConstants.kFlywheelIdleEnabled) {
+                setCollectVelocity(LauncherConstants.kFlywheelIdleRPS);
+            } else {
+                stopLauncher();
+            }
+        }, this)
     ).withName("RetractHood");
   }
 

@@ -3,7 +3,7 @@ package frc.robot.commands;
 import java.util.function.DoubleSupplier;
 import java.util.function.IntSupplier;
 
-import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
@@ -146,6 +146,34 @@ public class ShootFromPointCommand extends Command {
      */
     private static final double kHoodDeadbandRotations = 0.1;
 
+    // ── Tag locking ───────────────────────────────────────────────────────────
+    /**
+     * The tower tag ID locked in when the trigger was pressed.
+     * Held constant to prevent oscillation when multiple tower tags are visible.
+     * Updated only when the locked tag has been absent for TAG_SWITCH_STABILITY_LOOPS
+     * consecutive loops, indicating a true tag loss rather than camera flicker.
+     */
+    private int lockedTagId = -1;
+
+    /**
+     * The candidate replacement tag ID being evaluated for stability.
+     * Only promoted to lockedTagId after TAG_SWITCH_STABILITY_LOOPS consecutive loops.
+     */
+    private int pendingTagId = -1;
+
+    /**
+     * Number of consecutive loops the supplier has returned pendingTagId instead of lockedTagId.
+     * Resets to 0 whenever the supplier returns lockedTagId again.
+     */
+    private int pendingTagCounter = 0;
+
+    /**
+     * Number of consecutive loops a different tag must be returned before switching.
+     * 25 loops × 20 ms = 500 ms — long enough to ignore camera flicker/oscillation
+     * but short enough to recover quickly when the locked tag is truly lost.
+     */
+    private static final int TAG_SWITCH_STABILITY_LOOPS = 25;
+
     // ── State ─────────────────────────────────────────────────────────────────
     private boolean isFiring = false;
 
@@ -218,14 +246,19 @@ public class ShootFromPointCommand extends Command {
         SmartDashboard.putString( DASH + "Status",  "Initializing");
         SmartDashboard.putBoolean(DASH + "Firing",  false);
 
-        // Push the compiled offset as the initial dashboard value.
-        // The driver/technician can change this number in Elastic/SmartDashboard
-        // at runtime to fine-tune turret aim WITHOUT redeploying code.
-        // Sign convention: positive = turret physical zero is CCW (left) of robot forward.
-        SmartDashboard.putNumber(DASH + "Turret Zero Offset (deg)",
-                frc.robot.Constants.TurretConstants.kTurretZeroOffsetDegrees);
+        // Lock the tower tag on trigger press — prevents oscillation when multiple
+        // tower tags (e.g. 5 and 10) are simultaneously visible.
+        lockedTagId      = towerTagIdSupplier.getAsInt();
+        pendingTagId     = -1;
+        pendingTagCounter = 0;
 
-        // Seed the cached offset from the dashboard (or compiled constant on first boot).
+        // Publish locked tag immediately so Elastic shows it before the first throttled block.
+        SmartDashboard.putNumber(DASH + "Locked Tag ID", lockedTagId);
+
+        // Read the turret zero offset from the dashboard ONCE when the trigger is pressed.
+        // The value stays fixed for the entire button press — release and re-press to
+        // pick up a new value you typed in Elastic between shots.
+        // Falls back to kTurretZeroOffsetDegrees if the widget hasn't been set yet.
         liveOffset = SmartDashboard.getNumber(
                 DASH + "Turret Zero Offset (deg)",
                 frc.robot.Constants.TurretConstants.kTurretZeroOffsetDegrees);
@@ -233,10 +266,35 @@ public class ShootFromPointCommand extends Command {
 
     @Override
     public void execute() {
-        // ── 0. Gather context ─────────────────────────────────────────────────
-        int           towerTagId  = towerTagIdSupplier.getAsInt();
-        Translation2d towerCenter = ShootingArcManager.getTowerCenter(towerTagId);
+        // ── 0. Gather context — tag locking with stability ────────────────────
+        // Ask the supplier for the current best tag every loop, but only switch
+        // lockedTagId if the supplier has returned a DIFFERENT tag for
+        // TAG_SWITCH_STABILITY_LOOPS consecutive loops. This prevents the turret
+        // from jumping when tags 5 and 10 are both visible and the camera alternates.
+        int currentBestTag = towerTagIdSupplier.getAsInt();
+        if (currentBestTag == lockedTagId) {
+            // Locked tag still visible — reset pending counter
+            pendingTagId      = -1;
+            pendingTagCounter = 0;
+        } else {
+            // Supplier returned a different tag — start/continue stability count
+            if (currentBestTag == pendingTagId) {
+                pendingTagCounter++;
+                if (pendingTagCounter >= TAG_SWITCH_STABILITY_LOOPS) {
+                    // Locked tag has been absent for ~500 ms — switch to new tag
+                    lockedTagId       = pendingTagId;
+                    pendingTagId      = -1;
+                    pendingTagCounter = 0;
+                }
+            } else {
+                // New candidate tag — restart stability count
+                pendingTagId      = currentBestTag;
+                pendingTagCounter = 1;
+            }
+        }
+        int           towerTagId  = lockedTagId;
         var           robotPose   = drivetrain.getState().Pose;
+        Translation3d towerCenter = ShootingArcManager.getTowerCenter(robotPose, towerTagId);
 
         // ── 1. Distance-based shooting parameters ─────────────────────────────
         double distance            = ShootingArcManager.calculateDistance(robotPose, towerCenter);
@@ -279,6 +337,7 @@ public class ShootFromPointCommand extends Command {
                         manualTurretOffset + povNudgeSupplier.getAsDouble() * kPovNudgeDegreesPerLoop));
 
         // Apply cached zero-offset + manual POV nudge
+        // (pair-midpoint goal center in getTowerCenter() handles per-tag aiming)
         double adjustedTurretAngle = rawTurretAngle - liveOffset + manualTurretOffset;
         while (adjustedTurretAngle >  180.0) adjustedTurretAngle -= 360.0;
         while (adjustedTurretAngle < -180.0) adjustedTurretAngle += 360.0;
@@ -353,13 +412,6 @@ public class ShootFromPointCommand extends Command {
         if (dashboardCounter >= 5) {
             dashboardCounter = 0;
 
-            // Refresh the cached turret offset from the dashboard (~10 Hz).
-            // Doing this inside the throttled block avoids a 50 Hz NT read.
-            // Note: "Turret Zero Offset (deg)" is writable from the dashboard — do NOT overwrite it here.
-            liveOffset = SmartDashboard.getNumber(
-                    DASH + "Turret Zero Offset (deg)",
-                    frc.robot.Constants.TurretConstants.kTurretZeroOffsetDegrees);
-
             // ── Tag identification outputs ─────────────────────────────────────
             // Determine alliance and whether this is the primary (center) tag.
             String  tagAlliance = ShootingArcManager.isRedTowerTag(towerTagId)  ? "Red"
@@ -388,6 +440,7 @@ public class ShootFromPointCommand extends Command {
             SmartDashboard.putBoolean(DASH + "Turret Aimed",            turretAimed);
 
             // ── Tag identification outputs ─────────────────────────────────────
+            SmartDashboard.putNumber( DASH + "Locked Tag ID",       lockedTagId);
             SmartDashboard.putNumber( DASH + "Tower Tag ID",        towerTagId);
             SmartDashboard.putString( DASH + "Tower Tag Info",      tagInfo);
             SmartDashboard.putString( DASH + "Tag Alliance",        tagAlliance);
