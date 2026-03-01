@@ -54,6 +54,15 @@ public class CenterOnAprilTagCommand extends Command {
     private int dashboardCounter = 0;
 
     /**
+     * Rounds a double to the specified number of decimal places for cleaner dashboard display.
+     * Position/distance values use 3 decimals; angles and ft distances use 2 decimals.
+     */
+    private static double round(double value, int decimals) {
+        double scale = Math.pow(10, decimals);
+        return Math.round(value * scale) / scale;
+    }
+
+    /**
      * Creates a CenterOnAprilTagCommand with a custom target distance.
      *
      * @param drivetrain     The swerve drivetrain subsystem
@@ -181,17 +190,17 @@ public class CenterOnAprilTagCommand extends Command {
             SmartDashboard.putBoolean("CenterOnTag/Command Active",     true);
             SmartDashboard.putNumber( "CenterOnTag/Looking For Tag",    visionSubsystem.getSelectedTagId());
             SmartDashboard.putString( "Vision/Centering Camera",        cameraLabel);
-            SmartDashboard.putNumber( "Vision/Tag Distance (ft)",       currentDist * 3.28084);
-            SmartDashboard.putNumber( "Vision/Tag Distance (m)",        currentDist);
+            SmartDashboard.putNumber( "Vision/Tag Distance (ft)",       round(currentDist * 3.28084, 2));
+            SmartDashboard.putNumber( "Vision/Tag Distance (m)",        round(currentDist, 3));
             SmartDashboard.putBoolean("Vision/Centered",                centered);
             SmartDashboard.putString( "CenterOnTag/Active Camera",      activeCamera);
-            SmartDashboard.putNumber( "CenterOnTag/Yaw Error (deg)",    targetYaw);
-            SmartDashboard.putNumber( "CenterOnTag/Distance (m)",       currentDist);
-            SmartDashboard.putNumber( "CenterOnTag/Distance (ft)",      currentDist * 3.28084);
-            SmartDashboard.putNumber( "CenterOnTag/Distance Error",     distanceError);
+            SmartDashboard.putNumber( "CenterOnTag/Yaw Error (deg)",    round(targetYaw, 2));
+            SmartDashboard.putNumber( "CenterOnTag/Distance (m)",       round(currentDist, 3));
+            SmartDashboard.putNumber( "CenterOnTag/Distance (ft)",      round(currentDist * 3.28084, 2));
+            SmartDashboard.putNumber( "CenterOnTag/Distance Error",     round(distanceError, 3));
             SmartDashboard.putBoolean("CenterOnTag/Centered",           centered);
-            SmartDashboard.putNumber( "CenterOnTag/Strafe Speed",       strafeSpeed);
-            SmartDashboard.putNumber( "CenterOnTag/Drive Speed",        driveSpeed);
+            SmartDashboard.putNumber( "CenterOnTag/Strafe Speed",       round(strafeSpeed, 3));
+            SmartDashboard.putNumber( "CenterOnTag/Drive Speed",        round(driveSpeed, 3));
 
             String status = centered
                 ? "CENTERED [" + cameraLabel + "] @ " + String.format("%.1f ft", currentDist * 3.28084)

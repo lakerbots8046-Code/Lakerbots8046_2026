@@ -64,6 +64,15 @@ public class VisionSubsystem extends SubsystemBase {
     // Camera processing (pose estimation, target tracking) still runs every loop.
     private int periodicCounter = 0;
 
+    /**
+     * Rounds a double to the specified number of decimal places for cleaner dashboard display.
+     * Position values use 3 decimals (mm precision); angles/distances use 2 decimals.
+     */
+    private static double round(double value, int decimals) {
+        double scale = Math.pow(10, decimals);
+        return Math.round(value * scale) / scale;
+    }
+
     public VisionSubsystem() {
         // Initialize both cameras with names from Constants
         cameraBF = new PhotonCamera(Constants.Vision.kCameraNameBF);
@@ -234,30 +243,30 @@ public class VisionSubsystem extends SubsystemBase {
         // BF camera telemetry
         SmartDashboard.putBoolean("BF Target Visible",        targetVisibleBF);
         SmartDashboard.putNumber( "BF Detected Tag ID",       detectedTagIdBF);
-        SmartDashboard.putNumber( "BF Target Yaw (deg)",      targetYawBF);
-        SmartDashboard.putNumber( "BF Target Pitch (deg)",    targetPitchBF);
-        SmartDashboard.putNumber( "BF Target Area (%)",       targetAreaBF);
-        SmartDashboard.putNumber( "BF Approx Distance",       targetDistanceBF);
+        SmartDashboard.putNumber( "BF Target Yaw (deg)",      round(targetYawBF, 2));
+        SmartDashboard.putNumber( "BF Target Pitch (deg)",    round(targetPitchBF, 2));
+        SmartDashboard.putNumber( "BF Target Area (%)",       round(targetAreaBF, 3));
+        SmartDashboard.putNumber( "BF Approx Distance",       round(targetDistanceBF, 2));
         SmartDashboard.putNumber( "BF Total Targets",         totalTargetsBF);
         SmartDashboard.putBoolean("BF Camera Connected",      cameraBF.isConnected());
-        SmartDashboard.putNumber( "AprilTag " + selectedTagId + " Yaw BF", targetYawBF);
+        SmartDashboard.putNumber( "AprilTag " + selectedTagId + " Yaw BF", round(targetYawBF, 2));
         SmartDashboard.putBoolean("Vision Target Visible BF", targetVisibleBF);
         // Ambiguity: -1 = multi-tag/no target (always accepted), 0–1 = single-tag score
-        SmartDashboard.putNumber( "BF Best Ambiguity",        bestAmbiguityBF);
+        SmartDashboard.putNumber( "BF Best Ambiguity",        round(bestAmbiguityBF, 3));
 
         // FF camera telemetry
         SmartDashboard.putBoolean("FF Target Visible",        targetVisibleFF);
         SmartDashboard.putNumber( "FF Detected Tag ID",       detectedTagIdFF);
-        SmartDashboard.putNumber( "FF Target Yaw (deg)",      targetYawFF);
-        SmartDashboard.putNumber( "FF Target Pitch (deg)",    targetPitchFF);
-        SmartDashboard.putNumber( "FF Target Area (%)",       targetAreaFF);
-        SmartDashboard.putNumber( "FF Approx Distance",       targetDistanceFF);
+        SmartDashboard.putNumber( "FF Target Yaw (deg)",      round(targetYawFF, 2));
+        SmartDashboard.putNumber( "FF Target Pitch (deg)",    round(targetPitchFF, 2));
+        SmartDashboard.putNumber( "FF Target Area (%)",       round(targetAreaFF, 3));
+        SmartDashboard.putNumber( "FF Approx Distance",       round(targetDistanceFF, 2));
         SmartDashboard.putNumber( "FF Total Targets",         totalTargetsFF);
         SmartDashboard.putBoolean("FF Camera Connected",      cameraFF.isConnected());
-        SmartDashboard.putNumber( "AprilTag " + selectedTagId + " Yaw FF", targetYawFF);
+        SmartDashboard.putNumber( "AprilTag " + selectedTagId + " Yaw FF", round(targetYawFF, 2));
         SmartDashboard.putBoolean("Vision Target Visible FF", targetVisibleFF);
         // Ambiguity: -1 = multi-tag/no target (always accepted), 0–1 = single-tag score
-        SmartDashboard.putNumber( "FF Best Ambiguity",        bestAmbiguityFF);
+        SmartDashboard.putNumber( "FF Best Ambiguity",        round(bestAmbiguityFF, 3));
 
         publishCombinedStatus();
         publishPoseEstimationData();
@@ -270,9 +279,9 @@ public class VisionSubsystem extends SubsystemBase {
             Pose2d pose = estimatedPose.estimatedPose.toPose2d();
 
             SmartDashboard.putBoolean("Vision/BF/Pose Valid",    true);
-            SmartDashboard.putNumber( "Vision/BF/Pose X",        pose.getX());
-            SmartDashboard.putNumber( "Vision/BF/Pose Y",        pose.getY());
-            SmartDashboard.putNumber( "Vision/BF/Pose Rotation", pose.getRotation().getDegrees());
+            SmartDashboard.putNumber( "Vision/BF/Pose X",        round(pose.getX(), 3));
+            SmartDashboard.putNumber( "Vision/BF/Pose Y",        round(pose.getY(), 3));
+            SmartDashboard.putNumber( "Vision/BF/Pose Rotation", round(pose.getRotation().getDegrees(), 2));
             SmartDashboard.putNumber( "Vision/BF/Pose Timestamp",estimatedPose.timestampSeconds);
             SmartDashboard.putNumber( "Vision/BF/Tags Used",     estimatedPose.targetsUsed.size());
 
@@ -292,9 +301,9 @@ public class VisionSubsystem extends SubsystemBase {
             Pose2d pose = estimatedPose.estimatedPose.toPose2d();
 
             SmartDashboard.putBoolean("Vision/FF/Pose Valid",    true);
-            SmartDashboard.putNumber( "Vision/FF/Pose X",        pose.getX());
-            SmartDashboard.putNumber( "Vision/FF/Pose Y",        pose.getY());
-            SmartDashboard.putNumber( "Vision/FF/Pose Rotation", pose.getRotation().getDegrees());
+            SmartDashboard.putNumber( "Vision/FF/Pose X",        round(pose.getX(), 3));
+            SmartDashboard.putNumber( "Vision/FF/Pose Y",        round(pose.getY(), 3));
+            SmartDashboard.putNumber( "Vision/FF/Pose Rotation", round(pose.getRotation().getDegrees(), 2));
             SmartDashboard.putNumber( "Vision/FF/Pose Timestamp",estimatedPose.timestampSeconds);
             SmartDashboard.putNumber( "Vision/FF/Tags Used",     estimatedPose.targetsUsed.size());
 
@@ -351,8 +360,8 @@ public class VisionSubsystem extends SubsystemBase {
 
         SmartDashboard.putString( "Vision/Active Camera",       getActiveCameraName());
         SmartDashboard.putBoolean("Vision/Any Target Visible",  isAnyTargetVisible());
-        SmartDashboard.putNumber( "Vision/Best Target Yaw",     getBestTargetYaw());
-        SmartDashboard.putNumber( "Vision/Best Target Distance",getBestTargetDistance());
+        SmartDashboard.putNumber( "Vision/Best Target Yaw",     round(getBestTargetYaw(), 2));
+        SmartDashboard.putNumber( "Vision/Best Target Distance",round(getBestTargetDistance(), 2));
     }
 
     // -------------------------------------------------------------------------

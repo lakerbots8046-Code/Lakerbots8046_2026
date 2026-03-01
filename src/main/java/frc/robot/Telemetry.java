@@ -91,6 +91,15 @@ public class Telemetry {
 
     private final double[] m_poseArray = new double[3];
 
+    /**
+     * Rounds a double to the specified number of decimal places for cleaner dashboard display.
+     * Position values use 3 decimals (mm precision); angles use 2 decimals.
+     */
+    private static double round(double value, int decimals) {
+        double scale = Math.pow(10, decimals);
+        return Math.round(value * scale) / scale;
+    }
+
     /** Accept the swerve drive state and telemeterize it to SmartDashboard and SignalLogger. */
     public void telemeterize(SwerveDriveState state) {
         /* Telemeterize the swerve drive state */
@@ -113,9 +122,9 @@ public class Telemetry {
         /* Telemeterize the pose to a Field2d */
         fieldTypePub.set("Field2d");
 
-        m_poseArray[0] = state.Pose.getX();
-        m_poseArray[1] = state.Pose.getY();
-        m_poseArray[2] = state.Pose.getRotation().getDegrees();
+        m_poseArray[0] = round(state.Pose.getX(), 3);
+        m_poseArray[1] = round(state.Pose.getY(), 3);
+        m_poseArray[2] = round(state.Pose.getRotation().getDegrees(), 2);
         fieldPub.set(m_poseArray);
 
         /* Telemeterize each module state to a Mechanism2d */

@@ -1,26 +1,14 @@
-# Mirror leftNeutralScore Paths to rightNeutralScore
+# Dashboard Decimal Rounding - TODO
 
-## Task
-Mirror all leftNeutralScore_Part1 through Part7 paths across the horizontal center line (y = 4.035m) to create rightNeutralScore equivalents starting from the right side of blue.
-
-## Mirroring Formula
-- new_y = 8.07 - old_y
-- x stays the same
-- new_rotation = -old_rotation
+## Goal
+Round long-decimal outputs on the Elastic dashboard to 2-3 decimal places for cleaner display.
 
 ## Steps
-- [x] Read leftNeutralScore_Part1.path
-- [x] Read leftNeutralScore_Part2.path
-- [x] Read leftNeutralScore_Part3.path
-- [x] Read leftNeutralScore_Part4.path
-- [x] Read LeftNeutralScore_Part5.path
-- [x] Read leftNeutralScore_Part6.path
-- [x] Read leftNeutralScore_Part7.path
-- [x] Create rightNeutralScore_Part1.path
-- [x] Create rightNeutralScore_Part2.path
-- [x] Create rightNeutralScore_Part3.path
-- [x] Create rightNeutralScore_Part4.path
-- [x] Create rightNeutralScore_Part5.path
-- [x] Create rightNeutralScore_Part6.path
-- [x] Create rightNeutralScore_Part7.path
-- [x] Update rightNeutralScore.auto to reference new paths
+
+- [x] Gather understanding of all files publishing numeric data
+- [x] Create edit plan and get user approval
+- [x] Edit `Telemetry.java` — round pose array [X, Y, Rotation]
+- [x] Edit `VisionSubsystem.java` — round all putNumber calls (pose, yaw, pitch, area, distance, ambiguity)
+- [x] Edit `CenterOnAprilTagCommand.java` — round distance, yaw error, speeds
+- [x] Edit `DriveToAprilTag.java` — round X/Y errors, rotation error, distance, target pose
+- [x] Edit `DriveToAprilTagWithPathPlanner.java` — round target pose, distance, rotation error

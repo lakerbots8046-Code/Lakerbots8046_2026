@@ -38,6 +38,15 @@ public class DriveToAprilTag extends Command {
 
     /** Throttle counter — SmartDashboard writes every 5 execute() calls (~100 ms). */
     private int dashboardCounter = 0;
+
+    /**
+     * Rounds a double to the specified number of decimal places for cleaner dashboard display.
+     * Position values use 3 decimals (mm precision); angles use 2 decimals.
+     */
+    private static double round(double value, int decimals) {
+        double scale = Math.pow(10, decimals);
+        return Math.round(value * scale) / scale;
+    }
     
     /**
      * Creates a new DriveToAprilTag command.
@@ -186,14 +195,14 @@ public class DriveToAprilTag extends Command {
         if (dashboardCounter >= 5) {
             dashboardCounter = 0;
             SmartDashboard.putString( "DriveToTag/Status",               "Driving");
-            SmartDashboard.putNumber( "DriveToTag/X Error",              xError);
-            SmartDashboard.putNumber( "DriveToTag/Y Error",              yError);
-            SmartDashboard.putNumber( "DriveToTag/Rotation Error (deg)", Math.toDegrees(rotationError));
-            SmartDashboard.putNumber( "DriveToTag/Distance to Target",   Math.sqrt(xError * xError + yError * yError));
+            SmartDashboard.putNumber( "DriveToTag/X Error",              round(xError, 3));
+            SmartDashboard.putNumber( "DriveToTag/Y Error",              round(yError, 3));
+            SmartDashboard.putNumber( "DriveToTag/Rotation Error (deg)", round(Math.toDegrees(rotationError), 2));
+            SmartDashboard.putNumber( "DriveToTag/Distance to Target",   round(Math.sqrt(xError * xError + yError * yError), 3));
             SmartDashboard.putBoolean("DriveToTag/At Target",            isFinished());
-            SmartDashboard.putNumber( "DriveToTag/Target X",             targetPose.getX());
-            SmartDashboard.putNumber( "DriveToTag/Target Y",             targetPose.getY());
-            SmartDashboard.putNumber( "DriveToTag/Target Rotation",      targetPose.getRotation().getDegrees());
+            SmartDashboard.putNumber( "DriveToTag/Target X",             round(targetPose.getX(), 3));
+            SmartDashboard.putNumber( "DriveToTag/Target Y",             round(targetPose.getY(), 3));
+            SmartDashboard.putNumber( "DriveToTag/Target Rotation",      round(targetPose.getRotation().getDegrees(), 2));
         }
     }
     

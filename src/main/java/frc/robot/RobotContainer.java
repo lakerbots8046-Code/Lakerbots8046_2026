@@ -23,21 +23,18 @@ import edu.wpi.first.wpilibj2.command.button.RobotModeTriggers;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
 
 import frc.robot.generated.TunerConstants;
-import frc.robot.Constants;
+//import frc.robot.Constants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.VisionSubsystem;
-import frc.robot.subsystems.TurretSubsystem;
 import frc.robot.subsystems.Intake;
 import frc.robot.subsystems.Launcher;
 import frc.robot.subsystems.Spindexer;
 import frc.robot.commands.AutoDeployIntake;
-import frc.robot.commands.CenterOnAprilTagCommand;
-import frc.robot.commands.DriveToAprilTag;
-import frc.robot.commands.DriveToAprilTagWithPathPlanner;
+//import frc.robot.commands.CenterOnAprilTagCommand;
+//import frc.robot.commands.DriveToAprilTag;
 import frc.robot.commands.FeedFromCenterCommand;
 import frc.robot.commands.ShootFromPointCommand;
 import frc.robot.commands.ShootOnMoveCommand;
-import frc.robot.commands.TrackAprilTagCommand;
 import frc.robot.util.ShootingArcManager;
 
 import com.pathplanner.lib.auto.AutoBuilder;
@@ -53,9 +50,6 @@ public class RobotContainer {
     // Vision subsystem
     private final VisionSubsystem visionSubsystem = new VisionSubsystem();
     
-    // Turret subsystem (CAN ID 6 on RIO bus)
-    private final TurretSubsystem turretSubsystem = new TurretSubsystem();
-
     // Intake subsystem
     public static Intake intake = new Intake();
 
@@ -426,50 +420,6 @@ public class RobotContainer {
     }
     
     /**
-     * Builds the Tag 10 → aim → shoot sequence command.
-     *
-     * Step 1: PathPlanner drives to a position 2 m in front of Tag 10 on the Tower.
-     *         Tag 10 field position: (12.505, 4.021) facing +X.
-     *         Robot shooting position: (~14.5m, 4.021m) facing the Tower.
-     *
-     * Step 2: TrackAprilTagCommand aims the turret at Tag 10 using vision (3 s timeout).
-     *
-     * Step 3: launchFromTower() fires all motors for 2 seconds.
-     *
-     * Dashboard key: "Tag10Shoot/Status"
-     */
-    private Command buildTag10ShootCommand() {
-        final int TAG_10_ID = 10;
-        final double SHOOT_OFFSET_M = 2.0;   // meters in front of Tag 10
-        final double AIM_TIMEOUT_S  = 3.0;   // max seconds to aim turret
-        final double FIRE_DURATION_S = 2.0;  // seconds to run launchFromTower
-
-        return Commands.sequence(
-            // ── Step 1: Drive to shooting position near Tag 10 ──────────────
-            Commands.runOnce(() ->
-                SmartDashboard.putString("Tag10Shoot/Status", "Step 1: Driving to Tag 10")),
-            new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, TAG_10_ID, SHOOT_OFFSET_M),
-
-            // ── Step 2: Aim turret at Tag 10 using vision ───────────────────
-            Commands.runOnce(() ->
-                SmartDashboard.putString("Tag10Shoot/Status", "Step 2: Aiming Turret")),
-            new TrackAprilTagCommand(turretSubsystem, visionSubsystem, TAG_10_ID)
-                .withTimeout(AIM_TIMEOUT_S),
-
-            // ── Step 3: Fire using launchFromTower ──────────────────────────
-            Commands.runOnce(() ->
-                SmartDashboard.putString("Tag10Shoot/Status", "Step 3: Firing")),
-            Commands.parallel(
-                spindexer.launchFromTower(),
-                launcher.launchFromTowerLauncher()
-            ).withTimeout(FIRE_DURATION_S),
-
-            Commands.runOnce(() ->
-                SmartDashboard.putString("Tag10Shoot/Status", "Complete"))
-        );
-    }
-
-    /**
      * Publishes tower tag identification and distance info to SmartDashboard/Elastic.
      *
      * <p>Published under the {@code Tower/} namespace so the widgets are always
@@ -761,24 +711,7 @@ public class RobotContainer {
         return Optional.empty();
     }
     
-    /**
-     * Applies a squared curve to a joystick input while preserving the sign.
-     * This gives finer control at low speeds while still allowing full speed
-     * at full joystick deflection.
-     *
-     * <p>Formula: {@code Math.copySign(value * value, value)}
-     *
-     * <p>Examples:
-     * <ul>
-     *   <li>0.0  → 0.0  (no movement)</li>
-     *   <li>0.5  → 0.25 (half stick = quarter speed)</li>
-     *   <li>1.0  → 1.0  (full stick = full speed)</li>
-     *   <li>-0.5 → -0.25 (sign preserved)</li>
-     * </ul>
-     *
-     * @param value Raw joystick axis value in the range [-1.0, 1.0]
-     * @return Squared value with the original sign, in the range [-1.0, 1.0]
-     */
+    
     private double squareInput(double value) {
         return Math.copySign(value * value, value);
     }

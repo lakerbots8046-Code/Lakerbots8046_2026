@@ -34,6 +34,15 @@ public class DriveToAprilTagWithPathPlanner extends Command {
 
     /** Throttle counter — SmartDashboard writes every 5 execute() calls (~100 ms). */
     private int dashboardCounter = 0;
+
+    /**
+     * Rounds a double to the specified number of decimal places for cleaner dashboard display.
+     * Position values use 3 decimals (mm precision); angles use 2 decimals.
+     */
+    private static double round(double value, int decimals) {
+        double scale = Math.pow(10, decimals);
+        return Math.round(value * scale) / scale;
+    }
     
     /**
      * Creates a new DriveToAprilTagWithPathPlanner command.
@@ -128,9 +137,9 @@ public class DriveToAprilTagWithPathPlanner extends Command {
             CommandScheduler.getInstance().schedule(pathFollowingCommand);
             
             SmartDashboard.putString("PathPlanner/Status", "Path Generated - Following");
-            SmartDashboard.putNumber("PathPlanner/Target X", targetPose.getX());
-            SmartDashboard.putNumber("PathPlanner/Target Y", targetPose.getY());
-            SmartDashboard.putNumber("PathPlanner/Target Rotation", targetPose.getRotation().getDegrees());
+            SmartDashboard.putNumber("PathPlanner/Target X",        round(targetPose.getX(), 3));
+            SmartDashboard.putNumber("PathPlanner/Target Y",        round(targetPose.getY(), 3));
+            SmartDashboard.putNumber("PathPlanner/Target Rotation", round(targetPose.getRotation().getDegrees(), 2));
             
         } catch (Exception e) {
             System.err.println("DriveToAprilTagWithPathPlanner: Failed to generate path: " + e.getMessage());
@@ -154,8 +163,8 @@ public class DriveToAprilTagWithPathPlanner extends Command {
             double rotationError = Math.abs(
                 currentPose.getRotation().getRadians() - targetPose.getRotation().getRadians()
             );
-            SmartDashboard.putNumber( "PathPlanner/Distance to Target",   distanceToTarget);
-            SmartDashboard.putNumber( "PathPlanner/Rotation Error (deg)", Math.toDegrees(rotationError));
+            SmartDashboard.putNumber( "PathPlanner/Distance to Target",   round(distanceToTarget, 3));
+            SmartDashboard.putNumber( "PathPlanner/Rotation Error (deg)", round(Math.toDegrees(rotationError), 2));
             SmartDashboard.putBoolean("PathPlanner/At Target",            isFinished());
         }
     }
