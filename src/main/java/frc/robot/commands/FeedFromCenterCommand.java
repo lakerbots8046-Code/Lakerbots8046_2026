@@ -2,6 +2,7 @@ package frc.robot.commands;
 
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.geometry.Translation3d;
+import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.wpilibj.Timer;
@@ -183,13 +184,46 @@ public class FeedFromCenterCommand extends Command {
             }
         }
 
-        // ── 5. Distance to target (for flywheel lookup) ───────────────────────
+        // ── 5. Distance to target (for initial flywheel bootstrap) ────────────
         double distance = robotPos.getDistance(target);
 
+        // ── 5b. Velocity lead compensation ────────────────────────────────────
+        // When the robot is moving, the game piece is launched from a moving
+        // platform and drifts in the direction of robot motion during flight.
+        // We compute a "virtual target" — the point we must aim at so the ball
+        // arrives at the actual target after accounting for robot velocity.
+        //
+        // Algorithm (one-iteration bootstrap):
+        //   1. Estimate initial RPS from actual distance.
+        //   2. Compute exit speed and flight time.
+        //   3. virtualTarget = target − (robotVelocity × flightTime)
+        //   4. Recompute RPS from virtual distance (one iteration is sufficient).
+        //
+        // Robot chassis speeds are robot-relative; rotate by heading to get
+        // field-relative velocity components.
+        ChassisSpeeds chassisSpeeds = drivetrain.getState().Speeds;
+        double heading = robotPose.getRotation().getRadians();
+        double fieldVx = chassisSpeeds.vxMetersPerSecond * Math.cos(heading)
+                       - chassisSpeeds.vyMetersPerSecond * Math.sin(heading);
+        double fieldVy = chassisSpeeds.vxMetersPerSecond * Math.sin(heading)
+                       + chassisSpeeds.vyMetersPerSecond * Math.cos(heading);
+        Translation2d robotVelocity = new Translation2d(fieldVx, fieldVy);
+
+        // Step 1: bootstrap RPS from actual distance
+        double initialRPS  = ShootingArcManager.calculateLauncherRPS(distance);
+        // Step 2: estimate exit speed and flight time
+        double exitSpeed   = FeedFromCenter.kBallExitSpeedPerRPS * Math.abs(initialRPS);
+        double flightTime  = (exitSpeed > 0.1) ? distance / exitSpeed : 0.0;
+        // Step 3: virtual target — where we must aim to hit the actual target
+        Translation2d virtualTarget = target.minus(robotVelocity.times(flightTime));
+        // Step 4: recompute distance and RPS from virtual target
+        double virtualDistance    = robotPos.getDistance(virtualTarget);
+        double robotSpeed         = robotVelocity.getNorm(); // for dashboard
+
         // ── 6. Spin flywheel open-loop (DutyCycleOut) ─────────────────────────
-        // Uses the same distance-based RPS lookup as ShootFromPointCommand.
-        // dutyCycle = targetRPS / 100  (Kraken X60 free speed ≈ 100 RPS at 12V)
-        double targetLauncherRPS = ShootingArcManager.calculateLauncherRPS(distance);
+        // Uses virtual distance so flywheel compensates for robot moving
+        // toward or away from the feed station during the shot.
+        double targetLauncherRPS = ShootingArcManager.calculateLauncherRPS(virtualDistance);
         launcher.setCollectDutyCycle(targetLauncherRPS);
 
         // Record the timestamp the first time the flywheel is commanded this cycle.
@@ -204,13 +238,14 @@ public class FeedFromCenterCommand extends Command {
             lastCommandedHoodRotations = hoodTarget;
         }
 
-        // ── 8. Aim turret at adjusted target ──────────────────────────────────
-        // Uses calculateTurretAngleRaw() (no compiled offset) then applies the
-        // compiled zero-offset constant. Same approach as ShootFromPointCommand.
-        // calculateTurretAngleRaw now takes Translation3d. The feed-station target is a
-        // 2D field position; Z=0.0 is safe here because the angle calculation only uses X/Y.
+        // ── 8. Aim turret at VIRTUAL target (velocity-compensated) ────────────
+        // Uses the virtual target so the turret leads the feed station by the
+        // amount the robot moves during ball flight. When the robot is stationary
+        // the virtual target equals the actual target (no change in behavior).
+        // calculateTurretAngleRaw takes Translation3d; Z=0.0 is safe because the
+        // angle calculation only uses X/Y.
         double rawTurretAngle     = ShootingArcManager.calculateTurretAngleRaw(
-                robotPose, new Translation3d(target.getX(), target.getY(), 0.0));
+                robotPose, new Translation3d(virtualTarget.getX(), virtualTarget.getY(), 0.0));
         double adjustedTurretAngle = rawTurretAngle - TurretConstants.kTurretZeroOffsetDegrees;
         while (adjustedTurretAngle >  180.0) adjustedTurretAngle -= 360.0;
         while (adjustedTurretAngle < -180.0) adjustedTurretAngle += 360.0;
@@ -275,12 +310,16 @@ public class FeedFromCenterCommand extends Command {
         if (dashboardCounter >= 5) {
             dashboardCounter = 0;
 
-            SmartDashboard.putString( DASH + "Active Pair",    pairLabel);
-            SmartDashboard.putNumber( DASH + "Distance (m)",   distance);
-            SmartDashboard.putNumber( DASH + "Turret Error (deg)", turretError);
-            SmartDashboard.putBoolean(DASH + "Turret Aimed",   turretAimed);
-            SmartDashboard.putBoolean(DASH + "At Speed",       launcherAtSpeed);
-            SmartDashboard.putBoolean(DASH + "Firing",         isFiring);
+            SmartDashboard.putString( DASH + "Active Pair",         pairLabel);
+            SmartDashboard.putNumber( DASH + "Distance (m)",        distance);
+            SmartDashboard.putNumber( DASH + "Virtual Dist (m)",    virtualDistance);
+            SmartDashboard.putNumber( DASH + "Robot Speed (m/s)",   robotSpeed);
+            SmartDashboard.putNumber( DASH + "Flight Time (s)",     flightTime);
+            SmartDashboard.putNumber( DASH + "Lead Offset (m)",     robotVelocity.times(flightTime).getNorm());
+            SmartDashboard.putNumber( DASH + "Turret Error (deg)",  turretError);
+            SmartDashboard.putBoolean(DASH + "Turret Aimed",        turretAimed);
+            SmartDashboard.putBoolean(DASH + "At Speed",            launcherAtSpeed);
+            SmartDashboard.putBoolean(DASH + "Firing",              isFiring);
             SmartDashboard.putString( DASH + "Status",
                     isFiring           ? "FIRING"
                     : !launcherAtSpeed ? String.format("Spooling (%.1f s)", timeSpooling)

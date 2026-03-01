@@ -9,19 +9,19 @@
       "prevControl": null,
       "nextControl": {
         "x": 6.20817880794702,
-        "y": 2.336175496688743
+        "y": 2.3361754966887425
       },
       "isLocked": false,
       "linkedName": "rightNeutralScorePart6_End"
     },
     {
       "anchor": {
-        "x": 6.092019867549669,
-        "y": 0.55023178807947
+        "x": 6.062980132450331,
+        "y": 0.7026903973509935
       },
       "prevControl": {
-        "x": 5.707243377483444,
-        "y": 0.55023178807947
+        "x": 5.678203642384106,
+        "y": 0.7026903973509935
       },
       "nextControl": null,
       "isLocked": false,

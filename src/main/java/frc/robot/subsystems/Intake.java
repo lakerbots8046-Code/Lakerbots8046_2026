@@ -16,6 +16,7 @@ import com.ctre.phoenix6.hardware.TalonFX;
 //import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
+import edu.wpi.first.wpilibj2.command.InstantCommand;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants.IntakeConstants;
 import frc.robot.Mechanisms;
@@ -43,6 +44,13 @@ public class Intake extends SubsystemBase {
   private double pivotTargetPosition = 0.0;
   private boolean rollersEnabled = false; // Tracks whether rollers should be spinning
   private int periodicCounter = 0;        // Throttle SmartDashboard updates to reduce NT load
+
+  /**
+   * Adjustable pivot target used by intakeDeployCollect().
+   * Modified by bumpPivotUp() / bumpPivotDown() WITHOUT requiring the subsystem,
+   * so those commands never interrupt intakeDeployCollect() and the rollers keep spinning.
+   */
+  private double currentPivotTarget = IntakeConstants.kPivotDeployCollectPosition;
     
   public Intake() {
     // Initialize motors using constants
@@ -109,7 +117,7 @@ public class Intake extends SubsystemBase {
     cfgPivot.SoftwareLimitSwitch.ForwardSoftLimitEnable = true;
     cfgPivot.SoftwareLimitSwitch.ForwardSoftLimitThreshold = IntakeConstants.kPivotHomePosition; // hard stop at 0.0 (home)
     cfgPivot.SoftwareLimitSwitch.ReverseSoftLimitEnable = true;
-    cfgPivot.SoftwareLimitSwitch.ReverseSoftLimitThreshold = IntakeConstants.kPivotDeployCollectPosition; // hard stop at -1.36
+    cfgPivot.SoftwareLimitSwitch.ReverseSoftLimitThreshold = IntakeConstants.kPivotHardDownLimit; // physical hard stop at -1.4 (DO NOT EXCEED)
 
 
     // Apply configs to correct motors (rollers config → rollers motor, pivot config → pivot motor)
@@ -330,11 +338,14 @@ public Command AutoIntakeDeployCollect() {
    * @return Command that deploys pivot and spins rollers, retracts on cancel
    */
   public Command intakeDeployCollect() {
-    return Commands.runOnce(() -> rollersEnabled = true, this)
+    return Commands.runOnce(() -> {
+        rollersEnabled = true;
+        currentPivotTarget = IntakeConstants.kPivotDeployCollectPosition; // reset on each deploy
+      }, this)
       .andThen(Commands.run(() -> {
-        setPivotPosition(IntakeConstants.kPivotDeployCollectPosition);
+        // Use currentPivotTarget so bumpPivotUp/Down can adjust it without interrupting this command
+        setPivotPosition(currentPivotTarget);
         if (rollersEnabled) {
-          //setIntakeRollersVoltage(IntakeConstants.kIntakeVoltage);
           setRollersVelocity(IntakeConstants.kRollersIntakeVelocity);
         } else {
           stopRollers();
@@ -345,6 +356,7 @@ public Command AutoIntakeDeployCollect() {
         rollersEnabled = false;
         stopRollers();
         setPivotPosition(IntakeConstants.kPivotHomePosition);
+        currentPivotTarget = IntakeConstants.kPivotDeployCollectPosition; // reset for next deploy
       });
   }
 
@@ -410,47 +422,47 @@ public Command AutoIntakeDeployCollect() {
   /**
    * Bumps the intake pivot position up by kPivotBumpFactor.
    * Used with POV Up (0°) button to incrementally raise the intake.
-   * Saves and restores rollersEnabled to prevent roller stop when interrupting.
-   * @return Command that bumps pivot position upward
+   *
+   * <p>Intentionally has NO subsystem requirement so it does NOT interrupt
+   * {@link #intakeDeployCollect()}. It updates {@code currentPivotTarget}, which
+   * intakeDeployCollect() reads every loop — the pivot moves to the new position
+   * while the rollers keep spinning uninterrupted.
+   *
+   * @return Command that bumps pivot position upward without stopping rollers
    */
   public Command bumpPivotUp() {
-    return Commands.runOnce(() -> {
-      // Save current roller state
-      boolean savedRollersEnabled = rollersEnabled;
-      // Perform the bump
-      double newPosition = getPivotPosition() + IntakeConstants.kPivotBumpFactor;
-      // Clamp to stowed position (0.0) as upper limit
-      newPosition = Math.min(newPosition, IntakeConstants.kPivotStowedPosition);
-      setPivotPosition(newPosition);
-      // Restore rollers immediately in case finallyDo was triggered
-      if (savedRollersEnabled) {
-        setRollersVelocity(IntakeConstants.kRollersIntakeVelocity);
-      }
-      rollersEnabled = savedRollersEnabled;
-    }, this);
+    // InstantCommand with no requirements — will NOT interrupt intakeDeployCollect().
+    // Updates currentPivotTarget; intakeDeployCollect() reads it every loop so the
+    // pivot moves to the new position while the rollers keep spinning uninterrupted.
+    return new InstantCommand(() -> {
+      currentPivotTarget = Math.min(
+          currentPivotTarget + IntakeConstants.kPivotBumpFactor,
+          IntakeConstants.kPivotStowedPosition);
+      // Also command the pivot directly in case intakeDeployCollect() is not running
+      setPivotPosition(currentPivotTarget);
+    }); // no subsystem requirement
   }
 
   /**
    * Bumps the intake pivot position down by kPivotBumpFactor.
    * Used with POV Down (180°) button to incrementally lower the intake.
-   * Saves and restores rollersEnabled to prevent roller stop when interrupting.
-   * @return Command that bumps pivot position downward
+   *
+   * <p>Intentionally has NO subsystem requirement so it does NOT interrupt
+   * {@link #intakeDeployCollect()}. It updates {@code currentPivotTarget}, which
+   * intakeDeployCollect() reads every loop — the pivot moves to the new position
+   * while the rollers keep spinning uninterrupted.
+   *
+   * @return Command that bumps pivot position downward without stopping rollers
    */
   public Command bumpPivotDown() {
-    return Commands.runOnce(() -> {
-      // Save current roller state
-      boolean savedRollersEnabled = rollersEnabled;
-      // Perform the bump
-      double newPosition = getPivotPosition() - IntakeConstants.kPivotBumpFactor;
-      // Clamp to deploy position as lower limit
-      newPosition = Math.max(newPosition, IntakeConstants.kPivotDeployCollectPosition);
-      setPivotPosition(newPosition);
-      // Restore rollers immediately in case finallyDo was triggered
-      if (savedRollersEnabled) {
-        setRollersVelocity(IntakeConstants.kRollersIntakeVelocity);
-      }
-      rollersEnabled = savedRollersEnabled;
-    }, this);
+    // InstantCommand with no requirements — will NOT interrupt intakeDeployCollect().
+    return new InstantCommand(() -> {
+      currentPivotTarget = Math.max(
+          currentPivotTarget - IntakeConstants.kPivotBumpFactor,
+          IntakeConstants.kPivotHardDownLimit); // never go past the physical hard stop (-1.4)
+      // Also command the pivot directly in case intakeDeployCollect() is not running
+      setPivotPosition(currentPivotTarget);
+    }); // no subsystem requirement
   }
 
   /**

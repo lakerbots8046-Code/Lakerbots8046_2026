@@ -346,7 +346,8 @@ public class Constants {
         public static final double kPivotCollectPosition = 0.25;         // Extended for collecting game pieces
        // public static final double kPivotScoreHighPosition = 0.15;       // Position for high scoring
        // public static final double kPivotScoreLowPosition = 0.05;        // Position for low scoring
-        public static final double kPivotDeployCollectPosition = -1.355; // Deploy position for intake_deploy_collect -1.36 to -1.25 to 1.304 to 1.36
+        public static final double kPivotDeployCollectPosition = -1.4   ; // Deploy position for intake_deploy_collect -1.36 to -1.25 to 1.304 to -1.36, 1.355, *** -1.365 ***
+        public static final double kPivotHardDownLimit = -1.4;          // Physical hard stop limit (DO NOT EXCEED)
         public static final double kPivotHomePosition = 0.0;            // Retract/home position after collecting
         public static final double kPivotDumpPosition = -0.75;          // 
         // Intake Collection Velocities (in rotations per second
@@ -423,6 +424,20 @@ public class Constants {
          * "A few feet behind" the midpoint = 0.6096 m (2 ft). TUNE ON ROBOT.
          */
         public static final double kFeedTargetDepthMeters = 0.6096; // 2 ft
+
+        // ── Velocity compensation ─────────────────────────────────────────────
+        /**
+         * Ball exit speed per flywheel RPS (meters per second per RPS).
+         *
+         * <p>Used to estimate ball flight time for velocity lead compensation:
+         * {@code exitSpeed = kBallExitSpeedPerRPS × |targetRPS|}
+         * {@code flightTime = distance / exitSpeed}
+         *
+         * <p>Derived from Kraken X60 launcher wheel geometry (same value used in
+         * ShootingArcManager physics comments). TUNE ON ROBOT if shots consistently
+         * lead or lag the target while the robot is moving.
+         */
+        public static final double kBallExitSpeedPerRPS = 0.18617; // m/s per RPS
 
         // ── Red alliance feed-station tag pairs ───────────────────────────────
         /** Red alliance feed station — one side (tags 1 and 3). */
@@ -531,9 +546,9 @@ public class Constants {
             {3.0,  -45.0},  // was -58.5, 51.5, 50.0
            // {3.175, -51.0},  // added intermediate point at 3.175 m (Tower Shot) 49.0, 51.0
             {3.5,  -48.5},  // was -61.5, 54.5
-            {4.0,  -55.5},  // was -74.5, 67.5
-            {4.5,  -56.0},   // was -80.5, 73.5
-            {5.0,  -60.0}   // was -58
+            {4.0,  -53.5},  // was -74.5, 67.5, 55.5
+            {4.5,  -54.0},   // was -80.5, 73.5, 56.0
+            {5.0,  -58.0}   // was -58, 60
         };
 
         // ── Hood angle lookup table ───────────────────────────────────────────
@@ -710,7 +725,7 @@ public class Constants {
          *
          * <p>0.3 is the widely-recommended FRC threshold (PhotonVision docs).
          */
-        public static final double kMaxAmbiguity = 0.3;
+        public static final double kMaxAmbiguity = 1.0;
         
         // AprilTag driving parameters
         public static final double kTargetDistanceMeters = 1.524; // Target distance from tag (5 feet = 1.524 meters)

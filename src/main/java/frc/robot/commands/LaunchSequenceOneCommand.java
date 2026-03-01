@@ -39,11 +39,23 @@ public class LaunchSequenceOneCommand extends Command {
     /** Supplier for the flywheel RPS (rotations per second). */
     private final DoubleSupplier flywheelRPSSupplier;
 
-    // ── Base duty cycle values (from launchFromTower) ────────────────────────
-    // These are the duty cycles at the base flywheel reference RPS
-    private static final double SPINDEXER_DUTY_AT_BASE = -0.6;
-    private static final double FLAPPYWHEEL_DUTY_AT_BASE = -0.1;
-    private static final double FEEDER_DUTY_AT_BASE = 0.6;
+    // ── Base duty cycle values (at BASE_FLYWHEEL_RPS) ────────────────────────
+    // Increased from original values (-0.6 / -0.1 / 0.6) to raise BPS.
+    // These are the duty cycles when the flywheel is running at BASE_FLYWHEEL_RPS.
+    // At lower flywheel speeds the values scale down proportionally, but are
+    // always clamped to at least the minimum floor values below.
+    private static final double SPINDEXER_DUTY_AT_BASE   = -0.85; // was -0.85 → max for higher BPS
+    private static final double FLAPPYWHEEL_DUTY_AT_BASE = -0.25; // reduced — was -0.50
+    private static final double FEEDER_DUTY_AT_BASE      =  0.85; // was 0.85 → max for higher BPS
+
+    // ── Minimum duty cycle floors ─────────────────────────────────────────────
+    // The flywheel encoder often reports ~0 RPS even when the motor is spinning
+    // (known hardware issue — see ShootOnMoveCommand comments). Without a floor,
+    // scaleFactor ≈ 0 and all feed motors stall, killing BPS.
+    // These floors guarantee a minimum feed rate regardless of encoder reading.
+    private static final double SPINDEXER_MIN_DUTY   = -0.75; // guaranteed minimum
+    private static final double FLAPPYWHEEL_MIN_DUTY = -0.15; // guaranteed minimum (reduced)
+    private static final double FEEDER_MIN_DUTY      =  0.75; // guaranteed minimum
 
     // Base flywheel reference RPS (the RPS at which the base duty cycles were tuned)
     // This is approximately the RPS at -0.75 duty cycle
@@ -87,11 +99,19 @@ public class LaunchSequenceOneCommand extends Command {
             scaleFactor = flywheelRPS / Math.abs(BASE_FLYWHEEL_RPS);
         }
         
-        // Calculate proportional duty cycles for each motor
-        // These scale linearly with the flywheel RPS
-        double spindexerDC = SPINDEXER_DUTY_AT_BASE * scaleFactor;
+        // Calculate proportional duty cycles for each motor (scale with flywheel RPS)
+        double spindexerDC   = SPINDEXER_DUTY_AT_BASE   * scaleFactor;
         double flappyWheelDC = FLAPPYWHEEL_DUTY_AT_BASE * scaleFactor;
-        double feederDC = FEEDER_DUTY_AT_BASE * scaleFactor;
+        double feederDC      = FEEDER_DUTY_AT_BASE       * scaleFactor;
+
+        // Apply minimum floor so motors always run at a guaranteed minimum speed
+        // even when the flywheel encoder reports 0 RPS (known hardware issue).
+        // Negative motors: take the more-negative of scaled vs floor (Math.min).
+        // Positive motors: take the more-positive of scaled vs floor (Math.max).
+        // Then clamp to the valid duty cycle range [-1.0, 1.0].
+        spindexerDC   = Math.max(-1.0, Math.min(spindexerDC,   SPINDEXER_MIN_DUTY));
+        flappyWheelDC = Math.max(-1.0, Math.min(flappyWheelDC, FLAPPYWHEEL_MIN_DUTY));
+        feederDC      = Math.min( 1.0, Math.max(feederDC,       FEEDER_MIN_DUTY));
 
         // Apply duty cycles to motors using Spindexer subsystem
         spindexer.runFeedMotorsDirect(spindexerDC, flappyWheelDC, feederDC);
