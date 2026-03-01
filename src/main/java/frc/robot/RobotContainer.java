@@ -110,6 +110,11 @@ public class RobotContainer {
 
         // Publish autonomous chooser to SmartDashboard
         SmartDashboard.putData("Auto Chooser", autoChooser);
+
+        // Turret auto-aim toggle — set to true to enable pose-based auto-aiming,
+        // false to use manual D-pad control (1° per tap via Motion Magic).
+        // Eventually this will be mapped to an Xbox controller button.
+        SmartDashboard.putBoolean("Turret/Auto Aim Enabled", true);
 /* 
         // ================= INTAKE COLLECT testing buttons =================
         SmartDashboard.putData("Run Intake Collect Positive Voltage", intake.setIntakeRollersVoltage(2));
@@ -333,27 +338,20 @@ public class RobotContainer {
         // Uses no-subsystem command so it does NOT interrupt the pivot control.
         joystick.x().onTrue(intake.toggleRollers());
 
-        // Left trigger (light press, 0.3–0.75): Center on selected tag using live camera data.
-        // Uses whichever camera currently has the best view of the tag.
-        // Strafes to make yaw=0 and drives backward to reach target distance.
-        // NOTE: Gated to BELOW 0.75 so it does NOT run when ShootFromPointCommand
-        // is active (0.75+). Without the negate() gate both commands would run
-        // simultaneously at hard-press, causing the robot to drive unexpectedly.
-        joystick.leftTrigger(0.3).and(joystick.leftTrigger(0.75).negate()).whileTrue(
-            new CenterOnAprilTagCommand(drivetrain, visionSubsystem)
-        );
-
-        // Left trigger (hard press, 0.75+): Shoot from current field position.
+        // Left trigger (any press, 0.3+): Shoot from current field position.
         // Aims turret, sets hood angle, spins flywheel — all based on distance to tower.
-        // Fires (LaunchSequenceOneCommand) once turret aimed + hood at target + flywheel at speed.
+        // Fires (LaunchSequenceOneCommand) once flywheel is at speed.
         // Robot does NOT move — drivetrain is untouched.
         //
-        // POV manual turret override (active ONLY while this command is running):
-        //   POV Left  (270°) → nudge turret CCW (left)  at 0.5°/loop = 25°/s
-        //   POV Right  (90°) → nudge turret CW  (right) at 0.5°/loop = 25°/s
-        //   Offset accumulates up to ±30° and resets to 0 on each trigger press.
-        //   Watch "ShootFromPoint/Turret Manual Offset (deg)" on Elastic to see the live value.
-        joystick.leftTrigger(0.75).whileTrue(
+        // When "Turret/Auto Aim Enabled" = true  (SmartDashboard):
+        //   Turret auto-aims using pose-based calculation.
+        //   POV Left (270°) / POV Right (90°) apply a fine-tune offset while held.
+        //
+        // When "Turret/Auto Aim Enabled" = false (SmartDashboard):
+        //   Turret holds its current position.
+        //   POV Left (270°) → tap moves turret 1° CCW via Motion Magic.
+        //   POV Right (90°) → tap moves turret 1° CW  via Motion Magic.
+        joystick.leftTrigger(0.3).whileTrue(
             new ShootFromPointCommand(
                 drivetrain,
                 launcher,
@@ -361,8 +359,8 @@ public class RobotContainer {
                 this::getActiveTowerTagId,
                 () -> {
                     int pov = joystick.getHID().getPOV();
-                    if (pov == 270) return  1.0; // POV Left  → nudge CCW
-                    if (pov == 90)  return -1.0; // POV Right → nudge CW
+                    if (pov == 270) return  1.0; // POV Left  → CCW
+                    if (pov == 90)  return -1.0; // POV Right → CW
                     return 0.0;
                 },
                 intake
@@ -387,40 +385,31 @@ public class RobotContainer {
         );
 
 
-        // POV buttons for specific tags using PathPlanner (for quick access to common tags).
+        // ── D-pad (POV) bindings ──────────────────────────────────────────────
         //
-        // POV Left (270°) and POV Right (90°) are DUAL-PURPOSE:
-        //   • While left trigger < 0.75 (NOT shooting): drive to tag as normal.
-        //   • While left trigger ≥ 0.75 (ShootFromPointCommand active): the POV input
-        //     is consumed by the ShootFromPointCommand's povNudgeSupplier (see above)
-        //     to nudge the turret angle. The DriveToAprilTag binding is gated off so
-        //     the robot does NOT accidentally drive while shooting.
+        // POV Left (270°) / POV Right (90°): Manual turret nudge — 1° per tap.
+        //   • When NOT shooting: calls nudgeTurretDirect() directly (no subsystem conflict).
+        //   • When shooting (left trigger held): ShootFromPointCommand reads the same
+        //     POV supplier and handles the nudge internally (auto-aim OFF = 1°/tap via
+        //     Motion Magic; auto-aim ON = continuous fine-tune offset).
         //
-        // POV Up (0°) and POV Down (180°) are NOT used for turret nudge — they keep
-        // their drive-to-tag bindings unconditionally.
+        // POV Up (0°) / POV Down (180°): Bump intake pivot position.
+        //   Active only when NOT shooting so they don't interfere with the trigger.
 
-        // POV Up (0°): Drive to tag 14 (always active)
-        //joystick.pov(0).whileTrue(new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, 14));
+        // POV Left (270°): nudge turret 1° CCW — when NOT shooting
+        joystick.pov(270).and(joystick.leftTrigger(0.3).negate())
+            .onTrue(Commands.runOnce(() -> launcher.nudgeTurretDirect(1.0)));
 
-        // POV Right (90°): Drive to tag 15 — only when NOT shooting
-        joystick.pov(90).and(joystick.leftTrigger(0.75).negate())
-            .whileTrue(new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, 15));
-
-        // POV Down (180°): Drive to tag 16 (always active)
-        //joystick.pov(180).whileTrue(new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, 16));
-
-        // POV Left (270°): Drive to tag 13 — only when NOT shooting
-        joystick.pov(270).and(joystick.leftTrigger(0.75).negate())
-            .whileTrue(new DriveToAprilTagWithPathPlanner(drivetrain, visionSubsystem, 13));
+        // POV Right (90°): nudge turret 1° CW — when NOT shooting
+        joystick.pov(90).and(joystick.leftTrigger(0.3).negate())
+            .onTrue(Commands.runOnce(() -> launcher.nudgeTurretDirect(-1.0)));
 
         // POV Up (0°): Bump intake pivot position up by kPivotBumpFactor
-        // Active only when NOT shooting (same gate as other POV drive commands)
-        joystick.pov(0).and(joystick.leftTrigger(0.75).negate())
+        joystick.pov(0).and(joystick.leftTrigger(0.3).negate())
             .onTrue(intake.bumpPivotUp());
 
         // POV Down (180°): Bump intake pivot position down by kPivotBumpFactor
-        // Note: This overrides the commented-out drive to tag 16
-        joystick.pov(180).and(joystick.leftTrigger(0.75).negate())
+        joystick.pov(180).and(joystick.leftTrigger(0.3).negate())
             .onTrue(intake.bumpPivotDown());
 
         // ── Y button: Shoot-on-Arc ────────────────────────────────────────────

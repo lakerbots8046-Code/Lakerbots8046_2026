@@ -93,7 +93,7 @@ public class ShootFromPointCommand extends Command {
      * Time (seconds) to wait after the flywheel starts before considering it
      * "at speed". Matches the value used in {@link ShootOnMoveCommand}.
      */
-    private static final double FLYWHEEL_SPOOL_TIME_SECONDS = 1.5;
+    private static final double FLYWHEEL_SPOOL_TIME_SECONDS = 2.0;
 
     // ── POV manual turret override ────────────────────────────────────────────
     /**
@@ -115,6 +115,26 @@ public class ShootFromPointCommand extends Command {
      * Reset to 0 in initialize() so each trigger press starts from the calculated angle.
      */
     private double manualTurretOffset = 0.0;
+
+    // ── Auto-aim toggle & manual mode state ──────────────────────────────────
+    /**
+     * Previous auto-aim enabled state — used to detect ON→OFF transition so the
+     * manual target can be seeded from the current turret position.
+     */
+    private boolean prevAutoAimEnabled = true;
+
+    /**
+     * Previous POV nudge value — used for rising-edge detection in manual mode.
+     * Prevents the turret from moving continuously while the D-pad is held.
+     */
+    private double prevPovNudge = 0.0;
+
+    /**
+     * Manual turret target in raw motor rotations (used when auto-aim is OFF).
+     * Initialized to the current turret position when auto-aim is turned off.
+     * Each D-pad tap increments/decrements by 1° (kRotationsPerDegree).
+     */
+    private double manualTargetRotations = 0.0;
 
     // ── Dashboard throttle ────────────────────────────────────────────────────
     /** Counts execute() calls; telemetry is written every 5 calls (~100 ms). */
@@ -237,6 +257,9 @@ public class ShootFromPointCommand extends Command {
         flywheelStartTimestamp       = -1.0;
         lastCommandedHoodRotations   = Double.MAX_VALUE; // force update on first execute()
         manualTurretOffset           = 0.0; // reset nudge on each trigger press
+        prevPovNudge                 = 0.0;
+        manualTargetRotations        = launcher.getTurretPosition(); // seed to current position
+        prevAutoAimEnabled           = SmartDashboard.getBoolean("Turret/Auto Aim Enabled", true);
 
         // Stop intake rollers for the duration of this command.
         // Sets rollersEnabled=false so intakeDeployCollect() will not restart them.
@@ -322,57 +345,93 @@ public class ShootFromPointCommand extends Command {
             flywheelStartTimestamp = Timer.getFPGATimestamp();
         }
 
-        // ── 3. Aim turret (CAN 7) via Motion Magic position control ──────────
-        //
-        // Use calculateTurretAngleRaw() (no compiled offset) and apply the
-        // dashboard-adjustable offset instead. This lets the driver tune the
-        // offset in Elastic without redeploying code.
-        double rawTurretAngle = ShootingArcManager.calculateTurretAngleRaw(robotPose, towerCenter);
+        // ── 3. Aim turret (CAN 7) ─────────────────────────────────────────────
+        // Read auto-aim toggle from SmartDashboard ("Turret/Auto Aim Enabled" widget).
+        boolean autoAimEnabled = SmartDashboard.getBoolean("Turret/Auto Aim Enabled", true);
 
-        // Accumulate POV manual nudge (±kPovNudgeDegreesPerLoop per loop, clamped to ±kPovNudgeMaxDegrees).
-        // POV Left (270°) → supplier returns +1.0 → nudge CCW (positive offset).
-        // POV Right (90°) → supplier returns -1.0 → nudge CW  (negative offset).
-        manualTurretOffset = Math.max(-kPovNudgeMaxDegrees,
-                Math.min(kPovNudgeMaxDegrees,
-                        manualTurretOffset + povNudgeSupplier.getAsDouble() * kPovNudgeDegreesPerLoop));
-
-        // Apply cached zero-offset + manual POV nudge
-        // (pair-midpoint goal center in getTowerCenter() handles per-tag aiming)
-        double adjustedTurretAngle = rawTurretAngle - liveOffset + manualTurretOffset;
-        while (adjustedTurretAngle >  180.0) adjustedTurretAngle -= 360.0;
-        while (adjustedTurretAngle < -180.0) adjustedTurretAngle += 360.0;
-
-        // Override the pose-based target with the adjusted version
-        targetTurretAngle = adjustedTurretAngle;
-
-        double currentTurretDeg = launcher.getTurretPositionDegrees();
-        double turretError      = targetTurretAngle - currentTurretDeg;
-        // Normalize error to [-180, 180]
-        while (turretError >  180.0) turretError -= 360.0;
-        while (turretError < -180.0) turretError += 360.0;
-
-        double targetRawRotations = targetTurretAngle * TurretConstants.kRotationsPerDegree;
-
-        // ── Limit enforcement ±18 raw motor rotations ───
-        boolean turretAtLimit    = !launcher.isTurretWithinLimits();
-        boolean targetOutOfRange = Math.abs(targetRawRotations) > TurretConstants.kPhysicalLimitRotations;
-        double  clampedRaw       = Math.max(-TurretConstants.kPhysicalLimitRotations,
-                                   Math.min( TurretConstants.kPhysicalLimitRotations, targetRawRotations));
-
-        // 0.5° deadband prevents constant profile resets from tiny pose jitter.
-        final double kDeadbandDeg = 0.5;
-
-        if (turretAtLimit) {
-            // PAST LIMIT — hold at current position
-            launcher.setTurretPosition(launcher.getTurretPosition());
-        } else if (targetOutOfRange) {
-            // OUT OF RANGE — drive to nearest limit
-            launcher.setTurretPosition(clampedRaw);
-        } else if (Math.abs(turretError) > kDeadbandDeg) {
-            // NORMAL — update Motion Magic target
-            launcher.setTurretPosition(targetRawRotations);
+        // Detect transition from auto-aim ON → OFF: re-initialize manual target to
+        // the current turret position so the first tap starts from where it is now.
+        if (prevAutoAimEnabled && !autoAimEnabled) {
+            manualTargetRotations = launcher.getTurretPosition();
         }
-        // else: within deadband — hold last commanded position (no profile reset)
+        prevAutoAimEnabled = autoAimEnabled;
+
+        double rawTurretAngle;
+        double currentTurretDeg = launcher.getTurretPositionDegrees();
+        double targetRawRotations;
+        double turretError;
+        boolean turretAtLimit    = !launcher.isTurretWithinLimits();
+        boolean targetOutOfRange;
+
+        if (autoAimEnabled) {
+            // ── AUTO-AIM: pose-based turret angle calculation ─────────────────
+            rawTurretAngle = ShootingArcManager.calculateTurretAngleRaw(robotPose, towerCenter);
+
+            // Accumulate POV manual nudge (±kPovNudgeDegreesPerLoop per loop, clamped to ±kPovNudgeMaxDegrees).
+            // POV Left (270°) → supplier returns +1.0 → nudge CCW (positive offset).
+            // POV Right (90°) → supplier returns -1.0 → nudge CW  (negative offset).
+            manualTurretOffset = Math.max(-kPovNudgeMaxDegrees,
+                    Math.min(kPovNudgeMaxDegrees,
+                            manualTurretOffset + povNudgeSupplier.getAsDouble() * kPovNudgeDegreesPerLoop));
+
+            // Apply cached zero-offset + manual POV nudge
+            double adjustedTurretAngle = rawTurretAngle - liveOffset + manualTurretOffset;
+            while (adjustedTurretAngle >  180.0) adjustedTurretAngle -= 360.0;
+            while (adjustedTurretAngle < -180.0) adjustedTurretAngle += 360.0;
+            targetTurretAngle = adjustedTurretAngle;
+
+            targetRawRotations = targetTurretAngle * TurretConstants.kRotationsPerDegree;
+            targetOutOfRange   = Math.abs(targetRawRotations) > TurretConstants.kPhysicalLimitRotations;
+            double clampedRaw  = Math.max(-TurretConstants.kPhysicalLimitRotations,
+                                 Math.min( TurretConstants.kPhysicalLimitRotations, targetRawRotations));
+
+            turretError = targetTurretAngle - currentTurretDeg;
+            while (turretError >  180.0) turretError -= 360.0;
+            while (turretError < -180.0) turretError += 360.0;
+
+            // 0.5° deadband prevents constant profile resets from tiny pose jitter.
+            final double kDeadbandDeg = 0.5;
+            if (turretAtLimit) {
+                launcher.setTurretPosition(launcher.getTurretPosition());
+            } else if (targetOutOfRange) {
+                launcher.setTurretPosition(clampedRaw);
+            } else if (Math.abs(turretError) > kDeadbandDeg) {
+                launcher.setTurretPosition(targetRawRotations);
+            }
+
+        } else {
+            // ── MANUAL MODE: D-pad tap moves turret ±1° via Motion Magic ─────
+            // Rising-edge detection: only move on the first loop the D-pad is pressed,
+            // not continuously while held. This gives exactly 1° per tap.
+            rawTurretAngle = ShootingArcManager.calculateTurretAngleRaw(robotPose, towerCenter); // telemetry only
+
+            double currentPovNudge  = povNudgeSupplier.getAsDouble();
+            boolean povLeftPressed  = (currentPovNudge >  0.5) && (prevPovNudge <=  0.5); // rising edge CCW
+            boolean povRightPressed = (currentPovNudge < -0.5) && (prevPovNudge >= -0.5); // rising edge CW
+            prevPovNudge = currentPovNudge;
+
+            if (povLeftPressed) {
+                manualTargetRotations += TurretConstants.kRotationsPerDegree; // 1° CCW
+            }
+            if (povRightPressed) {
+                manualTargetRotations -= TurretConstants.kRotationsPerDegree; // 1° CW
+            }
+            // Clamp to physical hard-stop limits
+            manualTargetRotations = Math.max(-TurretConstants.kPhysicalLimitRotations,
+                                    Math.min( TurretConstants.kPhysicalLimitRotations, manualTargetRotations));
+
+            targetRawRotations = manualTargetRotations;
+            targetTurretAngle  = manualTargetRotations / TurretConstants.kRotationsPerDegree;
+            targetOutOfRange   = false; // already clamped above
+
+            turretError = targetTurretAngle - currentTurretDeg;
+            while (turretError >  180.0) turretError -= 360.0;
+            while (turretError < -180.0) turretError += 360.0;
+
+            if (!turretAtLimit) {
+                launcher.setTurretPosition(manualTargetRotations);
+            }
+        }
 
         // ── 4. Evaluate all three fire conditions ─────────────────────────────
         boolean turretAimed = !turretAtLimit && !targetOutOfRange
@@ -430,8 +489,10 @@ public class ShootFromPointCommand extends Command {
             SmartDashboard.putNumber( DASH + "Robot Heading (deg)",     robotPose.getRotation().getDegrees());
 
             // ── Turret angle diagnostics ───────────────────────────────────────
+            SmartDashboard.putBoolean(DASH + "Auto Aim Enabled",          autoAimEnabled);
             SmartDashboard.putNumber( DASH + "Turret Raw Angle (deg)",    rawTurretAngle);
             SmartDashboard.putNumber( DASH + "Turret Manual Offset (deg)", manualTurretOffset);
+            SmartDashboard.putNumber( DASH + "Turret Manual Target (rot)", manualTargetRotations);
             SmartDashboard.putNumber( DASH + "Turret Target (deg)",       targetTurretAngle);
             SmartDashboard.putNumber( DASH + "Turret Position (deg)",   currentTurretDeg);
             SmartDashboard.putNumber( DASH + "Turret Target (raw rot)", targetRawRotations);

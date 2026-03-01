@@ -1,22 +1,26 @@
+# Mirror leftNeutralScore Paths to rightNeutralScore
 
-# Translation2d → Translation3d Conversion
+## Task
+Mirror all leftNeutralScore_Part1 through Part7 paths across the horizontal center line (y = 4.035m) to create rightNeutralScore equivalents starting from the right side of blue.
+
+## Mirroring Formula
+- new_y = 8.07 - old_y
+- x stays the same
+- new_rotation = -old_rotation
 
 ## Steps
-
-- [x] Plan confirmed
-- [x] 1. `Constants.java` — add `kTurretOffsetZ = Units.inchesToMeters(14.0)` to `TurretConstants`
-- [x] 2. `ShootingArcManager.java` — full Translation3d conversion:
-  - [x] Add `Translation3d` import
-  - [x] Change fallback constants to `Translation3d` (z = 1.12395 m from field layout)
-  - [x] `getTowerCenter()` → return `Translation3d`, add `goalZ = tagPose.get().getZ()`
-  - [x] `getNearestShootingPose()` → use `towerCenter.toTranslation2d()` for 2D ops
-  - [x] `calculateArcVelocity()` → parameter `Translation3d`, use `.toTranslation2d()` internally
-  - [x] `calculateTargetHeading()` → parameter `Translation3d`
-  - [x] `getTurretFieldPosition()` → return `Translation3d`, add Z from `kTurretOffsetZ`
-  - [x] `calculateTurretAngleRaw()` → parameter `Translation3d`
-  - [x] `calculateTurretAngle()` → parameter `Translation3d`
-  - [x] `calculateDistance()` → parameter `Translation3d` (true 3D distance)
-- [x] 3. `ShootOnMoveCommand.java` — add `Translation3d` import, change `towerCenter` type
-- [x] 4. `ShootFromPointCommand.java` — change import + `towerCenter` type
-- [x] 5. `FeedFromCenterCommand.java` — add `Translation3d` import, wrap feed target in Translation3d for calculateTurretAngleRaw
-- [x] 6. `RobotContainer.java` — no changes needed (uses `var`, auto-infers Translation3d)
+- [x] Read leftNeutralScore_Part1.path
+- [x] Read leftNeutralScore_Part2.path
+- [x] Read leftNeutralScore_Part3.path
+- [x] Read leftNeutralScore_Part4.path
+- [x] Read LeftNeutralScore_Part5.path
+- [x] Read leftNeutralScore_Part6.path
+- [x] Read leftNeutralScore_Part7.path
+- [x] Create rightNeutralScore_Part1.path
+- [x] Create rightNeutralScore_Part2.path
+- [x] Create rightNeutralScore_Part3.path
+- [x] Create rightNeutralScore_Part4.path
+- [x] Create rightNeutralScore_Part5.path
+- [x] Create rightNeutralScore_Part6.path
+- [x] Create rightNeutralScore_Part7.path
+- [x] Update rightNeutralScore.auto to reference new paths

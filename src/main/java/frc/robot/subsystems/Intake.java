@@ -318,8 +318,8 @@ public Command AutoIntakeDeployCollect() {
         } else {
           stopRollers();
         }
-        rollersEnabled = true;
-      }, this)).withTimeout(3);
+          rollersEnabled = true;
+        }, this)).withTimeout(3);
   }
   /**
    * Command to deploy the intake pivot to -1.2 rotations (Motion Magic) and start

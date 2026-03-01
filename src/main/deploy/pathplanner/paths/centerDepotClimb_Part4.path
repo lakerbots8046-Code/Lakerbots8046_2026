@@ -3,37 +3,32 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 3.55830298013245,
-        "y": 7.563327814569536
+        "x": 1.728799668874172,
+        "y": 5.75560430463576
       },
       "prevControl": null,
       "nextControl": {
-        "x": 6.592955298013244,
-        "y": 7.669395695364238
+        "x": 2.728799668874172,
+        "y": 5.75560430463576
       },
       "isLocked": false,
-      "linkedName": null
+      "linkedName": "centerDepotClimb_Part3_End"
     },
     {
       "anchor": {
-        "x": 5.823402317880794,
-        "y": 7.45
+        "x": 1.728799668874172,
+        "y": 3.991440397350992
       },
       "prevControl": {
-        "x": 5.625246320604644,
-        "y": 7.602427690212424
+        "x": 2.5273923841059602,
+        "y": 4.013220198675495
       },
       "nextControl": null,
       "isLocked": false,
-      "linkedName": "leftPart1End"
+      "linkedName": null
     }
   ],
-  "rotationTargets": [
-    {
-      "waypointRelativePos": 0.2819089900110977,
-      "rotationDegrees": 0.0
-    }
-  ],
+  "rotationTargets": [],
   "constraintZones": [],
   "pointTowardsZones": [],
   "eventMarkers": [],
@@ -47,13 +42,13 @@
   },
   "goalEndState": {
     "velocity": 0,
-    "rotation": -0.3603725713919039
+    "rotation": 0.0
   },
   "reversed": false,
-  "folder": "leftNeutralScore",
+  "folder": "centerDepotClimb",
   "idealStartingState": {
     "velocity": 0,
-    "rotation": 0.0
+    "rotation": -35.7538872544367
   },
   "useDefaultConstraints": true
 }

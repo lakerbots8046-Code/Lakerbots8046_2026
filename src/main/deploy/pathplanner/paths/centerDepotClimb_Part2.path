@@ -3,25 +3,25 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 1.0,
-        "y": 5.875
+        "x": 1.7650993377483442,
+        "y": 5.944362582781457
       },
       "prevControl": null,
       "nextControl": {
-        "x": 2.164395695364239,
-        "y": 5.748344370860926
+        "x": 1.5152154434343048,
+        "y": 5.951980939720461
       },
       "isLocked": false,
-      "linkedName": null
+      "linkedName": "centerDepotClimb_Part1End"
     },
     {
       "anchor": {
-        "x": 2.7161506622516556,
-        "y": 4.049519867549668
+        "x": 0.5599503311258278,
+        "y": 6.09682119205298
       },
       "prevControl": {
-        "x": 1.641680463576159,
-        "y": 3.88980132450331
+        "x": 0.8099122203592113,
+        "y": 6.092456111197175
       },
       "nextControl": null,
       "isLocked": false,
@@ -33,8 +33,8 @@
   "pointTowardsZones": [],
   "eventMarkers": [],
   "globalConstraints": {
-    "maxVelocity": 3.0,
-    "maxAcceleration": 3.0,
+    "maxVelocity": 0.5,
+    "maxAcceleration": 0.5,
     "maxAngularVelocity": 540.0,
     "maxAngularAcceleration": 720.0,
     "nominalVoltage": 12.0,
@@ -42,13 +42,13 @@
   },
   "goalEndState": {
     "velocity": 0,
-    "rotation": 1.0809241866607266
+    "rotation": 171.4692343900518
   },
   "reversed": false,
   "folder": "centerDepotClimb",
   "idealStartingState": {
-    "velocity": 0,
-    "rotation": 179.44891067848624
+    "velocity": 1.0,
+    "rotation": 172.11686068327023
   },
-  "useDefaultConstraints": true
+  "useDefaultConstraints": false
 }

@@ -5,15 +5,22 @@
     "data": {
       "commands": [
         {
-          "type": "named",
+          "type": "parallel",
           "data": {
-            "name": "AimTurretAuto"
-          }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "centerDepotClimb_Part1"
+            "commands": [
+              {
+                "type": "path",
+                "data": {
+                  "pathName": "centerDepotClimb_Part1"
+                }
+              },
+              {
+                "type": "named",
+                "data": {
+                  "name": "AutoIntakeDeployCollect"
+                }
+              }
+            ]
           }
         },
         {
@@ -23,19 +30,44 @@
           }
         },
         {
-          "type": "parallel",
+          "type": "path",
+          "data": {
+            "pathName": "centerDepotClimb_Part3"
+          }
+        },
+        {
+          "type": "deadline",
           "data": {
             "commands": [
               {
-                "type": "wait",
+                "type": "sequential",
                 "data": {
-                  "waitTime": 1.0
+                  "commands": [
+                    {
+                      "type": "wait",
+                      "data": {
+                        "waitTime": 3.0
+                      }
+                    },
+                    {
+                      "type": "named",
+                      "data": {
+                        "name": "DumpAndReturn"
+                      }
+                    },
+                    {
+                      "type": "wait",
+                      "data": {
+                        "waitTime": 3.0
+                      }
+                    }
+                  ]
                 }
               },
               {
                 "type": "named",
                 "data": {
-                  "name": "AimTurretAuto"
+                  "name": "ShootFromPointCommand"
                 }
               }
             ]
@@ -44,7 +76,7 @@
         {
           "type": "path",
           "data": {
-            "pathName": "centerDepotClimb_Part3"
+            "pathName": "centerDepotClimb_Part4"
           }
         }
       ]

@@ -305,12 +305,18 @@ public class Constants {
         public static final double starFeederDutyCycleOut = -0.1;  // StarFeeder (CAN 5): temp -0.2 | final: -1.0
         public static final double feederDutyCycleOut = 0.6;     // Feeder (CAN 6):     temp -0.2 | final: -0.5
         public static final double flywheelDutyCycleOut = -0.65;    //-0.75  // Launcher (CAN 8):   temp -0.2 | final: -1.0
+        /**
+         * Flywheel velocity (RPS) for launchFromTower shots — used by velocity closed-loop control.
+         * Equivalent to flywheelDutyCycleOut (-0.65) × Kraken X60 free speed (100 RPS) = -65 RPS.
+         * Negative = shooting direction. Tune on robot: increase magnitude if shots land short,
+         * decrease if shots overshoot.
+         */
+        public static final double kFlywheelTowerRPS = -45.0; // 55 , 52 , 45
         // Hood position (motor rotations) during Launch from Tower.
         // Range: 0.0 rot = 68° from horizontal (steepest) → 11.5 rot = 28° from horizontal (flattest).
         // TUNE ON ROBOT: increase toward 11.5 to flatten the shot; decrease toward 0.0 to steepen it.
-        public static final double hoodTowerPosition = 1.0; // TESTED on robot
+        public static final double hoodTowerPosition = 0.0; // TESTED on robot 0.5
 
-        // SmartDashboard Keys
         public static final String kSmartDashboardPrefix = "Turret/";
         public static final String kStartSpinKey = "Start Spin";
         public static final String kStopSpinKey = "Stop Spin";
@@ -340,10 +346,9 @@ public class Constants {
         public static final double kPivotCollectPosition = 0.25;         // Extended for collecting game pieces
        // public static final double kPivotScoreHighPosition = 0.15;       // Position for high scoring
        // public static final double kPivotScoreLowPosition = 0.05;        // Position for low scoring
-        public static final double kPivotDeployCollectPosition = -1.36; // Deploy position for intake_deploy_collect -1.36 to -1.25 to 1.304
+        public static final double kPivotDeployCollectPosition = -1.355; // Deploy position for intake_deploy_collect -1.36 to -1.25 to 1.304 to 1.36
         public static final double kPivotHomePosition = 0.0;            // Retract/home position after collecting
-        public static final double kPivotDumpPosition = -0.75;          // This is used to flip the remaining fuel back into the hopper while launching. 
-
+        public static final double kPivotDumpPosition = -0.75;          // 
         // Intake Collection Velocities (in rotations per second
         public static final double kCollectIntakeVelocity = 30.0;   // Speed when intaking game pieces
         public static final double kCollectOuttakeVelocity = -20.0; // Speed when ejecting game pieces
@@ -519,14 +524,16 @@ public class Constants {
 
         // v10: -5 RPS again — still overshooting after v9 reduction.
         public static final double[][] kLauncherRPSLookup = {
-            {1.0,  -43.0},  // was -50.0
-            {1.5,  -43.5},  // was -50.5
-            {2.0,  -46.0},  // was -53.0
-            {2.5,  -48.5},  // was -55.5
-            {3.0,  -51.5},  // was -58.5
-            {3.5,  -54.5},  // was -61.5
-            {4.0,  -67.5},  // was -74.5
-            {4.5,  -73.5}   // was -80.5
+            {1.0,  -42.0},  // was -50.0, 43.0, 42.0
+            {1.5,  -42.0},  // was -50.5, 43.5, 42.0
+            {2.0,  -40.0},  // was -53.0, 46.0, 42.0
+            {2.5,  -43.0},  // was -55.5, 48.5, 47.5
+            {3.0,  -45.0},  // was -58.5, 51.5, 50.0
+           // {3.175, -51.0},  // added intermediate point at 3.175 m (Tower Shot) 49.0, 51.0
+            {3.5,  -48.5},  // was -61.5, 54.5
+            {4.0,  -55.5},  // was -74.5, 67.5
+            {4.5,  -56.0},   // was -80.5, 73.5
+            {5.0,  -60.0}   // was -58
         };
 
         // ── Hood angle lookup table ───────────────────────────────────────────
@@ -578,10 +585,11 @@ public class Constants {
             {1.5,  0.0},   // extrapolated
             {2.0,  0.0},   // TESTED: hood position 0
             {2.5,  0.0},   // TESTED: hood position 0
-            {3.0,  1.0},   // TESTED: hood position 0 0         2
-            {3.5,  1.0},   // TESTED: hood position 1 1         3
+            {3.0,  0.0},   // TESTED: hood position 0 0         2   1
+            {3.5,  0.75},   // TESTED: hood position 1 1         3
             {4.0,  2.0},   // extrapolated (+1 rot per 0.5m)1   3
-            {4.5,  2.5}    // extrapolated (+1 rot per 0.5m) 2  3.5
+            {4.5,  3.0},    // extrapolated (+1 rot per 0.5m) 2  3.5
+            {5.0,  3.875}    // was 4.0
         };
     }
     public static class Vision {

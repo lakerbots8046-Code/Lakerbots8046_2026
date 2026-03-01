@@ -400,6 +400,26 @@ public class Launcher extends SubsystemBase {
   public void stopTurretDirect() {
       turretMotor.setControl(m_brake);
   }
+
+  /**
+   * Nudges the turret position by the given degrees using Motion Magic position control.
+   * Safe to call without subsystem ownership (like stopTurretDirect).
+   *
+   * <p>Sign convention (matches ShootingArcManager):
+   *   Positive degrees = CCW (left) = increase raw motor rotations.
+   *   Negative degrees = CW  (right) = decrease raw motor rotations.
+   *
+   * @param degrees Degrees to nudge (positive = CCW/left, negative = CW/right)
+   */
+  public void nudgeTurretDirect(double degrees) {
+      double currentRot = getTurretPosition();
+      double deltaRot   = degrees * TurretConstants.kRotationsPerDegree;
+      double newRot     = currentRot + deltaRot;
+      // Clamp to physical hard-stop limits
+      newRot = Math.max(-TurretConstants.kPhysicalLimitRotations,
+               Math.min( TurretConstants.kPhysicalLimitRotations, newRot));
+      setTurretPosition(newRot);
+  }
   
   /**
    * Gets the current collection motor velocity
@@ -540,10 +560,14 @@ public class Launcher extends SubsystemBase {
    */
   public Command launchFromTowerLauncher() {
     return Commands.run(() -> {
+      // Turret: center to zero (robot-forward) for tower shots
+      setTurretPosition(0);
       // Hood: move to tower launch position (Motion Magic position control)
       setHoodPosition(TurretConstants.hoodTowerPosition);
-      // Launcher flywheel: fixed duty cycle output
-      launcherMotor.setControl(m_dutyCycleOut.withOutput(TurretConstants.flywheelDutyCycleOut));
+      // Launcher flywheel: velocity closed-loop (VelocityVoltage) — same control mode
+      // as ShootFromPointCommand. kV handles steady-state; kP (0.3) recovers speed
+      // when a ball loads the flywheel. kFlywheelTowerRPS = -65 RPS (≡ -0.65 duty cycle).
+      setCollectVelocity(TurretConstants.kFlywheelTowerRPS);
     }, this).finallyDo(() -> {
       // Stop flywheel when command ends (button released).
       // Hood retraction is handled automatically by the default command (retractHood()).
