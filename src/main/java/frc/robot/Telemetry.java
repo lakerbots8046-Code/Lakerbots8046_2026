@@ -58,6 +58,16 @@ public class Telemetry {
     private final DoublePublisher driveTimestamp = driveStateTable.getDoubleTopic("Timestamp").publish();
     private final DoublePublisher driveOdometryFrequency = driveStateTable.getDoubleTopic("OdometryFrequency").publish();
 
+    /* Swerve module headings published individually for Elastic dashboard widgets.
+     * Keys: DriveState/Module0 Heading (deg) … Module3 Heading (deg)
+     * Rounded to 2 decimal places (0.01° resolution). */
+    private final DoublePublisher[] driveModuleHeadings = new DoublePublisher[] {
+        driveStateTable.getDoubleTopic("Module0 Heading (deg)").publish(),
+        driveStateTable.getDoubleTopic("Module1 Heading (deg)").publish(),
+        driveStateTable.getDoubleTopic("Module2 Heading (deg)").publish(),
+        driveStateTable.getDoubleTopic("Module3 Heading (deg)").publish()
+    };
+
     /* Robot pose for field positioning */
     private final NetworkTable table = inst.getTable("Pose");
     private final DoubleArrayPublisher fieldPub = table.getDoubleArrayTopic("robotPose").publish();
@@ -127,11 +137,19 @@ public class Telemetry {
         m_poseArray[2] = round(state.Pose.getRotation().getDegrees(), 2);
         fieldPub.set(m_poseArray);
 
-        /* Telemeterize each module state to a Mechanism2d */
+        /* Telemeterize each module state to a Mechanism2d and publish heading */
         for (int i = 0; i < 4; ++i) {
             m_moduleSpeeds[i].setAngle(state.ModuleStates[i].angle);
             m_moduleDirections[i].setAngle(state.ModuleStates[i].angle);
             m_moduleSpeeds[i].setLength(state.ModuleStates[i].speedMetersPerSecond / (2 * MaxSpeed));
+            // Publish each module's heading in degrees (rounded to 2 decimals) for Elastic
+            driveModuleHeadings[i].set(round(state.ModuleStates[i].angle.getDegrees(), 2));
         }
+
+        /* Also publish individual module headings to SmartDashboard for easy Elastic access */
+        SmartDashboard.putNumber("Swerve/Module0 Heading (deg)", round(state.ModuleStates[0].angle.getDegrees(), 2));
+        SmartDashboard.putNumber("Swerve/Module1 Heading (deg)", round(state.ModuleStates[1].angle.getDegrees(), 2));
+        SmartDashboard.putNumber("Swerve/Module2 Heading (deg)", round(state.ModuleStates[2].angle.getDegrees(), 2));
+        SmartDashboard.putNumber("Swerve/Module3 Heading (deg)", round(state.ModuleStates[3].angle.getDegrees(), 2));
     }
 }

@@ -459,7 +459,7 @@ public class RobotContainer {
         SmartDashboard.putNumber( "Tower/Tag ID",        tagId);
         SmartDashboard.putString( "Tower/Tag Info",      tagInfo);
         SmartDashboard.putString( "Tower/Alliance",      tagAlliance);
-        SmartDashboard.putNumber( "Tower/Distance (m)",  distance);
+        SmartDashboard.putNumber( "Tower/Distance (m)",  round(distance, 3));
         SmartDashboard.putBoolean("Tower/In Zone",       inZone);
 
         // ── Pre-seed locked tag widgets so they appear in Elastic immediately ─
@@ -497,7 +497,7 @@ public class RobotContainer {
 
         SmartDashboard.putNumber("ShootFromPoint/Turret Raw Angle (deg)", rawAngle);
         SmartDashboard.putNumber("ShootFromPoint/Turret Error (deg)",     turretError);
-        SmartDashboard.putNumber("ShootFromPoint/Distance (m)",           distance);
+        SmartDashboard.putNumber("ShootFromPoint/Distance (m)",           round(distance, 3));
         SmartDashboard.putString("ShootFromPoint/Tower Tag Info",         tagInfo);
         SmartDashboard.putNumber("ShootFromPoint/Turret Target (deg)",    targetAngle);
         SmartDashboard.putNumber("ShootFromPoint/Turret Position (deg)",  currentTurretDeg);
@@ -714,6 +714,14 @@ public class RobotContainer {
     
     private double squareInput(double value) {
         return Math.copySign(value * value, value);
+    }
+
+    /**
+     * Rounds a double to the specified number of decimal places for cleaner dashboard display.
+     */
+    private static double round(double value, int decimals) {
+        double scale = Math.pow(10, decimals);
+        return Math.round(value * scale) / scale;
     }
 
     /**
