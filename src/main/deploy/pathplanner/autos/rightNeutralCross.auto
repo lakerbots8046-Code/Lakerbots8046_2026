@@ -7,32 +7,7 @@
         {
           "type": "path",
           "data": {
-            "pathName": "rightOutpostScore_Part1"
-          }
-        },
-        {
-          "type": "parallel",
-          "data": {
-            "commands": [
-              {
-                "type": "named",
-                "data": {
-                  "name": "AimTurretAuto"
-                }
-              },
-              {
-                "type": "wait",
-                "data": {
-                  "waitTime": 3.0
-                }
-              }
-            ]
-          }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "rightOutpostScore_Part2"
+            "pathName": "RightNeutralCross_Part1"
           }
         },
         {
@@ -42,13 +17,13 @@
               {
                 "type": "path",
                 "data": {
-                  "pathName": "rightOutpostScore_Part3"
+                  "pathName": "RightNeutralCross_Part2"
                 }
               },
               {
                 "type": "named",
                 "data": {
-                  "name": "Intake"
+                  "name": "AutoIntakeDeployCollect"
                 }
               }
             ]
@@ -57,13 +32,38 @@
         {
           "type": "path",
           "data": {
-            "pathName": "rightOutpostScore_Part4"
+            "pathName": "rightNeutralCross_Part3"
           }
         },
         {
-          "type": "named",
+          "type": "path",
           "data": {
-            "name": "AimTurretAuto"
+            "pathName": "rightNeutralCross_Part4"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "rightNeutralCross_Part5"
+          }
+        },
+        {
+          "type": "parallel",
+          "data": {
+            "commands": [
+              {
+                "type": "path",
+                "data": {
+                  "pathName": "rightNeutralCross_Part6End"
+                }
+              },
+              {
+                "type": "named",
+                "data": {
+                  "name": "ShootFromPointCommand"
+                }
+              }
+            ]
           }
         }
       ]

@@ -74,9 +74,15 @@
           }
         },
         {
-          "type": "parallel",
+          "type": "deadline",
           "data": {
             "commands": [
+              {
+                "type": "path",
+                "data": {
+                  "pathName": "centerDepotClimb_Part4"
+                }
+              },
               {
                 "type": "named",
                 "data": {
@@ -87,12 +93,6 @@
                 "type": "named",
                 "data": {
                   "name": "ClimberReach"
-                }
-              },
-              {
-                "type": "path",
-                "data": {
-                  "pathName": "centerDepotClimb_Part4"
                 }
               }
             ]
@@ -114,6 +114,6 @@
     }
   },
   "resetOdom": true,
-  "folder": null,
+  "folder": "Center",
   "choreoAuto": false
 }

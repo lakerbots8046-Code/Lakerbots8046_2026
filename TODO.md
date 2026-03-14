@@ -1,4 +1,6 @@
-- [x] Add intake command for operator B hold: low-speed pivot opposite deploy direction
-- [x] Add intake command/method for operator X: reset pivot encoder position
-- [x] Rebind operatorController B/X in RobotContainer to new intake behaviors
-- [x] Run compile check and verify no errors
+- [x] Update VisionSubsystem periodic pose updates to include Left and Right cameras
+- [x] Extend VisionSubsystem pose telemetry publishing for Left and Right
+- [x] Add Left/Right estimated pose getters in VisionSubsystem
+- [x] Update RobotContainer.updateVisionMeasurements() to fuse Left/Right vision into drivetrain pose estimator
+- [x] Add Left/Right measurement status dashboard outputs in RobotContainer
+- [x] Run build test (gradlew.bat build)

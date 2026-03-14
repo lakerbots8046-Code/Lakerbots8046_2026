@@ -31,6 +31,7 @@ import frc.robot.subsystems.Launcher;
 import frc.robot.subsystems.Spindexer;
 import frc.robot.subsystems.Climber;
 import frc.robot.commands.AutoDeployIntake;
+import frc.robot.commands.ClimberGoToSetpoint;
 //import frc.robot.commands.CenterOnAprilTagCommand;
 //import frc.robot.commands.DriveToAprilTag;
 import frc.robot.commands.FeedFromCenterCommand;
@@ -194,13 +195,13 @@ public class RobotContainer {
             intake.dumpAndReturn());
 
         NamedCommands.registerCommand("ClimberReach",
-            climber.goToSetpoint(() -> Climber.Setpoint.Reach));
+            new ClimberGoToSetpoint(climber, Climber.Setpoint.Reach));
 
         NamedCommands.registerCommand("ClimberPullDown", 
-           climber.goToSetpoint(() -> Climber.Setpoint.PullDown));
+            new ClimberGoToSetpoint(climber, Climber.Setpoint.YButton));
 
         NamedCommands.registerCommand("IntakeHome", 
-           intake.goToPivotPosition(Constants.IntakeConstants.kPivotDeployCollectPosition));
+           intake.goToPivotPosition(Constants.IntakeConstants.kPivotHomePosition));
     
     }
     
@@ -239,7 +240,8 @@ public class RobotContainer {
             "leftNeutralScore",
             "rightNeutralFeed",
             "rightNeutralScore",
-            "rightOutpostScore"
+            "rightOutpostScore",
+            "rightNeutralCross"
         };
 
         for (String autoName : autoNames) {
@@ -336,10 +338,10 @@ public class RobotContainer {
             SmartDashboard.putString("Field-Centric Status", "Reset at: " + System.currentTimeMillis());
         }));
 
-        // Left bumper: Toggle intake deploy/collect.
-        // First press: deploys pivot to -1.2 rot (Motion Magic) and starts rollers.
-        // Second press: stops rollers and retracts pivot to home (-0.1 rot).
-        joystick.rightBumper().toggleOnTrue(intake.intakeDeployCollect());
+        // Right bumper: start intake deploy/collect (non-toggle).
+        // Single press deploys pivot and starts rollers; command remains active
+        // until interrupted by another intake command.
+        joystick.rightBumper().onTrue(intake.intakeDeployCollect());
         operatorController.rightBumper().toggleOnTrue(intake.intakeDeployCollect());
 
         // Left bumper: Dump-and-return sequence.
@@ -561,6 +563,35 @@ public class RobotContainer {
         SmartDashboard.putString("ShootFromPoint/Tower Tag Info",         tagInfo);
         SmartDashboard.putNumber("ShootFromPoint/Turret Target (deg)",    targetAngle);
         SmartDashboard.putNumber("ShootFromPoint/Turret Position (deg)",  currentTurretDeg);
+
+        // ── Always-on turret tracking in alliance zone (turret only) ─────────
+        // Track only when alliance is known and robot is in-zone for that alliance.
+        // Out of zone (or alliance unknown) -> return turret to zero.
+        var alliance = DriverStation.getAlliance();
+        boolean allianceKnown = alliance.isPresent();
+        int allianceTagId = allianceKnown && alliance.get() == Alliance.Blue
+                ? Constants.ShootingArc.kBluePrimaryTagId
+                : Constants.ShootingArc.kRedPrimaryTagId;
+
+        boolean inAllianceZone = allianceKnown
+                && ShootingArcManager.isInShootingZone(robotPose, allianceTagId);
+
+        var allianceTower = ShootingArcManager.getTowerCenter(robotPose, allianceTagId);
+        double targetTrackAngleDeg = ShootingArcManager.calculateTurretAngle(robotPose, allianceTower);
+        double targetTrackRaw = targetTrackAngleDeg * Constants.TurretConstants.kRotationsPerDegree;
+        targetTrackRaw = Math.max(-Constants.TurretConstants.kPhysicalLimitRotations,
+                         Math.min( Constants.TurretConstants.kPhysicalLimitRotations, targetTrackRaw));
+
+        double currentRaw = launcher.getTurretPosition();
+        double desiredRaw = inAllianceZone ? targetTrackRaw : 0.0;
+
+        // Previous (rollback) deadband: 0.01 raw rotations.
+        // Smaller deadband improves continuous follow while still filtering micro-jitter.
+        if (Math.abs(desiredRaw - currentRaw) > 0.005) {
+            launcher.setTurretPosition(desiredRaw);
+        }
+
+        SmartDashboard.putBoolean("Turret/Alliance Zone Tracking Enabled", inAllianceZone);
     }
 
     /**
@@ -694,6 +725,90 @@ public class RobotContainer {
             ffStatus = "No Pose";
         }
 
+        // ── Left camera: side-facing pose estimator ──────────────────────────
+        var poseLeft = visionSubsystem.getEstimatedGlobalPoseLeft();
+        String leftStatus;
+        if (poseLeft.isPresent()) {
+            var estimatedPose = poseLeft.get();
+
+            boolean tooAmbiguousLeft = estimatedPose.targetsUsed.stream()
+                .anyMatch(t -> {
+                    double amb = t.getPoseAmbiguity();
+                    return amb >= 0.0 && amb > Constants.Vision.kMaxAmbiguity;
+                });
+
+            if (tooAmbiguousLeft) {
+                leftStatus = "Rejected (High Ambiguity)";
+            } else {
+                Pose2d pose2d = estimatedPose.estimatedPose.toPose2d();
+
+                double avgDistLeft = estimatedPose.targetsUsed.stream()
+                    .mapToDouble(t -> t.getBestCameraToTarget().getTranslation().getNorm())
+                    .average()
+                    .orElse(0.0);
+
+                double distScaleLeft = 1.0 + (avgDistLeft * avgDistLeft
+                                            * Constants.Vision.kDistanceScaleFactor);
+
+                var baseStdDevsLeft = estimatedPose.targetsUsed.size() >= 2
+                    ? Constants.Vision.kMultiTagStdDevs
+                    : Constants.Vision.kSingleTagStdDevs;
+
+                var stdDevs = baseStdDevsLeft.times(distScaleLeft);
+
+                drivetrain.addVisionMeasurement(
+                    pose2d,
+                    estimatedPose.timestampSeconds,
+                    stdDevs
+                );
+                leftStatus = String.format("Applied (%.1fm)", avgDistLeft);
+            }
+        } else {
+            leftStatus = "No Pose";
+        }
+
+        // ── Right camera: side-facing pose estimator ─────────────────────────
+        var poseRight = visionSubsystem.getEstimatedGlobalPoseRight();
+        String rightStatus;
+        if (poseRight.isPresent()) {
+            var estimatedPose = poseRight.get();
+
+            boolean tooAmbiguousRight = estimatedPose.targetsUsed.stream()
+                .anyMatch(t -> {
+                    double amb = t.getPoseAmbiguity();
+                    return amb >= 0.0 && amb > Constants.Vision.kMaxAmbiguity;
+                });
+
+            if (tooAmbiguousRight) {
+                rightStatus = "Rejected (High Ambiguity)";
+            } else {
+                Pose2d pose2d = estimatedPose.estimatedPose.toPose2d();
+
+                double avgDistRight = estimatedPose.targetsUsed.stream()
+                    .mapToDouble(t -> t.getBestCameraToTarget().getTranslation().getNorm())
+                    .average()
+                    .orElse(0.0);
+
+                double distScaleRight = 1.0 + (avgDistRight * avgDistRight
+                                            * Constants.Vision.kDistanceScaleFactor);
+
+                var baseStdDevsRight = estimatedPose.targetsUsed.size() >= 2
+                    ? Constants.Vision.kMultiTagStdDevs
+                    : Constants.Vision.kSingleTagStdDevs;
+
+                var stdDevs = baseStdDevsRight.times(distScaleRight);
+
+                drivetrain.addVisionMeasurement(
+                    pose2d,
+                    estimatedPose.timestampSeconds,
+                    stdDevs
+                );
+                rightStatus = String.format("Applied (%.1fm)", avgDistRight);
+            }
+        } else {
+            rightStatus = "No Pose";
+        }
+
         // Throttle status string puts to every 5 calls (~100 ms) — these are
         // informational only and do not need to update at 50 Hz.
         visionStatusCounter++;
@@ -701,6 +816,8 @@ public class RobotContainer {
             visionStatusCounter = 0;
             SmartDashboard.putString("Vision/BF/Measurement Status", bfStatus);
             SmartDashboard.putString("Vision/FF/Measurement Status", ffStatus);
+            SmartDashboard.putString("Vision/Left/Measurement Status", leftStatus);
+            SmartDashboard.putString("Vision/Right/Measurement Status", rightStatus);
         }
     }
     

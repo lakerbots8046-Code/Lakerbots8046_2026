@@ -7,7 +7,7 @@
         {
           "type": "path",
           "data": {
-            "pathName": "rightNeutralScore_Part1"
+            "pathName": "leftNeutralScore_Part1"
           }
         },
         {
@@ -23,7 +23,7 @@
               {
                 "type": "path",
                 "data": {
-                  "pathName": "rightNeutralScore_Part2"
+                  "pathName": "leftNeutralScore_Part2"
                 }
               }
             ]
@@ -32,13 +32,13 @@
         {
           "type": "path",
           "data": {
-            "pathName": "rightNeutralScore_Part3"
+            "pathName": "leftNeutralScore_Part3"
           }
         },
         {
           "type": "path",
           "data": {
-            "pathName": "rightNeutralScore_Part4"
+            "pathName": "leftNeutralScore_Part4"
           }
         },
         {
@@ -52,7 +52,7 @@
                     {
                       "type": "wait",
                       "data": {
-                        "waitTime": 3.5
+                        "waitTime": 4.0
                       }
                     },
                     {
@@ -64,7 +64,7 @@
                     {
                       "type": "wait",
                       "data": {
-                        "waitTime": 2.0
+                        "waitTime": 1.5
                       }
                     },
                     {
@@ -104,9 +104,54 @@
           }
         },
         {
-          "type": "path",
+          "type": "deadline",
           "data": {
-            "pathName": "rightNeutralScore_Part5"
+            "commands": [
+              {
+                "type": "path",
+                "data": {
+                  "pathName": "LeftNeutralScore_Part5"
+                }
+              },
+              {
+                "type": "parallel",
+                "data": {
+                  "commands": [
+                    {
+                      "type": "sequential",
+                      "data": {
+                        "commands": [
+                          {
+                            "type": "wait",
+                            "data": {
+                              "waitTime": 1.0
+                            }
+                          },
+                          {
+                            "type": "named",
+                            "data": {
+                              "name": "DumpAndReturn"
+                            }
+                          },
+                          {
+                            "type": "wait",
+                            "data": {
+                              "waitTime": 1.0
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "named",
+                      "data": {
+                        "name": "ShootFromPointCommand"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
           }
         },
         {
@@ -122,7 +167,7 @@
               {
                 "type": "path",
                 "data": {
-                  "pathName": "rightNeutralScore_Part6"
+                  "pathName": "leftNeutralScore_Part6"
                 }
               }
             ]
@@ -132,6 +177,6 @@
     }
   },
   "resetOdom": true,
-  "folder": "Right",
+  "folder": "Left",
   "choreoAuto": false
 }

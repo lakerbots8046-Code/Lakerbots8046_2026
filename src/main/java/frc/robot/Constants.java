@@ -216,7 +216,7 @@ public class Constants {
         //   ≈ ±169.04°
         //
         // EXCEEDING THESE LIMITS WILL BREAK THE TURRET.
-        public static final double kPhysicalLimitRotations = 18.0; // raw motor rotations (from Tuner X)
+        public static final double kPhysicalLimitRotations = 20.0; // raw motor rotations (from Tuner X) //18.0
         public static final double kMinRotationDegrees = -(kPhysicalLimitRotations * 360.0 / kGearRatio); // ≈ -169.04°
         public static final double kMaxRotationDegrees =  (kPhysicalLimitRotations * 360.0 / kGearRatio); // ≈ +169.04°
 
@@ -622,8 +622,10 @@ public class Constants {
     }
     public static class Vision {
         // Camera names — must match exactly what is configured in PhotonVision
-        public static final String kCameraNameBF = "CAM_BF";   // Back Facing camera
-        public static final String kCameraNameFF = "CAM_FF";   // Front Facing camera
+        public static final String kCameraNameBF = "CAM_BF";      // Back Facing camera
+        public static final String kCameraNameFF = "CAM_FF";      // Front Facing camera
+        public static final String kCameraNameLeft = "CAM_Left";  // Left-facing camera (2nd Orange Pi)
+        public static final String kCameraNameRight = "CAM_Right";// Right-facing camera (2nd Orange Pi)
 
         // Camera stream URLs for dashboard viewing (Elastic, etc.)
         // Using PhotonVision coprocessor IP address (10.80.46.11)
@@ -631,6 +633,8 @@ public class Constants {
         // CAM_BF stream port and CAM_FF stream port (update if streams don't load in Elastic)
         public static final String kCameraStreamBF = "http://10.80.46.11:1184/stream.mjpg";
         public static final String kCameraStreamFF = "http://10.80.46.11:1182/stream.mjpg";
+        public static final String kCameraStreamLeft = "http://10.80.46.12:1182/stream.mjpg";
+        public static final String kCameraStreamRight = "http://10.80.46.12:1184/stream.mjpg";
 
         // Transform from robot center to Back Facing camera
         // Measured position: X=-12.955" (back), Y=-6.998" (right side), Z=10.711" (from floor)
@@ -674,6 +678,36 @@ public class Constants {
                                 Units.degreesToRadians(22),     // Pitch: +22° = lens tilts up (camera leans back 22° from forward)
                                 Units.degreesToRadians(0)));    // Yaw: +2 deg = slightly away from center (LEFT of forward)
                                                                 // Camera is on the left side and toed outward -- positive yaw is correct
+
+        // Transform from robot center to Left-facing camera (second Orange Pi)
+        // Measured position: X=-1.938" (back), Y=+13.746" (left), Z=9.92" (from ground)
+        // Rotation: Roll=0°, Pitch=+20° (up from horizontal), Yaw=+90° (left of forward)
+        public static final Transform3d kRobotToCamLeft =
+                new Transform3d(
+                        new Translation3d(
+                                Units.inchesToMeters(-1.938),   // Backward (negative X)
+                                Units.inchesToMeters(13.746),   // Left (positive Y)
+                                Units.inchesToMeters(9.92)      // Up (positive Z)
+                        ),
+                        new Rotation3d(
+                                Units.degreesToRadians(0),      // Roll
+                                Units.degreesToRadians(20),     // Pitch
+                                Units.degreesToRadians(90)));   // Yaw: left-facing
+
+        // Transform from robot center to Right-facing camera (second Orange Pi)
+        // Measured position: X=-3.0625" (back), Y=-13.746" (right), Z=9.571" (from ground)
+        // Rotation: Roll=0°, Pitch=+20° (up from horizontal), Yaw=-90° (right of forward)
+        public static final Transform3d kRobotToCamRight =
+                new Transform3d(
+                        new Translation3d(
+                                Units.inchesToMeters(-3.0625),  // Backward (negative X)
+                                Units.inchesToMeters(-13.746),  // Right (negative Y)
+                                Units.inchesToMeters(9.571)     // Up (positive Z)
+                        ),
+                        new Rotation3d(
+                                Units.degreesToRadians(0),      // Roll
+                                Units.degreesToRadians(20),     // Pitch
+                                Units.degreesToRadians(-90)));  // Yaw: right-facing
 
         // The layout of the AprilTags on the field
         // Using custom 2026 Rebuilt field layout loaded from JSON file

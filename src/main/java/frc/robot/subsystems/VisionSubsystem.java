@@ -17,21 +17,29 @@ import java.util.List;
 import java.util.Optional;
 
 public class VisionSubsystem extends SubsystemBase {
-    private final PhotonCamera cameraBF;  // Back Facing camera (formerly BL)
-    private final PhotonCamera cameraFF;  // Front Facing camera (formerly BR)
+    private final PhotonCamera cameraBF;     // Back Facing camera (formerly BL)
+    private final PhotonCamera cameraFF;     // Front Facing camera (formerly BR)
+    private final PhotonCamera cameraLeft;   // Left-facing camera (second Orange Pi)
+    private final PhotonCamera cameraRight;  // Right-facing camera (second Orange Pi)
 
     // Pose estimators for each camera
     private final PhotonPoseEstimator poseEstimatorBF;
     private final PhotonPoseEstimator poseEstimatorFF;
+    private final PhotonPoseEstimator poseEstimatorLeft;
+    private final PhotonPoseEstimator poseEstimatorRight;
 
     // Latest estimated poses
     private Optional<EstimatedRobotPose> latestEstimatedPoseBF = Optional.empty();
     private Optional<EstimatedRobotPose> latestEstimatedPoseFF = Optional.empty();
+    private Optional<EstimatedRobotPose> latestEstimatedPoseLeft = Optional.empty();
+    private Optional<EstimatedRobotPose> latestEstimatedPoseRight = Optional.empty();
 
     // Best (lowest) ambiguity score seen this loop for each camera.
     // -1.0 = no target / multi-tag result (always accepted).
     private double bestAmbiguityBF = -1.0;
     private double bestAmbiguityFF = -1.0;
+    private double bestAmbiguityLeft = -1.0;
+    private double bestAmbiguityRight = -1.0;
 
     // Back Facing Camera data
     private double targetYawBF = 0.0;
@@ -54,6 +62,28 @@ public class VisionSubsystem extends SubsystemBase {
     private int totalTargetsFF = 0;
     /** All tag IDs currently visible to the FF camera (updated every loop). */
     private List<Integer> allDetectedTagIdsFF = new ArrayList<>();
+
+    // Left Camera data
+    private double targetYawLeft = 0.0;
+    private double targetPitchLeft = 0.0;
+    private double targetAreaLeft = 0.0;
+    private double targetDistanceLeft = 0.0;
+    private int detectedTagIdLeft = -1;
+    private boolean targetVisibleLeft = false;
+    private int totalTargetsLeft = 0;
+    /** All tag IDs currently visible to the Left camera (updated every loop). */
+    private List<Integer> allDetectedTagIdsLeft = new ArrayList<>();
+
+    // Right Camera data
+    private double targetYawRight = 0.0;
+    private double targetPitchRight = 0.0;
+    private double targetAreaRight = 0.0;
+    private double targetDistanceRight = 0.0;
+    private int detectedTagIdRight = -1;
+    private boolean targetVisibleRight = false;
+    private int totalTargetsRight = 0;
+    /** All tag IDs currently visible to the Right camera (updated every loop). */
+    private List<Integer> allDetectedTagIdsRight = new ArrayList<>();
 
     private int selectedTagId = 14; // Default tag ID
 
@@ -81,6 +111,12 @@ public class VisionSubsystem extends SubsystemBase {
         cameraFF = new PhotonCamera(Constants.Vision.kCameraNameFF);
         cameraFF.setVersionCheckEnabled(false);
 
+        cameraLeft = new PhotonCamera(Constants.Vision.kCameraNameLeft);
+        cameraLeft.setVersionCheckEnabled(false);
+
+        cameraRight = new PhotonCamera(Constants.Vision.kCameraNameRight);
+        cameraRight.setVersionCheckEnabled(false);
+
         // Initialize pose estimators with MULTI_TAG_PNP_ON_COPROCESSOR strategy.
         // This uses full 3-D Perspective-n-Point (PnP) solving on the coprocessor.
         poseEstimatorBF = new PhotonPoseEstimator(
@@ -100,6 +136,20 @@ public class VisionSubsystem extends SubsystemBase {
             Constants.Vision.kRobotToCamFF
         );
         poseEstimatorFF.setMultiTagFallbackStrategy(PoseStrategy.CLOSEST_TO_REFERENCE_POSE);
+
+        poseEstimatorLeft = new PhotonPoseEstimator(
+            Constants.Vision.kTagLayout,
+            PoseStrategy.MULTI_TAG_PNP_ON_COPROCESSOR,
+            Constants.Vision.kRobotToCamLeft
+        );
+        poseEstimatorLeft.setMultiTagFallbackStrategy(PoseStrategy.CLOSEST_TO_REFERENCE_POSE);
+
+        poseEstimatorRight = new PhotonPoseEstimator(
+            Constants.Vision.kTagLayout,
+            PoseStrategy.MULTI_TAG_PNP_ON_COPROCESSOR,
+            Constants.Vision.kRobotToCamRight
+        );
+        poseEstimatorRight.setMultiTagFallbackStrategy(PoseStrategy.CLOSEST_TO_REFERENCE_POSE);
 
         // Set up tag ID chooser
         tagIdChooser = new SendableChooser<>();
@@ -140,8 +190,12 @@ public class VisionSubsystem extends SubsystemBase {
         // Publish camera stream URLs once at startup (not every loop)
         SmartDashboard.putString("Camera/BF/Stream URL", Constants.Vision.kCameraStreamBF);
         SmartDashboard.putString("Camera/FF/Stream URL", Constants.Vision.kCameraStreamFF);
+        SmartDashboard.putString("Camera/Left/Stream URL", Constants.Vision.kCameraStreamLeft);
+        SmartDashboard.putString("Camera/Right/Stream URL", Constants.Vision.kCameraStreamRight);
         SmartDashboard.putString("Camera/BF/Name", Constants.Vision.kCameraNameBF);
         SmartDashboard.putString("Camera/FF/Name", Constants.Vision.kCameraNameFF);
+        SmartDashboard.putString("Camera/Left/Name", Constants.Vision.kCameraNameLeft);
+        SmartDashboard.putString("Camera/Right/Name", Constants.Vision.kCameraNameRight);
     }
 
     @Override
@@ -153,9 +207,13 @@ public class VisionSubsystem extends SubsystemBase {
         // same camera returns an empty list because the buffer was already cleared.
         var allResultsBF = cameraBF.getAllUnreadResults();
         var allResultsFF = cameraFF.getAllUnreadResults();
+        var allResultsLeft = cameraLeft.getAllUnreadResults();
+        var allResultsRight = cameraRight.getAllUnreadResults();
 
         var latestBF = allResultsBF.isEmpty() ? null : allResultsBF.get(allResultsBF.size() - 1);
         var latestFF = allResultsFF.isEmpty() ? null : allResultsFF.get(allResultsFF.size() - 1);
+        var latestLeft = allResultsLeft.isEmpty() ? null : allResultsLeft.get(allResultsLeft.size() - 1);
+        var latestRight = allResultsRight.isEmpty() ? null : allResultsRight.get(allResultsRight.size() - 1);
 
         // ── Update pose estimates (must run every loop for accuracy) ──────────
         if (latestBF != null) {
@@ -166,6 +224,16 @@ public class VisionSubsystem extends SubsystemBase {
         if (latestFF != null) {
             latestEstimatedPoseFF = latestFF.hasTargets()
                 ? poseEstimatorFF.update(latestFF)
+                : Optional.empty();
+        }
+        if (latestLeft != null) {
+            latestEstimatedPoseLeft = latestLeft.hasTargets()
+                ? poseEstimatorLeft.update(latestLeft)
+                : Optional.empty();
+        }
+        if (latestRight != null) {
+            latestEstimatedPoseRight = latestRight.hasTargets()
+                ? poseEstimatorRight.update(latestRight)
                 : Optional.empty();
         }
 
@@ -317,12 +385,61 @@ public class VisionSubsystem extends SubsystemBase {
             SmartDashboard.putBoolean("Vision/FF/Pose Valid", false);
         }
 
-        boolean anyPoseValid = latestEstimatedPoseBF.isPresent() || latestEstimatedPoseFF.isPresent();
+        // Left Camera pose estimation
+        if (latestEstimatedPoseLeft.isPresent()) {
+            EstimatedRobotPose estimatedPose = latestEstimatedPoseLeft.get();
+            Pose2d pose = estimatedPose.estimatedPose.toPose2d();
+
+            SmartDashboard.putBoolean("Vision/Left/Pose Valid",    true);
+            SmartDashboard.putNumber( "Vision/Left/Pose X",        round(pose.getX(), 3));
+            SmartDashboard.putNumber( "Vision/Left/Pose Y",        round(pose.getY(), 3));
+            SmartDashboard.putNumber( "Vision/Left/Pose Rotation", round(pose.getRotation().getDegrees(), 2));
+            SmartDashboard.putNumber( "Vision/Left/Pose Timestamp",estimatedPose.timestampSeconds);
+            SmartDashboard.putNumber( "Vision/Left/Tags Used",     estimatedPose.targetsUsed.size());
+
+            StringBuilder tagIds = new StringBuilder();
+            for (var target : estimatedPose.targetsUsed) {
+                if (tagIds.length() > 0) tagIds.append(", ");
+                tagIds.append(target.getFiducialId());
+            }
+            SmartDashboard.putString("Vision/Left/Tags Used IDs", tagIds.toString());
+        } else {
+            SmartDashboard.putBoolean("Vision/Left/Pose Valid", false);
+        }
+
+        // Right Camera pose estimation
+        if (latestEstimatedPoseRight.isPresent()) {
+            EstimatedRobotPose estimatedPose = latestEstimatedPoseRight.get();
+            Pose2d pose = estimatedPose.estimatedPose.toPose2d();
+
+            SmartDashboard.putBoolean("Vision/Right/Pose Valid",    true);
+            SmartDashboard.putNumber( "Vision/Right/Pose X",        round(pose.getX(), 3));
+            SmartDashboard.putNumber( "Vision/Right/Pose Y",        round(pose.getY(), 3));
+            SmartDashboard.putNumber( "Vision/Right/Pose Rotation", round(pose.getRotation().getDegrees(), 2));
+            SmartDashboard.putNumber( "Vision/Right/Pose Timestamp",estimatedPose.timestampSeconds);
+            SmartDashboard.putNumber( "Vision/Right/Tags Used",     estimatedPose.targetsUsed.size());
+
+            StringBuilder tagIds = new StringBuilder();
+            for (var target : estimatedPose.targetsUsed) {
+                if (tagIds.length() > 0) tagIds.append(", ");
+                tagIds.append(target.getFiducialId());
+            }
+            SmartDashboard.putString("Vision/Right/Tags Used IDs", tagIds.toString());
+        } else {
+            SmartDashboard.putBoolean("Vision/Right/Pose Valid", false);
+        }
+
+        boolean anyPoseValid = latestEstimatedPoseBF.isPresent()
+                            || latestEstimatedPoseFF.isPresent()
+                            || latestEstimatedPoseLeft.isPresent()
+                            || latestEstimatedPoseRight.isPresent();
         SmartDashboard.putBoolean("Vision/Any Pose Valid", anyPoseValid);
 
         int totalTagsUsed = 0;
         if (latestEstimatedPoseBF.isPresent()) totalTagsUsed += latestEstimatedPoseBF.get().targetsUsed.size();
         if (latestEstimatedPoseFF.isPresent()) totalTagsUsed += latestEstimatedPoseFF.get().targetsUsed.size();
+        if (latestEstimatedPoseLeft.isPresent()) totalTagsUsed += latestEstimatedPoseLeft.get().targetsUsed.size();
+        if (latestEstimatedPoseRight.isPresent()) totalTagsUsed += latestEstimatedPoseRight.get().targetsUsed.size();
         SmartDashboard.putNumber("Vision/Total Tags Used", totalTagsUsed);
     }
 
@@ -435,9 +552,13 @@ public class VisionSubsystem extends SubsystemBase {
 
     public Optional<EstimatedRobotPose> getEstimatedGlobalPoseBF() { return latestEstimatedPoseBF; }
     public Optional<EstimatedRobotPose> getEstimatedGlobalPoseFF() { return latestEstimatedPoseFF; }
+    public Optional<EstimatedRobotPose> getEstimatedGlobalPoseLeft() { return latestEstimatedPoseLeft; }
+    public Optional<EstimatedRobotPose> getEstimatedGlobalPoseRight() { return latestEstimatedPoseRight; }
 
     public void setReferencePose(Pose2d pose) {
         poseEstimatorBF.setReferencePose(new Pose3d(pose));
         poseEstimatorFF.setReferencePose(new Pose3d(pose));
+        poseEstimatorLeft.setReferencePose(new Pose3d(pose));
+        poseEstimatorRight.setReferencePose(new Pose3d(pose));
     }
 }

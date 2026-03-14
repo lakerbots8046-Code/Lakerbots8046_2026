@@ -150,8 +150,8 @@ public class Climber extends SubsystemBase {
         )
         .withMotionMagic(
             leaderInitialConfigs.MotionMagic.clone()
-                .withMotionMagicCruiseVelocity(RotationsPerSecond.of(30)) //30
-                .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(30)) //30
+                .withMotionMagicCruiseVelocity(RotationsPerSecond.of(60)) //30
+                .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(60)) //30
                 .withMotionMagicJerk(RotationsPerSecondPerSecond.per(Second).of(10)) //10
         )
         .withSoftwareLimitSwitch(
@@ -186,6 +186,26 @@ public class Climber extends SubsystemBase {
      */
     public Angle getPosition() {
         return leadClimberMotorPosition.getValue();
+    }
+
+    /**
+     * Returns the signed position error in rotations to a provided setpoint.
+     *
+     * @param setpoint The desired climber setpoint
+     * @return currentPosition - targetPosition (rotations)
+     */
+    public double getPositionError(Setpoint setpoint) {
+        return getPosition().in(Rotations) - setpoint.target.in(Rotations);
+    }
+
+    /**
+     * Returns true if the climber is within tolerance of the provided setpoint.
+     *
+     * @param setpoint The desired climber setpoint
+     * @return true when absolute position error is below tolerance
+     */
+    public boolean isAtSetpoint(Setpoint setpoint) {
+        return Math.abs(getPositionError(setpoint)) < 0.1;
     }
 
     /**
@@ -226,6 +246,17 @@ public class Climber extends SubsystemBase {
             setpointRequest.withPosition(setpoint.get().target);
             leadClimberMotor.setControl(setpointRequest);
         });
+    }
+
+    /**
+     * Directly commands Motion Magic to a specific setpoint target.
+     * Intended for use inside custom Command classes that manage their own lifecycle.
+     *
+     * @param setpoint The desired climber setpoint
+     */
+    public void setSetpoint(Setpoint setpoint) {
+        setpointRequest.withPosition(setpoint.target);
+        leadClimberMotor.setControl(setpointRequest);
     }
 
     /**

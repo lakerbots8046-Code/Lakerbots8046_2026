@@ -3,15 +3,19 @@
   "robotLength": 0.8509,
   "holonomicMode": true,
   "pathFolders": [
-    "leftNeutralFeed",
+    "LeftScoreDepotClimb",
+    "RightNeutralCross",
     "centerDepotClimb",
+    "leftNeutralFeed",
     "leftNeutralScore",
     "rightNeutralFeed",
     "rightNeutralScore",
     "rightOutpostScore"
   ],
   "autoFolders": [
-    "New Folder"
+    "Left",
+    "Center",
+    "Right"
   ],
   "defaultMaxVel": 3.0,
   "defaultMaxAccel": 3.0,

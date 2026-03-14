@@ -20,8 +20,8 @@
         "y": 7.222110927152317
       },
       "prevControl": {
-        "x": 3.0936672185430454,
-        "y": 7.606887417218543
+        "x": 3.449403973509933,
+        "y": 7.447168874172184
       },
       "nextControl": null,
       "isLocked": false,
@@ -46,11 +46,11 @@
     "unlimited": false
   },
   "goalEndState": {
-    "velocity": 0,
+    "velocity": 1.0,
     "rotation": 180.0
   },
   "reversed": false,
-  "folder": "leftNeutralScore",
+  "folder": "LeftScoreDepotClimb",
   "idealStartingState": {
     "velocity": 3.0,
     "rotation": 180.0

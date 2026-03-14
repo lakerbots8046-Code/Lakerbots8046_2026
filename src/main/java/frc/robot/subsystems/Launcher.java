@@ -54,8 +54,10 @@ public class Launcher extends SubsystemBase {
     // Slot 1 — DynamicMotionMagicTorqueCurrentFOC (active control mode)
     // Constructor: (Position rots, CruiseVelocity rps, Acceleration rps/s) — Jerk defaults to 0.0 (disabled).
     // Starting very slow: 2 rps cruise, 2 rps/s accel. Raise once motion is confirmed safe on the robot.
+    // raised to 10 rps, 10 rps/s on 3/14/26
+    // Previous (rollback): new DynamicMotionMagicTorqueCurrentFOC(0.0, 10.0, 10.0).withSlot(1)
     private final DynamicMotionMagicTorqueCurrentFOC m_dynMMTorqueTurret =
-        new DynamicMotionMagicTorqueCurrentFOC(0.0, 2.0, 2.0).withSlot(1);
+        new DynamicMotionMagicTorqueCurrentFOC(0.0, 32.0, 40.0).withSlot(1);
     private final MotionMagicVoltage m_mmreqHood   = new MotionMagicVoltage(0);
 
     private final VelocityVoltage m_VelocityVoltage = new VelocityVoltage(0).withSlot(0);
@@ -104,7 +106,7 @@ public class Launcher extends SubsystemBase {
 
     /* Torque-based velocity does not require a velocity feed forward, as torque will accelerate the rotor up to the desired velocity by itself */
     cfgLaunch.Slot1.kS = 2.5; // To account for friction, add 2.5 A of static feedforward
-    cfgLaunch.Slot1.kP = 5; // An error of 1 rotation per second results in 5 A output
+    cfgLaunch.Slot1.kP = 10; // An error of 1 rotation per second results in 5 A output
     cfgLaunch.Slot1.kI = 0; // No output for integrated error
     cfgLaunch.Slot1.kD = 0; // No output for error derivative
     // Peak output of 40 A
@@ -163,14 +165,16 @@ public class Launcher extends SubsystemBase {
     slot1Turret.kS = 2.0;   // Static friction feedforward (A) — small kick to overcome stiction
     slot1Turret.kV = 0.0;   // Velocity feedforward (A per rps) — start at 0; add if motor lags
     slot1Turret.kA = 0.0;   // Acceleration feedforward (A per rps/s) — not needed initially
-    slot1Turret.kP = 5.0;   // 1 rotation error → 5 A correction (conservative)
+    // Previous (rollback): kP=5.0, kD=0.1
+    slot1Turret.kP = 8.0;   // Increased for better tracking responsiveness
     slot1Turret.kI = 0.0;   // No integral
-    slot1Turret.kD = 0.1;   // Damping: 1 rps velocity error → 0.1 A correction
+    slot1Turret.kD = 0.2;   // Increased damping for smoother follow
 
     // Peak torque current limits for turret — conservative for initial testing.
     // Raise toward 40–60 A once motion is confirmed safe and gains are tuned.
-    cfgTurret.TorqueCurrent.withPeakForwardTorqueCurrent(Amps.of(20))
-        .withPeakReverseTorqueCurrent(Amps.of(-20));
+    // Previous (rollback): ±20 A
+    cfgTurret.TorqueCurrent.withPeakForwardTorqueCurrent(Amps.of(35))
+        .withPeakReverseTorqueCurrent(Amps.of(-35));
 
     // ============ CONFIGURE HOOD POSITION CONTROL ============ //
     // SensorToMechanismRatio = 1.0 → positions are in raw motor rotations.
@@ -190,8 +194,8 @@ public class Launcher extends SubsystemBase {
     // v4: cruise=2,  accel=2  — very gentle; also fixed shared m_mmreq bug.
     // v5 (current): cruise=12, accel=6, jerk=0 — faster profile, jerk limiting disabled.
     MotionMagicConfigs mmHood = cfgHood.MotionMagic;
-    mmHood.withMotionMagicCruiseVelocity(RotationsPerSecond.of(12))
-      .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(6))
+    mmHood.withMotionMagicCruiseVelocity(RotationsPerSecond.of(20))
+      .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(10))
       .withMotionMagicJerk(RotationsPerSecondPerSecond.per(Second).of(0)); // 0 = jerk limiting disabled
 
     Slot0Configs slot0Hood = cfgHood.Slot0;
@@ -675,14 +679,8 @@ public class Launcher extends SubsystemBase {
                 stopLauncher();
             }
 
-            // Turret idle hold-at-zero with deadband of ±5 degrees
-            // Outside deadband: command Motion Magic to zero
-            // Inside deadband: brake to avoid hunting
-            if (!isTurretWithinDeadbandDegrees(0.0, 5.0)) {
-                setTurretPosition(0.0);
-            } else {
-                stopTurretDirect();
-            }
+            // Turret is controlled elsewhere (RobotContainer zone tracking / shooting commands).
+            // Do not force hold-at-zero here.
         }, this)
     ).withName("RetractHood");
   }

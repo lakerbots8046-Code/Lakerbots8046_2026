@@ -15,15 +15,15 @@
           "data": {
             "commands": [
               {
-                "type": "named",
-                "data": {
-                  "name": "AutoIntakeDeployCollect"
-                }
-              },
-              {
                 "type": "path",
                 "data": {
                   "pathName": "leftNeutralScore_Part2"
+                }
+              },
+              {
+                "type": "named",
+                "data": {
+                  "name": "AutoIntakeDeployCollect"
                 }
               }
             ]
@@ -38,7 +38,7 @@
         {
           "type": "path",
           "data": {
-            "pathName": "leftNeutralScore_Part4"
+            "pathName": "leftNeutralScore_Part4.2"
           }
         },
         {
@@ -52,7 +52,7 @@
                     {
                       "type": "wait",
                       "data": {
-                        "waitTime": 4.0
+                        "waitTime": 1.0
                       }
                     },
                     {
@@ -64,19 +64,57 @@
                     {
                       "type": "wait",
                       "data": {
-                        "waitTime": 1.5
+                        "waitTime": 1.0
                       }
-                    },
-                    {
-                      "type": "named",
-                      "data": {
-                        "name": "DumpAndReturn"
-                      }
-                    },
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "named",
+                "data": {
+                  "name": "ShootFromPointCommand"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "leftNeutralScore_Part5.2"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "leftNeutralScore_Part6.2"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "leftNeutralScore_Part3"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "leftNeutralScore_Part4.2"
+          }
+        },
+        {
+          "type": "deadline",
+          "data": {
+            "commands": [
+              {
+                "type": "sequential",
+                "data": {
+                  "commands": [
                     {
                       "type": "wait",
                       "data": {
-                        "waitTime": 2.5
+                        "waitTime": 1.0
                       }
                     },
                     {
@@ -102,36 +140,11 @@
               }
             ]
           }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "LeftNeutralScore_Part5"
-          }
-        },
-        {
-          "type": "parallel",
-          "data": {
-            "commands": [
-              {
-                "type": "named",
-                "data": {
-                  "name": "AutoIntakeDeployCollect"
-                }
-              },
-              {
-                "type": "path",
-                "data": {
-                  "pathName": "leftNeutralScore_Part6"
-                }
-              }
-            ]
-          }
         }
       ]
     }
   },
   "resetOdom": true,
-  "folder": null,
+  "folder": "Left",
   "choreoAuto": false
 }
