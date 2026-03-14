@@ -52,7 +52,19 @@
                     {
                       "type": "wait",
                       "data": {
-                        "waitTime": 2.5
+                        "waitTime": 4.0
+                      }
+                    },
+                    {
+                      "type": "named",
+                      "data": {
+                        "name": "DumpAndReturn"
+                      }
+                    },
+                    {
+                      "type": "wait",
+                      "data": {
+                        "waitTime": 1.5
                       }
                     },
                     {
@@ -65,6 +77,18 @@
                       "type": "wait",
                       "data": {
                         "waitTime": 2.5
+                      }
+                    },
+                    {
+                      "type": "named",
+                      "data": {
+                        "name": "DumpAndReturn"
+                      }
+                    },
+                    {
+                      "type": "wait",
+                      "data": {
+                        "waitTime": 2.0
                       }
                     }
                   ]
@@ -99,56 +123,6 @@
                 "type": "path",
                 "data": {
                   "pathName": "leftNeutralScore_Part6"
-                }
-              }
-            ]
-          }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "leftNeutralScore_Part7"
-          }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "leftNeutralScore_Part4"
-          }
-        },
-        {
-          "type": "deadline",
-          "data": {
-            "commands": [
-              {
-                "type": "sequential",
-                "data": {
-                  "commands": [
-                    {
-                      "type": "wait",
-                      "data": {
-                        "waitTime": 1.0
-                      }
-                    },
-                    {
-                      "type": "named",
-                      "data": {
-                        "name": "DumpAndReturn"
-                      }
-                    },
-                    {
-                      "type": "wait",
-                      "data": {
-                        "waitTime": 1.0
-                      }
-                    }
-                  ]
-                }
-              },
-              {
-                "type": "named",
-                "data": {
-                  "name": "ShootFromPointCommand"
                 }
               }
             ]

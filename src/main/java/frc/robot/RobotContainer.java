@@ -29,6 +29,7 @@ import frc.robot.subsystems.VisionSubsystem;
 import frc.robot.subsystems.Intake;
 import frc.robot.subsystems.Launcher;
 import frc.robot.subsystems.Spindexer;
+import frc.robot.subsystems.Climber;
 import frc.robot.commands.AutoDeployIntake;
 //import frc.robot.commands.CenterOnAprilTagCommand;
 //import frc.robot.commands.DriveToAprilTag;
@@ -58,6 +59,9 @@ public class RobotContainer {
 
     // Launcher subsystem
     public static Launcher launcher = new Launcher();
+
+    // Climber subsystem
+    public static Climber climber = new Climber();
     
     // Field2D for visualization on dashboard
     private final Field2d field2d = new Field2d();
@@ -77,7 +81,10 @@ public class RobotContainer {
 
     private final Telemetry logger = new Telemetry(MaxSpeed);
 
-    private final CommandXboxController joystick = new CommandXboxController(0);
+    private final CommandXboxController joystick =
+        new CommandXboxController(Constants.OperatorConstants.kDriverControllerPort);
+    private final CommandXboxController operatorController =
+        new CommandXboxController(Constants.OperatorConstants.kOperatorControllerPort);
 
     public final CommandSwerveDrivetrain drivetrain = TunerConstants.createDrivetrain();
 
@@ -186,6 +193,14 @@ public class RobotContainer {
         NamedCommands.registerCommand("DumpAndReturn", 
             intake.dumpAndReturn());
 
+        NamedCommands.registerCommand("ClimberReach",
+            climber.goToSetpoint(() -> Climber.Setpoint.Reach));
+
+        NamedCommands.registerCommand("ClimberPullDown", 
+           climber.goToSetpoint(() -> Climber.Setpoint.PullDown));
+
+        NamedCommands.registerCommand("IntakeHome", 
+           intake.goToPivotPosition(Constants.IntakeConstants.kPivotDeployCollectPosition));
     
     }
     
@@ -274,7 +289,7 @@ public class RobotContainer {
             drivetrain.applyRequest(() ->
                 drive.withVelocityX(squareInput(-joystick.getLeftY()) * MaxSpeed) // Drive forward with squared negative Y (forward)
                     .withVelocityY(squareInput(-joystick.getLeftX()) * MaxSpeed) // Drive left with squared negative X (left)
-                    .withRotationalRate(squareInput(-joystick.getRightX()) * MaxAngularRate) // Drive counterclockwise with squared negative X (left)
+                    .withRotationalRate((-joystick.getRightX()) * MaxAngularRate) // Drive counterclockwise with squared negative X (left)
             )
         );
 
@@ -291,6 +306,12 @@ public class RobotContainer {
         //   Feeder (CAN 6):    +0.2 V | Launcher (CAN 8):   +0.2 V
         // (Temp test values — update to final values after on-robot testing)
         joystick.a().whileTrue(
+            Commands.parallel(
+                spindexer.launchFromTower(),
+                launcher.launchFromTowerLauncher()
+            )
+        );
+        operatorController.a().whileTrue(
             Commands.parallel(
                 spindexer.launchFromTower(),
                 launcher.launchFromTowerLauncher()
@@ -319,6 +340,7 @@ public class RobotContainer {
         // First press: deploys pivot to -1.2 rot (Motion Magic) and starts rollers.
         // Second press: stops rollers and retracts pivot to home (-0.1 rot).
         joystick.rightBumper().toggleOnTrue(intake.intakeDeployCollect());
+        operatorController.rightBumper().toggleOnTrue(intake.intakeDeployCollect());
 
         // Left bumper: Dump-and-return sequence.
         // Lifts the intake pivot to the dump position (-0.75 rot), holds for 0.5 s,
@@ -326,11 +348,13 @@ public class RobotContainer {
         // Requires the intake subsystem — will interrupt intakeDeployCollect() while running.
         // Re-press right bumper after this command finishes to resume normal intake.
         joystick.leftBumper().onTrue(intake.dumpAndReturn());
+        operatorController.leftBumper().onTrue(intake.dumpAndReturn());
 
-        // X button: Toggle intake rollers on/off independently of pivot.
-        // First press stops rollers; second press starts them again.
-        // Uses no-subsystem command so it does NOT interrupt the pivot control.
+        // Driver X: toggle intake rollers on/off independently of pivot.
         joystick.x().onTrue(intake.toggleRollers());
+
+        // Operator X: reset intake pivot encoder position to home reference.
+        operatorController.x().onTrue(intake.resetPivotEncoderCommand());
 
         // Left trigger (any press, 0.3+): Shoot from current field position.
         // Aims turret, sets hood angle, spins flywheel — all based on distance to tower.
@@ -360,6 +384,21 @@ public class RobotContainer {
                 intake
             )
         );
+        operatorController.leftTrigger(0.3).whileTrue(
+            new ShootFromPointCommand(
+                drivetrain,
+                launcher,
+                spindexer,
+                this::getActiveTowerTagId,
+                () -> {
+                    int pov = operatorController.getHID().getPOV();
+                    if (pov == 270) return  1.0; // POV Left  → CCW
+                    if (pov == 90)  return -1.0; // POV Right → CW
+                    return 0.0;
+                },
+                intake
+            )
+        );
 
         // Right trigger: Drive to selected tag using basic PID (odometry-based, fallback/simple mode)
        
@@ -375,6 +414,9 @@ public class RobotContainer {
         // spins flywheel, and fires via LaunchSequenceOneCommand once at speed.
         // Robot does NOT move — drivetrain is untouched.
         joystick.rightTrigger(0.75).whileTrue(
+            new FeedFromCenterCommand(drivetrain, launcher, spindexer)
+        );
+        operatorController.rightTrigger(0.75).whileTrue(
             new FeedFromCenterCommand(drivetrain, launcher, spindexer)
         );
 
@@ -393,18 +435,33 @@ public class RobotContainer {
         // POV Left (270°): nudge turret 1° CCW — when NOT shooting
         joystick.pov(270).and(joystick.leftTrigger(0.3).negate())
             .onTrue(Commands.runOnce(() -> launcher.nudgeTurretDirect(1.0)));
+        operatorController.pov(270).and(operatorController.leftTrigger(0.3).negate())
+            .onTrue(Commands.runOnce(() -> launcher.nudgeTurretDirect(1.0)));
 
         // POV Right (90°): nudge turret 1° CW — when NOT shooting
         joystick.pov(90).and(joystick.leftTrigger(0.3).negate())
+            .onTrue(Commands.runOnce(() -> launcher.nudgeTurretDirect(-1.0)));
+        operatorController.pov(90).and(operatorController.leftTrigger(0.3).negate())
             .onTrue(Commands.runOnce(() -> launcher.nudgeTurretDirect(-1.0)));
 
         // POV Up (0°): Bump intake pivot position up by kPivotBumpFactor
         joystick.pov(0).and(joystick.leftTrigger(0.3).negate())
             .onTrue(intake.bumpPivotUp());
 
+        // Operator POV Up (0°): Climber to high setpoint (Reach)
+        operatorController.pov(0).and(operatorController.leftTrigger(0.3).negate())
+            .onTrue(climber.goToSetpoint(() -> Climber.Setpoint.Reach));
+
         // POV Down (180°): Bump intake pivot position down by kPivotBumpFactor
         joystick.pov(180).and(joystick.leftTrigger(0.3).negate())
             .onTrue(intake.bumpPivotDown());
+
+        // Operator POV Down (180°): Climber to lower setpoint (PullDown)
+        operatorController.pov(180).and(operatorController.leftTrigger(0.3).negate())
+            .onTrue(climber.goToSetpoint(() -> Climber.Setpoint.PullDown));
+
+        // Operator B: while held, move intake pivot opposite deploy direction (upward) at low speed.
+        operatorController.b().whileTrue(intake.raiseIntakeManualLowSpeed());
 
         // ── Y button: Shoot-on-Arc ────────────────────────────────────────────
         // Phase 1: PathPlanner drives to the nearest shooting position on the arc
@@ -415,6 +472,9 @@ public class RobotContainer {
         //          Fires automatically when turret is aimed AND launcher is at speed.
         // Release Y to stop everything.
         joystick.y().whileTrue(buildShootOnArcCommand());
+        operatorController.y().onTrue(
+            climber.goToSetpoint(() -> Climber.Setpoint.YButton)
+        );
 
         drivetrain.registerTelemetry(logger::telemeterize);
     }

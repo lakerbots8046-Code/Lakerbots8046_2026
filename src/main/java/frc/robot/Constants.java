@@ -18,6 +18,7 @@ public class Constants {
     
     public static class OperatorConstants {
         public static final int kDriverControllerPort = 0;
+        public static final int kOperatorControllerPort = 1;
     }
 
     public static boolean isLazerConnected;
@@ -127,7 +128,7 @@ public class Constants {
          * <p>Flip this value to quickly enable/disable idle spinning without touching
          * any other code.
          */
-        public static final boolean kFlywheelIdleEnabled = true; // ← set true to re-enable idling
+        public static final boolean kFlywheelIdleEnabled = true; // set true to re-enable idling
 
         public static double kSensorToMechanismRatio;
         public static double kHoodStowedPosition;
@@ -159,9 +160,21 @@ public class Constants {
 
 
     public static class ClimberConstants {
-        // Motor CAN IDs
+        // Motor CAN ID
         public static final int kClimberMotorID = 10;
-        public static double kSensorToMechanismRatio;
+
+        // Gear ratio: motor rotations per climber mechanism rotation
+        public static final double kSensorToMechanismRatio = 12.0;
+
+        // Climber setpoints (mechanism rotations) // All positions x 5 for new 60:1 gear ratio.
+        public static final double kClimberReverseSoftLimit = -13.25; // 2.65, -13.65
+        public static final double kClimberReachSetpoint = -12.65; // 2.65
+        public static final double kClimberPullDownSetpoint = 0.0; // 0.0
+        public static final double kClimberYButtonSetpoint = -5; // 1.5, -7.5
+
+        ;
+
+        // Optional dashboard/config placeholders used elsewhere
         public static double kClimbVelocity;
         public static double kClimbHoldVelocity;
         public static String kSmartDashboardPrefix;
@@ -346,7 +359,7 @@ public class Constants {
         public static final double kPivotCollectPosition = 0.25;         // Extended for collecting game pieces
        // public static final double kPivotScoreHighPosition = 0.15;       // Position for high scoring
        // public static final double kPivotScoreLowPosition = 0.05;        // Position for low scoring
-        public static final double kPivotDeployCollectPosition = -1.4   ; // Deploy position for intake_deploy_collect -1.36 to -1.25 to 1.304 to -1.36, 1.355, *** -1.365 ***
+        public static final double kPivotDeployCollectPosition = -1.33   ; // Deploy position for intake_deploy_collect -1.36 to -1.25 to 1.304 to -1.36, 1.355, *** -1.365 ***
         public static final double kPivotHardDownLimit = -1.4;          // Physical hard stop limit (DO NOT EXCEED)
         public static final double kPivotHomePosition = 0.0;            // Retract/home position after collecting
         public static final double kPivotDumpPosition = -0.75;          // 
@@ -415,7 +428,7 @@ public class Constants {
          * 0.0 rot = 68° from horizontal (steepest), 11.5 rot = 28° (flattest).
          * TUNE ON ROBOT.
          */
-        public static final double kHoodPosition = 5.0;
+        public static final double kHoodPosition = 3.0;
 
         // ── Target depth offset ───────────────────────────────────────────────
         /**
@@ -423,7 +436,7 @@ public class Constants {
          * in the direction from the robot toward the midpoint.
          * "A few feet behind" the midpoint = 0.6096 m (2 ft). TUNE ON ROBOT.
          */
-        public static final double kFeedTargetDepthMeters = 0.6096; // 2 ft
+        public static final double kFeedTargetDepthMeters = 1.5; // 2 ft
 
         // ── Velocity compensation ─────────────────────────────────────────────
         /**
@@ -541,13 +554,13 @@ public class Constants {
         public static final double[][] kLauncherRPSLookup = {
             {1.0,  -42.0},  // was -50.0, 43.0, 42.0
             {1.5,  -42.0},  // was -50.5, 43.5, 42.0
-            {2.0,  -40.0},  // was -53.0, 46.0, 42.0
-            {2.5,  -43.0},  // was -55.5, 48.5, 47.5
-            {3.0,  -45.0},  // was -58.5, 51.5, 50.0
+            {2.0,  -40.0},  // was -53.0, 46.0, 42.0, 40
+            {2.5,  -43.0},  // was -55.5, 48.5, 47.5, 43
+            {3.0,  -45.0},  // was -58.5, 51.5, 50.0, 45
            // {3.175, -51.0},  // added intermediate point at 3.175 m (Tower Shot) 49.0, 51.0
-            {3.5,  -48.5},  // was -61.5, 54.5
-            {4.0,  -53.5},  // was -74.5, 67.5, 55.5
-            {4.5,  -54.0},   // was -80.5, 73.5, 56.0
+            {3.5,  -48.5},  // was -61.5, 54.5, 48.5
+            {4.0,  -53.5},  // was -74.5, 67.5, 55.5, 53.5
+            {4.5,  -54.0},   // was -80.5, 73.5, 56.0, 54.0
             {5.0,  -58.0}   // was -58, 60
         };
 
@@ -626,14 +639,14 @@ public class Constants {
         public static final Transform3d kRobotToCamBF =
                 new Transform3d(
                         new Translation3d(
-                                Units.inchesToMeters(-12.955), // Backward (negative X = behind robot center)
-                                Units.inchesToMeters(-6.998),  // Right side (negative Y = right in WPILib)
-                                Units.inchesToMeters(10.711)   // Up (positive Z, measured from floor)
+                                Units.inchesToMeters(-12.941), // Backward (negative X = behind robot center)
+                                Units.inchesToMeters(-7.0625),  // Right side (negative Y = right in WPILib)
+                                Units.inchesToMeters(10.612)   // Up (positive Z, measured from floor)
                         ),
                         new Rotation3d(
                                 Units.degreesToRadians(0),       // Roll
-                                Units.degreesToRadians(10),      // Pitch: +10° = slightly toward ceiling (10° from vertical/forward)
-                                Units.degreesToRadians(187.502))); // Yaw: 180° facing back + 7.502° toed inward toward left
+                                Units.degreesToRadians(25),      // Pitch: +10° = slightly toward ceiling (10° from vertical/forward)
+                                Units.degreesToRadians(180.0))); // Yaw: 180° facing back + 7.502° toed inward toward left
 
         // Transform from robot center to Front Facing camera
         // Measured position: X=-7.069" (back), Y=+11.75" (left side), Z=20.4" (from ground)

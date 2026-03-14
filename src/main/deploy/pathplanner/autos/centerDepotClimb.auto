@@ -58,7 +58,7 @@
                     {
                       "type": "wait",
                       "data": {
-                        "waitTime": 3.0
+                        "waitTime": 2.0
                       }
                     }
                   ]
@@ -74,9 +74,40 @@
           }
         },
         {
+          "type": "parallel",
+          "data": {
+            "commands": [
+              {
+                "type": "named",
+                "data": {
+                  "name": "IntakeHome"
+                }
+              },
+              {
+                "type": "named",
+                "data": {
+                  "name": "ClimberReach"
+                }
+              },
+              {
+                "type": "path",
+                "data": {
+                  "pathName": "centerDepotClimb_Part4"
+                }
+              }
+            ]
+          }
+        },
+        {
           "type": "path",
           "data": {
-            "pathName": "centerDepotClimb_Part4"
+            "pathName": "centerDepotClimb_Part5"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "ClimberPullDown"
           }
         }
       ]

@@ -3,6 +3,7 @@ package frc.robot.subsystems;
 import static edu.wpi.first.units.Units.*;
 
 import com.ctre.phoenix6.StatusCode;
+import edu.wpi.first.wpilibj.DriverStation;
 import com.ctre.phoenix6.controls.NeutralOut;
 import com.ctre.phoenix6.controls.VelocityTorqueCurrentFOC;
 import com.ctre.phoenix6.controls.VelocityVoltage;
@@ -351,11 +352,18 @@ public Command AutoIntakeDeployCollect() {
           stopRollers();
         }
       }, this))
-      .finallyDo(() -> {
-        // On cancel (second press): stop rollers and retract pivot to home position
+      .finallyDo((interrupted) -> {
         rollersEnabled = false;
         stopRollers();
-        setPivotPosition(IntakeConstants.kPivotHomePosition);
+        if (DriverStation.isDisabled()) {
+          // Robot was disabled — hold wherever the pivot currently is.
+          // If it's deployed, stay deployed. If it's stowed, stay stowed.
+          // This prevents the intake from automatically retracting on re-enable.
+          setPivotPosition(getPivotPosition());
+        } else {
+          // User intentionally cancelled (second button press while enabled) — retract to home.
+          setPivotPosition(IntakeConstants.kPivotHomePosition);
+        }
         currentPivotTarget = IntakeConstants.kPivotDeployCollectPosition; // reset for next deploy
       });
   }
@@ -404,7 +412,7 @@ public Command AutoIntakeDeployCollect() {
    */
   public Command lowerIntakeManual() {
     return Commands.run(() -> intakePivot.set(-IntakeConstants.kPivotManualSpeed), this)
-        .finallyDo(() -> setPivotPosition(getPivotPosition())); // hold wherever it stopped
+        .finallyDo((interrupted) -> setPivotPosition(getPivotPosition())); // hold wherever it stopped
   }
 
   /**
@@ -416,7 +424,41 @@ public Command AutoIntakeDeployCollect() {
    */
   public Command raiseIntakeManual() {
     return Commands.run(() -> intakePivot.set(IntakeConstants.kPivotManualSpeed), this)
-        .finallyDo(() -> setPivotPosition(getPivotPosition())); // hold wherever it stopped
+        .finallyDo((interrupted) -> setPivotPosition(getPivotPosition())); // hold wherever it stopped
+  }
+
+  /**
+   * Manually raises the intake pivot at a reduced speed while held.
+   * Intended for operator B: move opposite deploy direction (upward) gently.
+   * On release: holds current position via Motion Magic.
+   *
+   * @return Command that raises pivot slowly while held, then holds on release
+   */
+  public Command raiseIntakeManualLowSpeed() {
+    // Use a stronger low-speed output so the pivot can reliably overcome gravity/static friction.
+    // This is intentionally higher than 0.3 * kPivotManualSpeed based on on-robot feedback.
+    return Commands.run(() -> intakePivot.set(IntakeConstants.kPivotManualSpeed * 1.8), this)
+        .finallyDo((interrupted) -> setPivotPosition(getPivotPosition()));
+  }
+
+  /**
+   * Resets intake pivot encoder position to the home reference.
+   * This sets both the integrated sensor and command target to home (0 rotations).
+   */
+  public void resetPivotEncoderToHome() {
+    intakePivot.setPosition(IntakeConstants.kPivotHomePosition);
+    pivotTargetPosition = IntakeConstants.kPivotHomePosition;
+    currentPivotTarget = IntakeConstants.kPivotDeployCollectPosition;
+    setPivotPosition(IntakeConstants.kPivotHomePosition);
+  }
+
+  /**
+   * Command wrapper for resetting intake pivot encoder to home.
+   *
+   * @return Command that resets pivot encoder reference
+   */
+  public Command resetPivotEncoderCommand() {
+    return Commands.runOnce(this::resetPivotEncoderToHome, this);
   }
 
   /**
@@ -477,8 +519,8 @@ public Command AutoIntakeDeployCollect() {
    */
   public Command dumpAndReturn() {
     return Commands.sequence(
-        goToPivotPosition(-0.75),                                                          // lift to dump position and wait until there
-        Commands.waitSeconds(0.5),                                                         // hold at dump position for 0.5 s
+        goToPivotPosition(-1),                                                                      // lift to dump position and wait until there // -0.75                        // run rollers for 0.5 seconds to dump game piece //0.25
+        Commands.waitSeconds(0.25),                                                         // hold at dump position for 0.5 s //0.5
         Commands.runOnce(() -> setPivotPosition(IntakeConstants.kPivotDeployCollectPosition), this) // return to collect position
     );
   }

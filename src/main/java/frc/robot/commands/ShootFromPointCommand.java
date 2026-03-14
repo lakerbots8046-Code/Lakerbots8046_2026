@@ -9,6 +9,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import frc.robot.Constants;
+import frc.robot.Constants.IntakeConstants;
 import frc.robot.Constants.TurretConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.Intake;
@@ -264,7 +265,9 @@ public class ShootFromPointCommand extends Command {
         // Stop intake rollers for the duration of this command.
         // Sets rollersEnabled=false so intakeDeployCollect() will not restart them.
         // Safe to call without subsystem ownership — uses direct motor control.
-        intake.stopRollersDirect();
+        //intake.stopRollersDirect();
+        
+        intake.setRollersVelocity(IntakeConstants.kRollersIntakeVelocity);
 
         SmartDashboard.putString( DASH + "Status",  "Initializing");
         SmartDashboard.putBoolean(DASH + "Firing",  false);
@@ -450,10 +453,9 @@ public class ShootFromPointCommand extends Command {
                 || (actualRPS > 5.0 && Math.abs(actualRPS - targetRPS)
                         < Constants.ShootingArc.kLauncherVelocityTolerance);
 
-        // LaunchSequenceOneCommand is triggered as soon as the flywheel reaches speed.
-        // Turret aim and hood position are still tracked for telemetry but do NOT gate firing.
-        // This matches the behaviour of ShootOnMoveCommand.
-        boolean readyToFire = launcherAtSpeed;
+        // LaunchSequenceOneCommand is triggered only when all mechanisms are ready:
+        // flywheel at speed, turret aimed, and hood at target.
+        boolean readyToFire = launcherAtSpeed && turretAimed && hoodAtTarget;
 
         // ── 5. Schedule / cancel LaunchSequenceOneCommand ─────────────────────
         if (readyToFire && !launchSequenceScheduled) {

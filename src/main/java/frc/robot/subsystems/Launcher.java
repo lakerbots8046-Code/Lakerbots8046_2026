@@ -12,8 +12,8 @@ import com.ctre.phoenix6.controls.VelocityTorqueCurrentFOC;
 import com.ctre.phoenix6.controls.VelocityVoltage;
 import com.ctre.phoenix6.controls.DutyCycleOut;
 import com.ctre.phoenix6.controls.DynamicMotionMagicTorqueCurrentFOC;
-import com.ctre.phoenix6.controls.MotionMagicTorqueCurrentFOC;
-import com.ctre.phoenix6.configs.FeedbackConfigs;
+//import com.ctre.phoenix6.controls.MotionMagicTorqueCurrentFOC;
+//import com.ctre.phoenix6.configs.FeedbackConfigs;
 import com.ctre.phoenix6.configs.MotionMagicConfigs;
 import com.ctre.phoenix6.configs.Slot0Configs;
 import com.ctre.phoenix6.configs.Slot1Configs;
@@ -129,8 +129,8 @@ public class Launcher extends SubsystemBase {
     // Configure Motion Magic cruise/accel/jerk in raw motor rotations per second
     MotionMagicConfigs mmTurret = cfgTurret.MotionMagic;
     //MotionMagicConfigs mmTurret = cfgTurret
-    mmTurret.withMotionMagicCruiseVelocity(RotationsPerSecond.of(40))
-      .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(20))
+    mmTurret.withMotionMagicCruiseVelocity(RotationsPerSecond.of(60)) // 40.0
+      .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(60)) // 20.0
       .withMotionMagicJerk(RotationsPerSecondPerSecond.per(Second).of(0));
 
     Slot0Configs slot0Turret = cfgTurret.Slot0;
@@ -668,13 +668,34 @@ public class Launcher extends SubsystemBase {
         // at kFlywheelIdleRPS between shots (reduces spool-up time).
         // Set to false (current) to keep the flywheel fully stopped between shots.
         Commands.run(() -> {
+            // Flywheel idle behavior
             if (LauncherConstants.kFlywheelIdleEnabled) {
                 setCollectVelocity(LauncherConstants.kFlywheelIdleRPS);
             } else {
                 stopLauncher();
             }
+
+            // Turret idle hold-at-zero with deadband of ±5 degrees
+            // Outside deadband: command Motion Magic to zero
+            // Inside deadband: brake to avoid hunting
+            if (!isTurretWithinDeadbandDegrees(0.0, 5.0)) {
+                setTurretPosition(0.0);
+            } else {
+                stopTurretDirect();
+            }
         }, this)
     ).withName("RetractHood");
+  }
+
+  /**
+   * Returns true when turret is within a deadband of a target angle in degrees.
+   *
+   * @param targetDeg target angle in degrees
+   * @param deadbandDeg allowable absolute error in degrees
+   * @return true if within deadband
+   */
+  private boolean isTurretWithinDeadbandDegrees(double targetDeg, double deadbandDeg) {
+    return Math.abs(getTurretPositionDegrees() - targetDeg) <= deadbandDeg;
   }
 
   /**

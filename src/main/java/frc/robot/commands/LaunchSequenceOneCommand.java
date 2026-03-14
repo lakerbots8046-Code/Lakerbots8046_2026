@@ -41,21 +41,22 @@ public class LaunchSequenceOneCommand extends Command {
 
     // ── Base duty cycle values (at BASE_FLYWHEEL_RPS) ────────────────────────
     // Increased from original values (-0.6 / -0.1 / 0.6) to raise BPS.
-    // These are the duty cycles when the flywheel is running at BASE_FLYWHEEL_RPS.
+    // These are the duty cycles when the flywheel is running at BASE_FLYWHEEL_RPS.[]\
+    
     // At lower flywheel speeds the values scale down proportionally, but are
     // always clamped to at least the minimum floor values below.
-    private static final double SPINDEXER_DUTY_AT_BASE   = -0.85; // was -0.85 → max for higher BPS
-    private static final double FLAPPYWHEEL_DUTY_AT_BASE = -0.25; // reduced — was -0.50
-    private static final double FEEDER_DUTY_AT_BASE      =  0.85; // was 0.85 → max for higher BPS
+    private static final double SPINDEXER_DUTY_AT_BASE   = -1.0; // was -0.85 → max for higher BPS
+    private static final double FLAPPYWHEEL_DUTY_AT_BASE = 0.75; // reduced — was -0.50 // -0.25
+    private static final double FEEDER_DUTY_AT_BASE      =  1.0; // was 0.85 → max for higher BPS
 
     // ── Minimum duty cycle floors ─────────────────────────────────────────────
     // The flywheel encoder often reports ~0 RPS even when the motor is spinning
     // (known hardware issue — see ShootOnMoveCommand comments). Without a floor,
     // scaleFactor ≈ 0 and all feed motors stall, killing BPS.
     // These floors guarantee a minimum feed rate regardless of encoder reading.
-    private static final double SPINDEXER_MIN_DUTY   = -0.75; // guaranteed minimum
-    private static final double FLAPPYWHEEL_MIN_DUTY = -0.15; // guaranteed minimum (reduced)
-    private static final double FEEDER_MIN_DUTY      =  0.75; // guaranteed minimum
+    private static final double SPINDEXER_MIN_DUTY   = -0.85; // guaranteed minimum
+    private static final double FLAPPYWHEEL_MIN_DUTY = 0.65; // guaranteed minimum (reduced) // -0.15
+    private static final double FEEDER_MIN_DUTY      =  0.85; // guaranteed minimum
 
     // Base flywheel reference RPS (the RPS at which the base duty cycles were tuned)
     // This is approximately the RPS at -0.75 duty cycle

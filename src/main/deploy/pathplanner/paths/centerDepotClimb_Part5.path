@@ -3,29 +3,29 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 1.3295033112532608,
-        "y": 0.6736506622516549
+        "x": 1.8897983392645323,
+        "y": 3.728362989323844
       },
       "prevControl": null,
       "nextControl": {
-        "x": 1.0864827591085142,
-        "y": 0.7323107955217261
+        "x": 2.1397982236849127,
+        "y": 3.728122594239656
       },
       "isLocked": false,
-      "linkedName": "rightOutpostScore_Part2End"
+      "linkedName": "centerDepotClimb_Part4_End"
     },
     {
       "anchor": {
-        "x": 0.7559685430413403,
-        "y": 0.6736506622516549
+        "x": 1.4701897983392653,
+        "y": 3.728362989323844
       },
       "prevControl": {
-        "x": 1.0028287010214845,
-        "y": 0.7131482875222738
+        "x": 1.20585797404425,
+        "y": 3.728480766240985
       },
       "nextControl": null,
       "isLocked": false,
-      "linkedName": "rightOutpostScore_Part3End"
+      "linkedName": null
     }
   ],
   "rotationTargets": [],
@@ -42,13 +42,13 @@
   },
   "goalEndState": {
     "velocity": 0,
-    "rotation": -179.57677957608573
+    "rotation": 0.0
   },
   "reversed": false,
-  "folder": "rightOutpostScore",
+  "folder": "centerDepotClimb",
   "idealStartingState": {
     "velocity": 0,
-    "rotation": 180.0
+    "rotation": 0.0
   },
   "useDefaultConstraints": true
 }
