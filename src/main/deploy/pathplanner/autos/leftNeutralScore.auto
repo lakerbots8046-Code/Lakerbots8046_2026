@@ -23,7 +23,7 @@
               {
                 "type": "named",
                 "data": {
-                  "name": "AutoIntakeDeployCollect"
+                  "name": "AutoIntakeDeployCollect2Secs"
                 }
               }
             ]
@@ -77,30 +77,6 @@
                 }
               }
             ]
-          }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "leftNeutralScore_Part5.2"
-          }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "leftNeutralScore_Part6.2"
-          }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "leftNeutralScore_Part3"
-          }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "leftNeutralScore_Part4.2"
           }
         },
         {

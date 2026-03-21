@@ -46,9 +46,26 @@ public class Constants {
         public static final int kFeederMotorID = 6;
         public static double kSensorToMechanismRatio;
         public static double kSpindexerVelocity;
-        public static double kSpindexerOuttakeVelocity;
-        public static double kSpindexerIntakeVelocity;
-        public static double kSpindexerHoldVelocity;
+
+        // ── Spindexer velocity setpoints (RPS) ───────────────────────────────
+        // Negative = intake direction for spindexer.
+        // Tune kSpindexerIntakeVelocity first; adjust kSpindexerOuttakeVelocity as needed.
+        public static final double kSpindexerIntakeVelocity  = -90.0; // RPS — intake direction
+        public static final double kSpindexerOuttakeVelocity =  30.0; // RPS — outtake direction
+        public static final double kSpindexerHoldVelocity    = -10.0; // RPS — slow hold
+
+        // ── FlappyWheel (Stars) velocity setpoints (RPS) ─────────────────────
+        // Negative = intake direction for flappy wheel.
+        public static final double kFlappyWheelIntakeVelocity  = -10.0; // RPS — intake direction
+        public static final double kFlappyWheelOuttakeVelocity =  10.0; // RPS — outtake direction
+
+        // ── Feeder velocity setpoints (RPS) ──────────────────────────────────
+        // Positive = intake direction for feeder.
+        public static final double kFeederIntakeVelocity  =  90.0; // RPS — intake direction
+        public static final double kFeederOuttakeVelocity = -30.0; // RPS — outtake direction
+        public static final double kFeederHoldVelocity    =  10.0; // RPS — slow hold
+
+        // SmartDashboard keys
         public static String kSmartDashboardPrefix;
         public static String kSpindexerVelocityKey;
         public static String kSpindexerCurrentKey;
@@ -57,9 +74,6 @@ public class Constants {
         public static String kFeederTempKey;
         public static String kSpindexerTempKey;
         public static String kStatusKey;
-        public static double kFeederIntakeVelocity;
-        public static double kFeederOuttakeVelocity;
-        public static double kFeederHoldVelocity;
         public static String kFlappyWheelVelocityKey;
         public static String kFlappyWheelCurrentKey;
         public static String kFlappyWheelTempKey;
@@ -388,9 +402,14 @@ public class Constants {
         public static final String kCollectTempKey = "Collect Temp (C)";
         public static final String kStatusKey = "Status";
         public static final double kIntakeVoltage = -9.0;
-        public static final double kRollersIntakeVelocity = -100.0; //-85.0 // Speed when intaking game pieces (rps) — negative = correct intake direction, (100 rps max?)
-        public static final double kRollersOuttakeVelocity = -20.0; // Speed when ejecting game pieces (rps)
-        public static final double kRollersHoldVelocity = 5.0;      // Low speed to hold game piece (rps)
+        // ── Roller velocity setpoints (RPS) ──────────────────────────────────
+        public static final double kRollersIntakeVelocity = -100.0; // RPS — intake direction
+        public static final double kRollersOuttakeVelocity = -20.0; // RPS — outtake direction
+        public static final double kRollersHoldVelocity = 5.0;      // RPS — slow hold
+
+        // ── Roller current limits ─────────────────────────────────────────────
+        public static final double kRollersStatorCurrentLimit = 40.0; // Amps — stall protection
+        public static final double kRollersSupplyCurrentLimit = 40.0; // Amps — breaker protection
         public static String kRollersVelocityKey;
         public static String kRollersCurrentKey;
         public static String kRollersTempKey;
@@ -552,14 +571,14 @@ public class Constants {
 
         // v10: -5 RPS again — still overshooting after v9 reduction.
         public static final double[][] kLauncherRPSLookup = {
-            {1.0,  -42.0},  // was -50.0, 43.0, 42.0
-            {1.5,  -42.0},  // was -50.5, 43.5, 42.0
+            {1.0,  -40.0},  // was -50.0, 43.0, 42.0
+            {1.5,  -40.0},  // was -50.5, 43.5, 42.0
             {2.0,  -40.0},  // was -53.0, 46.0, 42.0, 40
-            {2.5,  -43.0},  // was -55.5, 48.5, 47.5, 43
-            {3.0,  -45.0},  // was -58.5, 51.5, 50.0, 45
+            {2.5,  -41.5},  // was -55.5, 48.5, 47.5, 43
+            {3.0,  -42.5},  // was -58.5, 51.5, 50.0, 45, 43
            // {3.175, -51.0},  // added intermediate point at 3.175 m (Tower Shot) 49.0, 51.0
-            {3.5,  -48.5},  // was -61.5, 54.5, 48.5
-            {4.0,  -53.5},  // was -74.5, 67.5, 55.5, 53.5
+            {3.5,  -46.0},  // was -61.5, 54.5, 48.5, 46.5
+            {4.0,  -48.0},  // was -74.5, 67.5, 55.5, 53.5
             {4.5,  -54.0},   // was -80.5, 73.5, 56.0, 54.0
             {5.0,  -58.0}   // was -58, 60
         };
@@ -613,9 +632,9 @@ public class Constants {
             {1.5,  0.0},   // extrapolated
             {2.0,  0.0},   // TESTED: hood position 0
             {2.5,  0.0},   // TESTED: hood position 0
-            {3.0,  0.0},   // TESTED: hood position 0 0         2   1
-            {3.5,  0.75},   // TESTED: hood position 1 1         3
-            {4.0,  2.0},   // extrapolated (+1 rot per 0.5m)1   3
+            {3.0,  0.5},   // TESTED: hood position 0 0  
+            {3.5,  2.25},   // TESTED: hood position 1 1,               0.75   
+            {4.0,  2.5},   // extrapolated (+1 rot per 0.5m)1           2.0
             {4.5,  3.0},    // extrapolated (+1 rot per 0.5m) 2  3.5
             {5.0,  3.875}    // was 4.0
         };
@@ -686,7 +705,7 @@ public class Constants {
                 new Transform3d(
                         new Translation3d(
                                 Units.inchesToMeters(-1.938),   // Backward (negative X)
-                                Units.inchesToMeters(13.746),   // Left (positive Y)
+                                Units.inchesToMeters(40.0),   // Left (positive Y) 13.746
                                 Units.inchesToMeters(9.92)      // Up (positive Z)
                         ),
                         new Rotation3d(
@@ -701,7 +720,7 @@ public class Constants {
                 new Transform3d(
                         new Translation3d(
                                 Units.inchesToMeters(-3.0625),  // Backward (negative X)
-                                Units.inchesToMeters(-13.746),  // Right (negative Y)
+                                Units.inchesToMeters(-50.0),  // Right (negative Y)//-13.746?
                                 Units.inchesToMeters(9.571)     // Up (positive Z)
                         ),
                         new Rotation3d(
@@ -738,6 +757,20 @@ public class Constants {
         public static final Matrix<N3, N1> kSingleTagStdDevs = VecBuilder.fill(4, 4, 8);
         // Multiple tags are more reliable, so lower standard deviation
         public static final Matrix<N3, N1> kMultiTagStdDevs = VecBuilder.fill(0.5, 0.5, 1);
+
+        /**
+         * Explicit std dev multiplier applied to the BF (hub-facing) camera when it
+         * sees a tower tag during ShootFromPointCommand.
+         *
+         * <p>A value of 0.5 means the BF camera's std devs are halved (50% tighter)
+         * compared to the distance-scaled base, giving it higher weight in the
+         * drivetrain Kalman filter and therefore more influence on the pose estimate
+         * used for turret aiming.
+         *
+         * <p>Tune toward 1.0 to reduce the priority boost; toward 0.0 for maximum
+         * trust in the hub-facing camera. 0.5 is a safe starting value.
+         */
+        public static final double kHubCameraStdDevBonus = 0.5;
 
         /**
          * Distance-based scaling factor applied to vision standard deviations.

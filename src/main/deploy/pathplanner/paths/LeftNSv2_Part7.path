@@ -3,29 +3,29 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 6.041200331125827,
-        "y": 7.410869205298013
+        "x": 5.583824503311258,
+        "y": 7.396349337748344
       },
       "prevControl": null,
       "nextControl": {
-        "x": 4.14635761589404,
-        "y": 7.425389072847682
+        "x": 5.010289735099337,
+        "y": 7.367309602649005
       },
       "isLocked": false,
-      "linkedName": "leftNeutralScorePart3_End"
+      "linkedName": "LeftNSv2_Part6End"
     },
     {
       "anchor": {
-        "x": 3.6817218543046355,
-        "y": 7.410869205298013
+        "x": 3.7107615894039734,
+        "y": 7.360049668874171
       },
       "prevControl": {
-        "x": 5.300687086092714,
-        "y": 7.410869205298013
+        "x": 4.676332781456954,
+        "y": 7.374569536423841
       },
       "nextControl": null,
       "isLocked": false,
-      "linkedName": "leftNeutralScore4.2End"
+      "linkedName": null
     }
   ],
   "rotationTargets": [],
@@ -45,10 +45,10 @@
     "rotation": 0.0
   },
   "reversed": false,
-  "folder": "leftNeutralScore",
+  "folder": "LeftNSV2",
   "idealStartingState": {
-    "velocity": 0,
-    "rotation": 0.0
+    "velocity": 1.0,
+    "rotation": -0.6210681347942139
   },
   "useDefaultConstraints": true
 }

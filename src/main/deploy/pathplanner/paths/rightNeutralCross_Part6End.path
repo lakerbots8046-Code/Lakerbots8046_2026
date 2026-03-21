@@ -3,13 +3,13 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 3.0936672185430463,
-        "y": 7.316490066225165
+        "x": 0.24777317880794714,
+        "y": 7.425389072847682
       },
       "prevControl": null,
       "nextControl": {
-        "x": 1.6925,
-        "y": 7.432649006622516
+        "x": -1.1533940397350992,
+        "y": 7.541548013245033
       },
       "isLocked": false,
       "linkedName": "rightNeutralCross_Part5End"

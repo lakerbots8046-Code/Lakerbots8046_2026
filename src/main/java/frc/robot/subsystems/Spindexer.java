@@ -20,7 +20,6 @@ import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants.SpindexerConstants;
-import frc.robot.Constants.TurretConstants;
 
 /**
  * Subsystem for the Launcher mechanism, which includes:
@@ -36,9 +35,12 @@ public class Spindexer extends SubsystemBase {
     private final TalonFX flappyWheelFeederMotor;
     private final TalonFX feederMotor; 
     
-  //Controls 
-    private final MotionMagicVoltage m_mmreq = new MotionMagicVoltage(0);
-    private final VelocityVoltage m_VelocityVoltage = new VelocityVoltage(0).withSlot(0);
+  //Controls
+    // Separate VelocityVoltage objects per motor — sharing one object between motors causes
+    // the last withVelocity() call to overwrite the previous one in the same loop iteration.
+    private final VelocityVoltage m_spindexerVelocity    = new VelocityVoltage(0).withSlot(0);
+    private final VelocityVoltage m_flappyWheelVelocity  = new VelocityVoltage(0).withSlot(0);
+    private final VelocityVoltage m_feederVelocity        = new VelocityVoltage(0).withSlot(0);
     private final VelocityTorqueCurrentFOC m_velocityTorque = new VelocityTorqueCurrentFOC(0).withSlot(0);
     private final NeutralOut m_brake = new NeutralOut();
     private final DutyCycleOut m_dutyCycleOut = new DutyCycleOut(0);
@@ -63,14 +65,19 @@ public class Spindexer extends SubsystemBase {
     /* ------------------------------SPINDEXER/FLAPPYWHEEL/FEEDER : VelocityClosedLoop -> --------------------------------- */
     //======== SPINDEXER CONFIG ========// 
     /* Voltage-based velocity requires a velocity feed forward to account for the back-emf of the motor */
-    cfgSpindexer.Slot0.kS = 0.1; // To account for friction, add 0.1 V of static feedforward
-    cfgSpindexer.Slot0.kV = 0.12; // Kraken X60 is a 500 kV motor, 500 rpm per V = 8.333 rps per V, 1/8.33 = 0.12 volts / rotation per second
-    cfgSpindexer.Slot0.kP = 0.11; // An error of 1 rotation per second results in 0.11 V output
-    cfgSpindexer.Slot0.kI = 0; // No output for integrated error
-    cfgSpindexer.Slot0.kD = 0; // No output for error derivative
-    // Peak output of 8 volts
-    cfgSpindexer.Voltage.withPeakForwardVoltage(Volts.of(8))
-      .withPeakReverseVoltage(Volts.of(-8));
+    // kS increased: better overcomes sudden load friction when a ball enters the spindexer.
+    cfgSpindexer.Slot0.kS = 0.25; // Increased from 0.1 — matches feeder, overcomes ball-load friction
+    cfgSpindexer.Slot0.kV = 0.12; // Kraken X60: 1/8.333 rps per V = 0.12 V/RPS (unchanged)
+    // kP increased: at 0.11 a 20 RPS drop only added 2.2 V correction.
+    // At 0.5, a 20 RPS drop adds 10 V correction — pushes motor to near-full voltage immediately.
+    cfgSpindexer.Slot0.kP = 0.5;  // Increased from 0.11 — fast recovery under ball load
+    // kI added: eliminates steady-state velocity droop under sustained ball load.
+    cfgSpindexer.Slot0.kI = 0.02; // Added — eliminates steady-state error under sustained load
+    cfgSpindexer.Slot0.kD = 0;    // No derivative — load changes are gradual, D not needed
+    // Peak output raised to 12 V — at 90 RPS the feedforward alone needs ~10.9 V.
+    // The previous 8 V cap physically prevented the motor from exceeding ~64 RPS.
+    cfgSpindexer.Voltage.withPeakForwardVoltage(Volts.of(12))
+      .withPeakReverseVoltage(Volts.of(-12));
 
     /* Torque-based velocity does not require a velocity feed forward, as torque will accelerate the rotor up to the desired velocity by itself */
     cfgSpindexer.Slot1.kS = 2.5; // To account for friction, add 2.5 A of static feedforward
@@ -89,9 +96,9 @@ public class Spindexer extends SubsystemBase {
     cfgFlappyWheel.Slot0.kP = 0.11; // An error of 1 rotation per second results in 0.11 V output
     cfgFlappyWheel.Slot0.kI = 0; // No output for integrated error
     cfgFlappyWheel.Slot0.kD = 0; // No output for error derivative
-    // Peak output of 8 volts
-    cfgSpindexer.Voltage.withPeakForwardVoltage(Volts.of(8))
-      .withPeakReverseVoltage(Volts.of(-8));
+    // Peak output raised to 12 V (was incorrectly setting cfgSpindexer.Voltage — bug fixed).
+    cfgFlappyWheel.Voltage.withPeakForwardVoltage(Volts.of(12))
+      .withPeakReverseVoltage(Volts.of(-12));
 
     /* Torque-based velocity does not require a velocity feed forward, as torque will accelerate the rotor up to the desired velocity by itself */
     cfgFlappyWheel.Slot1.kS = 2.5; // To account for friction, add 2.5 A of static feedforward
@@ -105,14 +112,19 @@ public class Spindexer extends SubsystemBase {
 
     // ========= FEEDER CONFIG ========== //
     /* Voltage-based velocity requires a velocity feed forward to account for the back-emf of the motor */
-    cfgFeeder.Slot0.kS = 0.1; // To account for friction, add 0.1 V of static feedforward
-    cfgFeeder.Slot0.kV = 0.12; // Kraken X60 is a 500 kV motor, 500 rpm per V = 8.333 rps per V, 1/8.33 = 0.12 volts / rotation per second
-    cfgFeeder.Slot0.kP = 0.11; // An error of 1 rotation per second results in 0.11 V output
-    cfgFeeder.Slot0.kI = 0; // No output for integrated error
-    cfgFeeder.Slot0.kD = 0; // No output for error derivative
-    // Peak output of 8 volts
-    cfgFeeder.Voltage.withPeakForwardVoltage(Volts.of(8))
-      .withPeakReverseVoltage(Volts.of(-8));
+    // kS increased further: feeder sees the highest load of all three motors.
+    cfgFeeder.Slot0.kS = 0.35; // Increased from 0.25 — better overcomes peak ball-load friction
+    cfgFeeder.Slot0.kV = 0.12; // Kraken X60: 1/8.333 rps per V = 0.12 V/RPS (unchanged)
+    // kP doubled: with 12 V peak, kP=1.0 pushes to full voltage for any drop >1.1 RPS.
+    // This is the maximum useful kP before the motor is always at voltage saturation.
+    cfgFeeder.Slot0.kP = 1.0;  // Increased from 0.5 — maximum-speed recovery under ball load
+    // kI increased slightly: faster elimination of steady-state droop under sustained load.
+    cfgFeeder.Slot0.kI = 0.05; // Increased from 0.02 — faster steady-state error correction
+    cfgFeeder.Slot0.kD = 0;    // No derivative — feeder load changes are gradual, D not needed
+    // Peak output raised to 12 V — feeder needs ~11.05 V feedforward at 90 RPS.
+    // The previous 8 V cap was the reason the feeder stalled at ~60 RPS under load.
+    cfgFeeder.Voltage.withPeakForwardVoltage(Volts.of(12))
+      .withPeakReverseVoltage(Volts.of(-12));
 
     /* Torque-based velocity does not require a velocity feed forward, as torque will accelerate the rotor up to the desired velocity by itself */
     cfgFeeder.Slot1.kS = 2.5; // To account for friction, add 2.5 A of static feedforward
@@ -143,7 +155,8 @@ public class Spindexer extends SubsystemBase {
    * @param velocityRPS Velocity in rotations per second
    */
   public void setSpindexerVelocity(double velocityRPS) {
-    spindexerMotor.setControl(m_VelocityVoltage.withVelocity(velocityRPS));
+    lastSpindexerVelocity = velocityRPS;
+    spindexerMotor.setControl(m_spindexerVelocity.withVelocity(velocityRPS));
   }
   
   /**
@@ -161,13 +174,8 @@ public class Spindexer extends SubsystemBase {
   public double getSpindexerVelocity() {
     return spindexerMotor.getVelocity().getValueAsDouble();
   }
-//TO DO --- create open loop voltage contgrol methods and commands for initial testing
-// - 
-//public void setSpindexerVoltage(m_VelocityVoltage.w
-
-
   // ==================== COMMAND FACTORY METHODS ====================
-  
+
   public Command setSpindexerVoltage(double speed){
     return Commands.run(() -> {
       spindexerMotor.set(speed);
@@ -175,12 +183,12 @@ public class Spindexer extends SubsystemBase {
   }
   
   /**
-   * Command to run intake collection at intake speed
-   * @return Command that runs collection motor
+   * Command to run spindexer at intake velocity (velocity closed-loop).
+   * @return Command that runs spindexer at kSpindexerIntakeVelocity RPS
    */
   public Command runSpindexer() {
     return Commands.run(() -> {
-      setSpindexerVelocity(SpindexerConstants.kFeederIntakeVelocity);
+      setSpindexerVelocity(SpindexerConstants.kSpindexerIntakeVelocity);
     }, this);
   }
 
@@ -191,12 +199,12 @@ public class Spindexer extends SubsystemBase {
   }
   
   /**
-   * Command to run intake collection at outtake speed
+   * Command to run spindexer at outtake velocity (velocity closed-loop).
    * @return Command that ejects game pieces
    */
   public Command runSpindexerOuttake() {
     return Commands.run(() -> {
-      setSpindexerVelocity(SpindexerConstants.kFeederOuttakeVelocity);
+      setSpindexerVelocity(SpindexerConstants.kSpindexerOuttakeVelocity);
     }, this);
   }
   
@@ -207,7 +215,8 @@ public class Spindexer extends SubsystemBase {
    * @param velocityRPS Velocity in rotations per second
    */
   public void setFlappyWheelVelocity(double velocityRPS) {
-    flappyWheelFeederMotor.setControl(m_VelocityVoltage.withVelocity(velocityRPS));
+    lastFlappyWheelVelocity = velocityRPS;
+    flappyWheelFeederMotor.setControl(m_flappyWheelVelocity.withVelocity(velocityRPS));
   }
   
   /**
@@ -234,12 +243,12 @@ public class Spindexer extends SubsystemBase {
   }
 
   /**
-   * Command to run intake collection at intake speed
-   * @return Command that runs collection motor
+   * Command to run flappy wheel (Stars) at intake velocity (velocity closed-loop).
+   * @return Command that runs flappy wheel at kFlappyWheelIntakeVelocity RPS
    */
   public Command runFlappyWheel() {
     return Commands.run(() -> {
-      setFlappyWheelVelocity(SpindexerConstants.kFeederIntakeVelocity);
+      setFlappyWheelVelocity(SpindexerConstants.kFlappyWheelIntakeVelocity);
     }, this);
   }
   
@@ -250,12 +259,12 @@ public class Spindexer extends SubsystemBase {
   }
 
   /**
-   * Command to run intake collection at outtake speed
+   * Command to run flappy wheel at outtake velocity (velocity closed-loop).
    * @return Command that ejects game pieces
    */
   public Command runFlappyWheelOuttake() {
     return Commands.run(() -> {
-      setFlappyWheelVelocity(SpindexerConstants.kFeederOuttakeVelocity);
+      setFlappyWheelVelocity(SpindexerConstants.kFlappyWheelOuttakeVelocity);
     }, this);
   }
 
@@ -266,7 +275,8 @@ public class Spindexer extends SubsystemBase {
    * @param velocityRPS Velocity in rotations per second
    */
   public void setFeederVelocity(double velocityRPS) {
-    feederMotor.setControl(m_VelocityVoltage.withVelocity(velocityRPS));
+    lastFeederVelocity = velocityRPS;
+    feederMotor.setControl(m_feederVelocity.withVelocity(velocityRPS));
   }
   
   /**
@@ -293,8 +303,8 @@ public class Spindexer extends SubsystemBase {
   }
 
   /**
-   * Command to run intake collection at intake speed
-   * @return Command that runs collection motor
+   * Command to run feeder at intake velocity (velocity closed-loop).
+   * @return Command that runs feeder at kFeederIntakeVelocity RPS
    */
   public Command runFeeder() {
     return Commands.run(() -> {
@@ -309,7 +319,7 @@ public class Spindexer extends SubsystemBase {
   }
   
   /**
-   * Command to run intake collection at outtake speed
+   * Command to run feeder at outtake velocity (velocity closed-loop).
    * @return Command that ejects game pieces
    */
   public Command runFeederOuttake() {
@@ -373,20 +383,20 @@ public class Spindexer extends SubsystemBase {
   // ==================== DIRECT MOTOR CONTROL (for use inside other commands) ====================
 
   /**
-   * Directly runs all three feed-side motors at the specified duty cycles.
+   * Directly runs all three feed-side motors at the specified velocities (RPS).
    *
-   * <p>Intended for use inside another command's {@code execute()} method where
-   * returning a {@link Command} object is not possible.  Uses the same duty-cycle
-   * output mode as {@link #launchFromTower()}.
+   * <p>Uses VelocityVoltage closed-loop control for each motor independently.
+   * Intended for use inside another command's {@code execute()} method where
+   * returning a {@link Command} object is not possible.
    *
-   * @param spindexerDC    Duty cycle for the spindexer motor   (CAN 4), range [-1, 1]
-   * @param flappyWheelDC  Duty cycle for the flappy-wheel motor (CAN 5), range [-1, 1]
-   * @param feederDC       Duty cycle for the feeder motor       (CAN 6), range [-1, 1]
+   * @param spindexerRPS    Target velocity for the spindexer motor    (CAN 4), RPS
+   * @param flappyWheelRPS  Target velocity for the flappy-wheel motor (CAN 5), RPS
+   * @param feederRPS       Target velocity for the feeder motor        (CAN 6), RPS
    */
-  public void runFeedMotorsDirect(double spindexerDC, double flappyWheelDC, double feederDC) {
-    spindexerMotor.set(spindexerDC);
-    flappyWheelFeederMotor.set(flappyWheelDC);
-    feederMotor.set(feederDC);
+  public void runFeedMotorsDirect(double spindexerRPS, double flappyWheelRPS, double feederRPS) {
+    setSpindexerVelocity(spindexerRPS);
+    setFlappyWheelVelocity(flappyWheelRPS);
+    setFeederVelocity(feederRPS);
   }
 
   /**
@@ -404,10 +414,10 @@ public class Spindexer extends SubsystemBase {
 
   /**
    * LaunchFromTower shoot command.
-   * Runs all three Spindexer-side motors at fixed voltages for tower shooting.
-   *   - Spindexer motor (CAN 4):        -0.2 V  (temp test value)
-   *   - StarFeeder / FlappyWheel (CAN 5): +0.2 V  (temp test value)
-   *   - Feeder motor (CAN 6):            +0.2 V  (temp test value)
+   * Runs all three Spindexer-side motors at fixed RPS using VelocityVoltage closed-loop control.
+   *   - Spindexer motor    (CAN 4): {@link SpindexerConstants#kSpindexerIntakeVelocity} RPS
+   *   - FlappyWheel (Stars)(CAN 5): {@link SpindexerConstants#kFlappyWheelIntakeVelocity} RPS
+   *   - Feeder motor       (CAN 6): {@link SpindexerConstants#kFeederIntakeVelocity} RPS
    *
    * Designed to be used in parallel with Launcher.launchFromTowerLauncher().
    * Runs while the button is held; all motors stop when the command ends.
@@ -416,12 +426,11 @@ public class Spindexer extends SubsystemBase {
    */
   public Command launchFromTower() {
     return Commands.run(() -> {
-      // Spindexer: TurretConstants.spindexerDutyCycleOut (temp: -0.2 | final: -1.0)
-      spindexerMotor.setControl(m_dutyCycleOut.withOutput(TurretConstants.spindexerDutyCycleOut));
-      // StarFeeder (FlappyWheel): TurretConstants.starFeederDutyCycleOut (temp: +0.2 | final: +1.0)
-      flappyWheelFeederMotor.setControl(m_dutyCycleOut.withOutput(TurretConstants.starFeederDutyCycleOut));
-      // Feeder: TurretConstants.feederDutyCycleOut (temp: +0.2 | final: +0.5)
-      feederMotor.setControl(m_dutyCycleOut.withOutput(TurretConstants.feederDutyCycleOut));
+      // All three motors use independent VelocityVoltage closed-loop control.
+      // Tune each constant independently in SpindexerConstants.
+      setSpindexerVelocity(SpindexerConstants.kSpindexerIntakeVelocity);
+      setFlappyWheelVelocity(SpindexerConstants.kFlappyWheelIntakeVelocity);
+      setFeederVelocity(SpindexerConstants.kFeederIntakeVelocity);
     }, this).finallyDo(() -> {
       // Stop all three motors when command ends (button released)
       spindexerMotor.setControl(m_brake);

@@ -37,6 +37,7 @@ import frc.robot.commands.ClimberGoToSetpoint;
 import frc.robot.commands.FeedFromCenterCommand;
 import frc.robot.commands.ShootFromPointCommand;
 import frc.robot.commands.ShootOnMoveCommand;
+import frc.robot.subsystems.LEDSubsystem;
 import frc.robot.util.ShootingArcManager;
 
 import com.pathplanner.lib.auto.AutoBuilder;
@@ -63,6 +64,9 @@ public class RobotContainer {
 
     // Climber subsystem
     public static Climber climber = new Climber();
+
+    // LED subsystem (WPILib AddressableLED — periodic() auto-called by CommandScheduler)
+    public static LEDSubsystem leds = new LEDSubsystem();
     
     // Field2D for visualization on dashboard
     private final Field2d field2d = new Field2d();
@@ -94,6 +98,9 @@ public class RobotContainer {
 
     /** Throttle counter for tower tag info puts (updated every 5 calls ≈ 100 ms). */
     private int towerTagCounter = 0;
+
+    /** Throttle counter for FMS info puts (updated every 5 calls ≈ 100 ms). */
+    private int fmsInfoCounter = 0;
 
     public RobotContainer() {
         registerNamedCommands();
@@ -188,8 +195,14 @@ public class RobotContainer {
         NamedCommands.registerCommand("FeedFromCenterCommand",
             new FeedFromCenterCommand(drivetrain, launcher, spindexer));
 
-        NamedCommands.registerCommand("AutoIntakeDeployCollect",
-            intake.AutoIntakeDeployCollect());
+        NamedCommands.registerCommand("AutoIntakeDeployCollect3Secs",
+            intake.AutoIntakeDeployCollect3secs());
+
+        NamedCommands.registerCommand("AutoIntakeDeployCollect2Secs",
+            intake.AutoIntakeDeployCollect2secs());
+
+        NamedCommands.registerCommand("AutoIntakeDeployCollect8Secs",
+            intake.AutoIntakeDeployCollect8secs());
 
         NamedCommands.registerCommand("DumpAndReturn", 
             intake.dumpAndReturn());
@@ -236,12 +249,16 @@ public class RobotContainer {
         // Auto names must match the .auto file names in deploy/pathplanner/autos/
         String[] autoNames = {
             "centerDepotClimb",
-            "leftNeutralFeed",
+           // "leftNeutralFeed",
             "leftNeutralScore",
-            "rightNeutralFeed",
+            //"rightNeutralFeed",
             "rightNeutralScore",
-            "rightOutpostScore",
-            "rightNeutralCross"
+            //"rightOutpostScore",
+            "rightNeutralCross",
+            "CrossField",
+            "CrossFieldLeft",
+            "CrossFieldBackInLeft",
+            "LeftNeutralScoreV2"
         };
 
         for (String autoName : autoNames) {
@@ -410,14 +427,18 @@ public class RobotContainer {
         */
 
 
-        // Right trigger (hard press, 0.75+): Feed from center.
-        // Aims turret at the midpoint between the closer feed-station tag pair
-        // (offset 2 ft behind the midpoint), sets hood to FeedFromCenter.kHoodPosition,
-        // spins flywheel, and fires via LaunchSequenceOneCommand once at speed.
-        // Robot does NOT move — drivetrain is untouched.
+        // Driver right trigger (hard press, 0.75+): Shoot on move.
         joystick.rightTrigger(0.75).whileTrue(
-            new FeedFromCenterCommand(drivetrain, launcher, spindexer)
+            new ShootOnMoveCommand(
+                drivetrain,
+                launcher,
+                spindexer,
+                this::getActiveTowerTagId,
+                () -> -joystick.getLeftX()
+            )
         );
+
+        // Operator right trigger remains Feed from center.
         operatorController.rightTrigger(0.75).whileTrue(
             new FeedFromCenterCommand(drivetrain, launcher, spindexer)
         );
@@ -474,6 +495,7 @@ public class RobotContainer {
         //          Fires automatically when turret is aimed AND launcher is at speed.
         // Release Y to stop everything.
         joystick.y().whileTrue(buildShootOnArcCommand());
+        
         operatorController.y().onTrue(
             climber.goToSetpoint(() -> Climber.Setpoint.YButton)
         );
@@ -595,6 +617,46 @@ public class RobotContainer {
     }
 
     /**
+     * Publishes FMS/DriverStation info to SmartDashboard/Elastic.
+     *
+     * <p>Published under the {@code FMS/} namespace:
+     * <ul>
+     *   <li>{@code FMS/Alliance}</li>
+     *   <li>{@code FMS/Alliance Is Red}</li>
+     *   <li>{@code FMS/Alliance Is Blue}</li>
+     *   <li>{@code FMS/Match Time (s)}</li>
+     *   <li>{@code FMS/Shift Time (s)}</li>
+     * </ul>
+     *
+     * <p>Shift Time is defined as elapsed teleop time:
+     * {@code 135.0 - matchTime} while in teleop, otherwise {@code 0.0}.
+     * Throttled to every 5 calls (~100 ms) to reduce NetworkTables load.
+     */
+    public void updateFmsInfo() {
+        fmsInfoCounter++;
+        if (fmsInfoCounter < 5) return;
+        fmsInfoCounter = 0;
+
+        var alliance = DriverStation.getAlliance();
+        String allianceStr = alliance.map(a -> a == Alliance.Red ? "Red" : "Blue").orElse("Unknown");
+        boolean isRed = alliance.isPresent() && alliance.get() == Alliance.Red;
+        boolean isBlue = alliance.isPresent() && alliance.get() == Alliance.Blue;
+
+        double matchTime = DriverStation.getMatchTime();
+
+        double shiftTime = 0.0;
+        if (DriverStation.isTeleopEnabled() && matchTime >= 0.0) {
+            shiftTime = Math.max(0.0, 135.0 - matchTime);
+        }
+
+        SmartDashboard.putString("FMS/Alliance", allianceStr);
+        SmartDashboard.putBoolean("FMS/Alliance Is Red", isRed);
+        SmartDashboard.putBoolean("FMS/Alliance Is Blue", isBlue);
+        SmartDashboard.putNumber("FMS/Match Time (s)", matchTime);
+        SmartDashboard.putNumber("FMS/Shift Time (s)", round(shiftTime, 2));
+    }
+
+    /**
      * Updates the drivetrain's pose estimator with vision measurements from both cameras.
      *
      * <p>Both the Back-Facing (BF) and Front-Facing (FF) cameras contribute pose estimates
@@ -666,7 +728,23 @@ public class RobotContainer {
                     ? Constants.Vision.kMultiTagStdDevs
                     : Constants.Vision.kSingleTagStdDevs;
 
-                var stdDevs = baseStdDevsBF.times(distScaleBF);
+                // ── Hub-facing camera priority ────────────────────────────────
+                // When the BF camera sees a tower tag it has the most direct view
+                // of the hub. Apply kHubCameraStdDevBonus (0.5 = 50% tighter) to
+                // give its pose estimate higher weight in the Kalman filter.
+                boolean bfSeesTowerTag = false;
+                var bfTagIds = visionSubsystem.getAllDetectedTagIdsBF();
+                for (int tag : Constants.ShootingArc.kRedTowerTagIds) {
+                    if (bfTagIds.contains(tag)) { bfSeesTowerTag = true; break; }
+                }
+                if (!bfSeesTowerTag) {
+                    for (int tag : Constants.ShootingArc.kBlueTowerTagIds) {
+                        if (bfTagIds.contains(tag)) { bfSeesTowerTag = true; break; }
+                    }
+                }
+                double hubBonus = bfSeesTowerTag ? Constants.Vision.kHubCameraStdDevBonus : 1.0;
+
+                var stdDevs = baseStdDevsBF.times(distScaleBF * hubBonus);
 
                 // Feed BF pose estimate into the drivetrain Kalman filter
                 drivetrain.addVisionMeasurement(
@@ -674,7 +752,8 @@ public class RobotContainer {
                     estimatedPose.timestampSeconds,
                     stdDevs
                 );
-                bfStatus = String.format("Applied (%.1fm)", avgDistBF);
+                bfStatus = String.format("Applied (%.1fm%s)", avgDistBF,
+                    bfSeesTowerTag ? " HUB★" : "");
             }
         } else {
             bfStatus = "No Pose";
@@ -1054,53 +1133,46 @@ public class RobotContainer {
     }
 
     /**
-     * Scans both cameras for any currently-visible tower tag that belongs to
+     * Scans all four cameras for any currently-visible tower tag that belongs to
      * the alliance currently selected in the DriverStation.
      *
-     * <p>Only tags for the active alliance are considered — a red-alliance robot
-     * will never accidentally lock onto a blue tower tag even if one is visible.
-     * If the alliance is not yet reported by the DriverStation (e.g. during
-     * simulation or before FMS connection), both alliances are searched as a
-     * safe fallback.
+     * <p>Priority order: BF (hub-facing) → FF → Left → Right.
+     * The BF camera is checked first because it directly faces the tower during
+     * ShootFromPointCommand and therefore provides the most accurate tag data.
+     * Left and Right cameras are checked last as they face sideways and will only
+     * see tower tags at certain robot orientations.
      *
-     * <p>Back-Facing camera is checked first (typically has a better view of
-     * the tower when the robot is approaching). Front-Facing camera is the fallback.
+     * <p>Only tags for the active alliance are considered. If the alliance is not
+     * yet reported (e.g. simulation / pre-FMS), both alliances are searched.
      *
      * @return The first alliance-matching tower tag ID found, or {@code -1} if none.
      */
     private int getVisibleTowerTag() {
-        // Use ALL detected tag IDs from each camera — not just the dashboard-selected tag.
-        // Previously, getDetectedTagIdBF/FF() only returned the tag matching the
-        // SmartDashboard chooser (default: tag 14), so tower tags were never found
-        // and getActiveTowerTagId() always fell back to the primary tag (10/20).
-        var bfTags = visionSubsystem.getAllDetectedTagIdsBF();
-        var ffTags = visionSubsystem.getAllDetectedTagIdsFF();
+        // Use ALL detected tag IDs from every camera — not just the dashboard-selected tag.
+        var bfTags    = visionSubsystem.getAllDetectedTagIdsBF();
+        var ffTags    = visionSubsystem.getAllDetectedTagIdsFF();
+        var leftTags  = visionSubsystem.getAllDetectedTagIdsLeft();
+        var rightTags = visionSubsystem.getAllDetectedTagIdsRight();
 
         var alliance = DriverStation.getAlliance();
 
-        // Determine which tag arrays to search based on the DriverStation alliance.
         // If alliance is unknown, search both so the robot is never completely blind.
         boolean checkRed  = !alliance.isPresent() || alliance.get() == Alliance.Red;
         boolean checkBlue = !alliance.isPresent() || alliance.get() == Alliance.Blue;
 
-        // BF camera first (faces tower during shooting), then FF camera — for each alliance set.
-        // Return the first tower tag found so the pair-midpoint goal center is correct.
+        // Priority: BF (hub-facing) → FF → Left → Right
         if (checkRed) {
-            for (int tag : Constants.ShootingArc.kRedTowerTagIds) {
-                if (bfTags.contains(tag)) return tag;
-            }
-            for (int tag : Constants.ShootingArc.kRedTowerTagIds) {
-                if (ffTags.contains(tag)) return tag;
-            }
+            for (int tag : Constants.ShootingArc.kRedTowerTagIds) { if (bfTags.contains(tag))    return tag; }
+            for (int tag : Constants.ShootingArc.kRedTowerTagIds) { if (ffTags.contains(tag))    return tag; }
+            for (int tag : Constants.ShootingArc.kRedTowerTagIds) { if (leftTags.contains(tag))  return tag; }
+            for (int tag : Constants.ShootingArc.kRedTowerTagIds) { if (rightTags.contains(tag)) return tag; }
         }
 
         if (checkBlue) {
-            for (int tag : Constants.ShootingArc.kBlueTowerTagIds) {
-                if (bfTags.contains(tag)) return tag;
-            }
-            for (int tag : Constants.ShootingArc.kBlueTowerTagIds) {
-                if (ffTags.contains(tag)) return tag;
-            }
+            for (int tag : Constants.ShootingArc.kBlueTowerTagIds) { if (bfTags.contains(tag))    return tag; }
+            for (int tag : Constants.ShootingArc.kBlueTowerTagIds) { if (ffTags.contains(tag))    return tag; }
+            for (int tag : Constants.ShootingArc.kBlueTowerTagIds) { if (leftTags.contains(tag))  return tag; }
+            for (int tag : Constants.ShootingArc.kBlueTowerTagIds) { if (rightTags.contains(tag)) return tag; }
         }
 
         return -1; // No alliance-matching tower tag visible

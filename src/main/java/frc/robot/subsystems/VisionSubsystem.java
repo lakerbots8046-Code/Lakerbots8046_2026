@@ -301,6 +301,66 @@ public class VisionSubsystem extends SubsystemBase {
             }
         }
 
+        // ── Process Left camera target tracking (must run every loop) ─────────
+        if (latestLeft == null || !latestLeft.hasTargets()) {
+            targetYawLeft = 0.0; targetPitchLeft = 0.0; targetAreaLeft = 0.0;
+            targetDistanceLeft = 0.0; detectedTagIdLeft = -1;
+            targetVisibleLeft = false; totalTargetsLeft = 0;
+            bestAmbiguityLeft = -1.0;
+            allDetectedTagIdsLeft = Collections.emptyList();
+        } else {
+            var targetsLeft = latestLeft.getTargets();
+            totalTargetsLeft = targetsLeft.size();
+            List<Integer> idsLeft = new ArrayList<>(targetsLeft.size());
+            for (PhotonTrackedTarget t : targetsLeft) { idsLeft.add(t.getFiducialId()); }
+            allDetectedTagIdsLeft = idsLeft;
+            PhotonTrackedTarget selLeft = null;
+            for (PhotonTrackedTarget t : targetsLeft) {
+                if (t.getFiducialId() == selectedTagId) { selLeft = t; break; }
+            }
+            if (selLeft != null) {
+                bestAmbiguityLeft = selLeft.getPoseAmbiguity();
+                targetVisibleLeft = true; detectedTagIdLeft = selLeft.getFiducialId();
+                targetYawLeft = selLeft.getYaw(); targetPitchLeft = selLeft.getPitch();
+                targetAreaLeft = selLeft.getArea();
+                if (targetAreaLeft > 0) targetDistanceLeft = Math.sqrt(1.0 / targetAreaLeft) * 10.0;
+            } else {
+                targetYawLeft = 0.0; targetPitchLeft = 0.0; targetAreaLeft = 0.0;
+                targetDistanceLeft = 0.0; detectedTagIdLeft = -1; targetVisibleLeft = false;
+                bestAmbiguityLeft = -1.0;
+            }
+        }
+
+        // ── Process Right camera target tracking (must run every loop) ────────
+        if (latestRight == null || !latestRight.hasTargets()) {
+            targetYawRight = 0.0; targetPitchRight = 0.0; targetAreaRight = 0.0;
+            targetDistanceRight = 0.0; detectedTagIdRight = -1;
+            targetVisibleRight = false; totalTargetsRight = 0;
+            bestAmbiguityRight = -1.0;
+            allDetectedTagIdsRight = Collections.emptyList();
+        } else {
+            var targetsRight = latestRight.getTargets();
+            totalTargetsRight = targetsRight.size();
+            List<Integer> idsRight = new ArrayList<>(targetsRight.size());
+            for (PhotonTrackedTarget t : targetsRight) { idsRight.add(t.getFiducialId()); }
+            allDetectedTagIdsRight = idsRight;
+            PhotonTrackedTarget selRight = null;
+            for (PhotonTrackedTarget t : targetsRight) {
+                if (t.getFiducialId() == selectedTagId) { selRight = t; break; }
+            }
+            if (selRight != null) {
+                bestAmbiguityRight = selRight.getPoseAmbiguity();
+                targetVisibleRight = true; detectedTagIdRight = selRight.getFiducialId();
+                targetYawRight = selRight.getYaw(); targetPitchRight = selRight.getPitch();
+                targetAreaRight = selRight.getArea();
+                if (targetAreaRight > 0) targetDistanceRight = Math.sqrt(1.0 / targetAreaRight) * 10.0;
+            } else {
+                targetYawRight = 0.0; targetPitchRight = 0.0; targetAreaRight = 0.0;
+                targetDistanceRight = 0.0; detectedTagIdRight = -1; targetVisibleRight = false;
+                bestAmbiguityRight = -1.0;
+            }
+        }
+
         // ── Throttle ALL SmartDashboard puts to every 5 loops (~100ms) ───────
         // Camera processing above runs every loop for pose accuracy.
         // Only the NT writes are gated here to prevent roboRIO memory overload.
@@ -486,7 +546,7 @@ public class VisionSubsystem extends SubsystemBase {
     // -------------------------------------------------------------------------
 
     public boolean isAnyTargetVisible() {
-        return targetVisibleBF || targetVisibleFF;
+        return targetVisibleBF || targetVisibleFF || targetVisibleLeft || targetVisibleRight;
     }
 
     public double getBestTargetYaw() {
@@ -547,6 +607,28 @@ public class VisionSubsystem extends SubsystemBase {
      * this list contains EVERY tag the camera sees — used for tower-tag identification.
      */
     public List<Integer> getAllDetectedTagIdsFF() { return allDetectedTagIdsFF; }
+
+    // ── Left camera getters ───────────────────────────────────────────────────
+    public double getTargetYawLeft()      { return targetYawLeft; }
+    public boolean isTargetVisibleLeft()  { return targetVisibleLeft; }
+    public int getDetectedTagIdLeft()     { return detectedTagIdLeft; }
+    public double getTargetDistanceLeft() { return targetDistanceLeft; }
+    /**
+     * Returns all AprilTag IDs currently visible to the Left-facing camera.
+     * This list contains EVERY tag the camera sees — used for tower-tag identification.
+     */
+    public List<Integer> getAllDetectedTagIdsLeft() { return allDetectedTagIdsLeft; }
+
+    // ── Right camera getters ──────────────────────────────────────────────────
+    public double getTargetYawRight()      { return targetYawRight; }
+    public boolean isTargetVisibleRight()  { return targetVisibleRight; }
+    public int getDetectedTagIdRight()     { return detectedTagIdRight; }
+    public double getTargetDistanceRight() { return targetDistanceRight; }
+    /**
+     * Returns all AprilTag IDs currently visible to the Right-facing camera.
+     * This list contains EVERY tag the camera sees — used for tower-tag identification.
+     */
+    public List<Integer> getAllDetectedTagIdsRight() { return allDetectedTagIdsRight; }
 
     public int getSelectedTagId() { return selectedTagId; }
 

@@ -23,7 +23,7 @@
               {
                 "type": "named",
                 "data": {
-                  "name": "AutoIntakeDeployCollect"
+                  "name": "AutoIntakeDeployCollect2Secs"
                 }
               }
             ]

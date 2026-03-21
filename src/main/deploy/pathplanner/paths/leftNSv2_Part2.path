@@ -8,11 +8,27 @@
       },
       "prevControl": null,
       "nextControl": {
-        "x": 8.451498344370862,
-        "y": 6.863543046357614
+        "x": 7.304428807947019,
+        "y": 7.432649006622516
       },
       "isLocked": false,
       "linkedName": "leftPart1End"
+    },
+    {
+      "anchor": {
+        "x": 8.480538079470199,
+        "y": 6.452557947019867
+      },
+      "prevControl": {
+        "x": 8.443442306171528,
+        "y": 7.231569186291973
+      },
+      "nextControl": {
+        "x": 8.5023178807947,
+        "y": 5.995182119205297
+      },
+      "isLocked": false,
+      "linkedName": null
     },
     {
       "anchor": {
@@ -20,8 +36,8 @@
         "y": 5.5305463576158935
       },
       "prevControl": {
-        "x": 7.570753301438415,
-        "y": 7.877609756624483
+        "x": 8.175620860927152,
+        "y": 5.806423841059602
       },
       "nextControl": null,
       "isLocked": false,
@@ -30,8 +46,8 @@
   ],
   "rotationTargets": [
     {
-      "waypointRelativePos": 0.49733570159856744,
-      "rotationDegrees": -95.0
+      "waypointRelativePos": 0.5883777239709397,
+      "rotationDegrees": -100.0
     }
   ],
   "constraintZones": [],
@@ -46,13 +62,13 @@
     "unlimited": false
   },
   "goalEndState": {
-    "velocity": 2.0,
+    "velocity": 4.0,
     "rotation": -145.08059798754238
   },
   "reversed": false,
-  "folder": "leftNeutralScore",
+  "folder": "LeftNSV2",
   "idealStartingState": {
-    "velocity": 3.0,
+    "velocity": 5.0,
     "rotation": -90.0
   },
   "useDefaultConstraints": false

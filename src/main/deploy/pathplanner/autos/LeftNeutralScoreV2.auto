@@ -7,7 +7,7 @@
         {
           "type": "path",
           "data": {
-            "pathName": "rightNeutralScore_Part1"
+            "pathName": "leftNSv2_Part1"
           }
         },
         {
@@ -17,26 +17,13 @@
               {
                 "type": "path",
                 "data": {
-                  "pathName": "rightNeutralScore_Part2"
+                  "pathName": "leftNSv2_Part2"
                 }
               },
               {
-                "type": "sequential",
+                "type": "named",
                 "data": {
-                  "commands": [
-                    {
-                      "type": "wait",
-                      "data": {
-                        "waitTime": 0.1
-                      }
-                    },
-                    {
-                      "type": "named",
-                      "data": {
-                        "name": "AutoIntakeDeployCollect2Secs"
-                      }
-                    }
-                  ]
+                  "name": "AutoIntakeDeployCollect2Secs"
                 }
               }
             ]
@@ -45,13 +32,13 @@
         {
           "type": "path",
           "data": {
-            "pathName": "rightNeutralScore_Part3"
+            "pathName": "leftNSv2_Part3"
           }
         },
         {
           "type": "path",
           "data": {
-            "pathName": "rightNeutralScore_Part4"
+            "pathName": "leftNSv2_Part4.2"
           }
         },
         {
@@ -63,15 +50,9 @@
                 "data": {
                   "commands": [
                     {
-                      "type": "named",
-                      "data": {
-                        "name": "DumpAndReturn"
-                      }
-                    },
-                    {
                       "type": "wait",
                       "data": {
-                        "waitTime": 1.5
+                        "waitTime": 1.0
                       }
                     },
                     {
@@ -95,7 +76,7 @@
                     {
                       "type": "wait",
                       "data": {
-                        "waitTime": 1.3
+                        "waitTime": 1.75
                       }
                     }
                   ]
@@ -120,7 +101,7 @@
         {
           "type": "path",
           "data": {
-            "pathName": "rightNeutralScore_Part5"
+            "pathName": "leftNSv2_Part5.2"
           }
         },
         {
@@ -130,16 +111,22 @@
               {
                 "type": "named",
                 "data": {
-                  "name": "AutoIntakeDeployCollect2Secs"
+                  "name": "AutoIntakeDeployCollect3Secs"
                 }
               },
               {
                 "type": "path",
                 "data": {
-                  "pathName": "rightNeutralScore_Part6"
+                  "pathName": "leftNSv2_Part6.2"
                 }
               }
             ]
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "LeftNSv2_Part7"
           }
         },
         {
@@ -151,12 +138,6 @@
                 "data": {
                   "commands": [
                     {
-                      "type": "named",
-                      "data": {
-                        "name": "DumpAndReturn"
-                      }
-                    },
-                    {
                       "type": "wait",
                       "data": {
                         "waitTime": 1.0
@@ -166,6 +147,12 @@
                       "type": "named",
                       "data": {
                         "name": "DumpAndReturn"
+                      }
+                    },
+                    {
+                      "type": "wait",
+                      "data": {
+                        "waitTime": 2.0
                       }
                     }
                   ]
@@ -191,6 +178,6 @@
     }
   },
   "resetOdom": true,
-  "folder": "Right",
+  "folder": "Left",
   "choreoAuto": false
 }

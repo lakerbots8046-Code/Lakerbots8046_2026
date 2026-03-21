@@ -3,6 +3,7 @@
   "robotLength": 0.8509,
   "holonomicMode": true,
   "pathFolders": [
+    "LeftNSV2",
     "LeftScoreDepotClimb",
     "RightNeutralCross",
     "centerDepotClimb",

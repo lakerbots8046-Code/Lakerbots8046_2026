@@ -5,34 +5,60 @@
     "data": {
       "commands": [
         {
+          "type": "path",
+          "data": {
+            "pathName": "RightNeutralCross_Part1"
+          }
+        },
+        {
           "type": "parallel",
           "data": {
             "commands": [
               {
                 "type": "path",
                 "data": {
-                  "pathName": "centerDepotClimb_Part1"
+                  "pathName": "RightNeutralCross_Part2"
                 }
               },
               {
-                "type": "named",
+                "type": "sequential",
                 "data": {
-                  "name": "AutoIntakeDeployCollect2Secs"
+                  "commands": [
+                    {
+                      "type": "wait",
+                      "data": {
+                        "waitTime": 0.9
+                      }
+                    },
+                    {
+                      "type": "named",
+                      "data": {
+                        "name": "AutoIntakeDeployCollect8Secs"
+                      }
+                    }
+                  ]
                 }
               }
             ]
           }
         },
         {
-          "type": "path",
+          "type": "parallel",
           "data": {
-            "pathName": "centerDepotClimb_Part2"
-          }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "centerDepotClimb_Part3"
+            "commands": [
+              {
+                "type": "named",
+                "data": {
+                  "name": "AutoIntakeDeployCollect2Secs"
+                }
+              },
+              {
+                "type": "path",
+                "data": {
+                  "pathName": "rightNeutralCross_Part4"
+                }
+              }
+            ]
           }
         },
         {
@@ -43,6 +69,12 @@
                 "type": "sequential",
                 "data": {
                   "commands": [
+                    {
+                      "type": "named",
+                      "data": {
+                        "name": "DumpAndReturn"
+                      }
+                    },
                     {
                       "type": "wait",
                       "data": {
@@ -58,7 +90,7 @@
                     {
                       "type": "wait",
                       "data": {
-                        "waitTime": 2.0
+                        "waitTime": 3.0
                       }
                     }
                   ]
@@ -72,48 +104,11 @@
               }
             ]
           }
-        },
-        {
-          "type": "deadline",
-          "data": {
-            "commands": [
-              {
-                "type": "path",
-                "data": {
-                  "pathName": "centerDepotClimb_Part4"
-                }
-              },
-              {
-                "type": "named",
-                "data": {
-                  "name": "IntakeHome"
-                }
-              },
-              {
-                "type": "named",
-                "data": {
-                  "name": "ClimberReach"
-                }
-              }
-            ]
-          }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "centerDepotClimb_Part5"
-          }
-        },
-        {
-          "type": "named",
-          "data": {
-            "name": "ClimberPullDown"
-          }
         }
       ]
     }
   },
   "resetOdom": true,
-  "folder": "Center",
+  "folder": "Right",
   "choreoAuto": false
 }

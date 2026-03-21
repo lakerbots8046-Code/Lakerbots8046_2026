@@ -1,6 +1,20 @@
-- [x] Update VisionSubsystem periodic pose updates to include Left and Right cameras
-- [x] Extend VisionSubsystem pose telemetry publishing for Left and Right
-- [x] Add Left/Right estimated pose getters in VisionSubsystem
-- [x] Update RobotContainer.updateVisionMeasurements() to fuse Left/Right vision into drivetrain pose estimator
-- [x] Add Left/Right measurement status dashboard outputs in RobotContainer
-- [x] Run build test (gradlew.bat build)
+# TODO - ShootOnMoveCommand Update
+
+- [x] Refactor `ShootOnMoveCommand` to match `ShootFromPointCommand` firing logic:
+  - [x] turret + hood + launcher readiness gating (all three must be ready before firing)
+  - [x] launcher spool timing aligned to 2.0s (matching ShootFromPointCommand)
+  - [x] consistent turret control flow and tolerances
+- [x] Add velocity-compensated trajectory/aiming in `ShootOnMoveCommand`:
+  - [x] compute field-relative robot velocity from drivetrain chassis speeds
+  - [x] compensate shot target/aim using robot velocity × estimated flight time
+  - [x] use compensated aim for turret targeting
+- [x] Remove arc-driving behavior from `ShootOnMoveCommand`:
+  - [x] removed SwerveRequest.FieldCentric arc drive request
+  - [x] removed drivetrain from addRequirements (read-only now)
+  - [x] no arc translation/rotation commanded in execute
+- [x] Update telemetry in `ShootOnMoveCommand` to reflect compensated aiming and unified readiness states
+  - [x] added Robot Vx/Vy, Flight Time, Comp Dx/Dy, Hood At Target, Ready To Fire outputs
+  - [x] dashboard namespace changed to `ShootOnMove/`
+- [x] Bind driver right trigger (0.75) to `ShootOnMoveCommand` in `RobotContainer`
+- [x] Instantiate `LEDSubsystem` in `RobotContainer` so its `periodic()` runs (LEDs were not animating)
+- [x] Run build check — BUILD SUCCESSFUL

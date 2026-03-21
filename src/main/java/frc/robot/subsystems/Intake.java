@@ -72,10 +72,18 @@ public class Intake extends SubsystemBase {
     cfgRollers.Slot0.kP = 0.11; // An error of 1 rotation per second results in 0.11 V output
     cfgRollers.Slot0.kI = 0; // No output for integrated error
     cfgRollers.Slot0.kD = 0; // No output for error derivative
-    // Peak output of 8 volts
+    // Peak output of 12 volts
     cfgRollers.Voltage.withPeakForwardVoltage(Volts.of(12))
       .withPeakReverseVoltage(Volts.of(-12));
-    //    cfgRollers.CurrentLimits.withStatorCurrentLimit(Amps.of(60)); // Limit current to 40 A to prevent breaker trips and motor damage
+
+    // ── Current limits — prevent stalling under multi-ball load ──────────────
+    // Stator limit caps motor torque so rollers slow down gracefully instead of
+    // stalling hard when multiple balls are present simultaneously.
+    // Supply limit prevents the PDP breaker from tripping under peak load.
+    //cfgRollers.CurrentLimits.StatorCurrentLimit       = IntakeConstants.kRollersStatorCurrentLimit;
+    //cfgRollers.CurrentLimits.StatorCurrentLimitEnable = true;
+    //cfgRollers.CurrentLimits.SupplyCurrentLimit       = IntakeConstants.kRollersSupplyCurrentLimit;
+    //cfgRollers.CurrentLimits.SupplyCurrentLimitEnable = true;
 
     /* Torque-based velocity does not require a velocity feed forward, as torque will accelerate the rotor up to the desired velocity by itself */
     cfgRollers.Slot1.kS = 2.5; // To account for friction, add 2.5 A of static feedforward
@@ -317,7 +325,7 @@ public class Intake extends SubsystemBase {
       setPivotPosition(position);
     }, this).andThen(Commands.waitUntil(this::isPivotAtTarget));
   }
-public Command AutoIntakeDeployCollect() {
+public Command AutoIntakeDeployCollect3secs() {
     return Commands.runOnce(() -> rollersEnabled = true, this)
       .andThen(Commands.run(() -> {
         setPivotPosition(IntakeConstants.kPivotDeployCollectPosition);
@@ -329,6 +337,33 @@ public Command AutoIntakeDeployCollect() {
         }
           rollersEnabled = true;
         }, this)).withTimeout(3);
+  }
+  public Command AutoIntakeDeployCollect2secs() {
+    return Commands.runOnce(() -> rollersEnabled = true, this)
+      .andThen(Commands.run(() -> {
+        setPivotPosition(IntakeConstants.kPivotDeployCollectPosition);
+        if (rollersEnabled) {
+          //setIntakeRollersVoltage(IntakeConstants.kIntakeVoltage);
+          setRollersVelocity(IntakeConstants.kRollersIntakeVelocity);
+        } else {
+          stopRollers();
+        }
+          rollersEnabled = true;
+        }, this)).withTimeout(2);
+  }
+
+  public Command AutoIntakeDeployCollect8secs() {
+    return Commands.runOnce(() -> rollersEnabled = true, this)
+      .andThen(Commands.run(() -> {
+        setPivotPosition(IntakeConstants.kPivotDeployCollectPosition);
+        if (rollersEnabled) {
+          //setIntakeRollersVoltage(IntakeConstants.kIntakeVoltage);
+          setRollersVelocity(IntakeConstants.kRollersIntakeVelocity);
+        } else {
+          stopRollers();
+        }
+          rollersEnabled = true;
+        }, this)).withTimeout(8);
   }
   /**
    * Command to deploy the intake pivot to -1.2 rotations (Motion Magic) and start

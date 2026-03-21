@@ -11,6 +11,7 @@ import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import frc.robot.Constants;
 import frc.robot.Constants.IntakeConstants;
 import frc.robot.Constants.TurretConstants;
+import frc.robot.RobotContainer;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.Intake;
 import frc.robot.subsystems.Launcher;
@@ -268,6 +269,9 @@ public class ShootFromPointCommand extends Command {
         //intake.stopRollersDirect();
         
         intake.setRollersVelocity(IntakeConstants.kRollersIntakeVelocity);
+
+        // Activate yellow/black chase on the LEDs as soon as this command starts.
+        RobotContainer.leds.setRobotState(true);
 
         SmartDashboard.putString( DASH + "Status",  "Initializing");
         SmartDashboard.putBoolean(DASH + "Firing",  false);
@@ -551,6 +555,9 @@ public class ShootFromPointCommand extends Command {
         // If intakeDeployCollect() is still running, it will resume spinning
         // the rollers on its next loop. If it is not running, this is a no-op.
         intake.enableRollers();
+
+        // Return LEDs to passive blue/white chase.
+        RobotContainer.leds.setRobotState(false);
 
         isFiring = false;
         SmartDashboard.putBoolean(DASH + "Firing",  false);

@@ -57,7 +57,7 @@ public class Launcher extends SubsystemBase {
     // raised to 10 rps, 10 rps/s on 3/14/26
     // Previous (rollback): new DynamicMotionMagicTorqueCurrentFOC(0.0, 10.0, 10.0).withSlot(1)
     private final DynamicMotionMagicTorqueCurrentFOC m_dynMMTorqueTurret =
-        new DynamicMotionMagicTorqueCurrentFOC(0.0, 32.0, 40.0).withSlot(1);
+        new DynamicMotionMagicTorqueCurrentFOC(0.0, 85.0, 85.0).withSlot(1); //32 40
     private final MotionMagicVoltage m_mmreqHood   = new MotionMagicVoltage(0);
 
     private final VelocityVoltage m_VelocityVoltage = new VelocityVoltage(0).withSlot(0);

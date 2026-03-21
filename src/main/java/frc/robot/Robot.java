@@ -58,6 +58,9 @@ public class Robot extends TimedRobot {
 
         // Publish tower tag identification + distance to Elastic (always-on)
         m_robotContainer.updateTowerTagInfo();
+
+        // Publish FMS/DriverStation info to Elastic (alliance, match time, shift time)
+        m_robotContainer.updateFmsInfo();
     }
 
     @Override
