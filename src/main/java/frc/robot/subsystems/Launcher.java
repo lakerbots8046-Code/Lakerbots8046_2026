@@ -57,7 +57,7 @@ public class Launcher extends SubsystemBase {
     // raised to 10 rps, 10 rps/s on 3/14/26
     // Previous (rollback): new DynamicMotionMagicTorqueCurrentFOC(0.0, 10.0, 10.0).withSlot(1)
     private final DynamicMotionMagicTorqueCurrentFOC m_dynMMTorqueTurret =
-        new DynamicMotionMagicTorqueCurrentFOC(0.0, 85.0, 85.0).withSlot(1); //32 40
+        new DynamicMotionMagicTorqueCurrentFOC(0.0, 90.0, 90.0).withSlot(1); //32 40
     private final MotionMagicVoltage m_mmreqHood   = new MotionMagicVoltage(0);
 
     private final VelocityVoltage m_VelocityVoltage = new VelocityVoltage(0).withSlot(0);
@@ -194,17 +194,17 @@ public class Launcher extends SubsystemBase {
     // v4: cruise=2,  accel=2  — very gentle; also fixed shared m_mmreq bug.
     // v5 (current): cruise=12, accel=6, jerk=0 — faster profile, jerk limiting disabled.
     MotionMagicConfigs mmHood = cfgHood.MotionMagic;
-    mmHood.withMotionMagicCruiseVelocity(RotationsPerSecond.of(20))
-      .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(10))
-      .withMotionMagicJerk(RotationsPerSecondPerSecond.per(Second).of(0)); // 0 = jerk limiting disabled
+    mmHood.withMotionMagicCruiseVelocity(RotationsPerSecond.of(8))
+      .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(4))
+      .withMotionMagicJerk(RotationsPerSecondPerSecond.per(Second).of(0.0)); // 0 = jerk limiting disabled
 
     Slot0Configs slot0Hood = cfgHood.Slot0;
-    slot0Hood.kS = 0.1;  // Static friction feedforward: 0.1 V to overcome stiction
-    slot0Hood.kV = 8.4;  // Velocity feedforward: tuned for hood mechanism (replaces 0.12)
+    slot0Hood.kS = 0.0;  // Remove static kick to reduce on-move oscillation
+    slot0Hood.kV = 8.4;  // Velocity feedforward: tuned for hood mechanism
     slot0Hood.kA = 0.0;  // Acceleration feedforward (not used)
-    slot0Hood.kP = 40.0; // Proportional gain: tuned for hood position control
+    slot0Hood.kP = 22.0; // Lower proportional gain for smoother response
     slot0Hood.kI = 0;    // No integral
-    slot0Hood.kD = 0.0;  // No derivative (removed — kP=40 provides sufficient response)
+    slot0Hood.kD = 0.25; // Add damping near target to reduce ringing
 
 
     // Status Code for ALL

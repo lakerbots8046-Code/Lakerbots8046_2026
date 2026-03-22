@@ -209,21 +209,34 @@ public class FeedFromCenterCommand extends Command {
                        + chassisSpeeds.vyMetersPerSecond * Math.cos(heading);
         Translation2d robotVelocity = new Translation2d(fieldVx, fieldVy);
 
-        // Step 1: bootstrap RPS from actual distance
-        double initialRPS  = ShootingArcManager.calculateLauncherRPS(distance);
-        // Step 2: estimate exit speed and flight time
-        double exitSpeed   = FeedFromCenter.kBallExitSpeedPerRPS * Math.abs(initialRPS);
-        double flightTime  = (exitSpeed > 0.1) ? distance / exitSpeed : 0.0;
-        // Step 3: virtual target — where we must aim to hit the actual target
-        Translation2d virtualTarget = target.minus(robotVelocity.times(flightTime));
-        // Step 4: recompute distance and RPS from virtual target
-        double virtualDistance    = robotPos.getDistance(virtualTarget);
-        double robotSpeed         = robotVelocity.getNorm(); // for dashboard
+        // Iterative refinement: distance -> RPS -> exit speed -> flight time -> lead
+        // This converges compensation better than a single pass.
+        double virtualDistance = distance;
+        double flightTime = 0.0;
+        final int kLeadIterations = 3;
+
+        for (int i = 0; i < kLeadIterations; i++) {
+            double iterRPS = ShootingArcManager.calculateLauncherRPS(virtualDistance);
+            double iterExitSpeed = FeedFromCenter.kBallExitSpeedPerRPS * Math.abs(iterRPS);
+            flightTime = (iterExitSpeed > 0.1) ? virtualDistance / iterExitSpeed : 0.0;
+
+            Translation2d iterLeadOffset = robotVelocity
+                    .times(flightTime * FeedFromCenter.kFeedFromCenterMotionCompensationGain);
+            Translation2d iterVirtualTarget = target.minus(iterLeadOffset);
+            virtualDistance = robotPos.getDistance(iterVirtualTarget);
+        }
+
+        Translation2d leadOffset = robotVelocity
+                .times(flightTime * FeedFromCenter.kFeedFromCenterMotionCompensationGain);
+        Translation2d virtualTarget = target.minus(leadOffset);
+        virtualDistance = robotPos.getDistance(virtualTarget);
+        double robotSpeed = robotVelocity.getNorm(); // for dashboard
 
         // ── 6. Spin flywheel open-loop (DutyCycleOut) ─────────────────────────
         // Uses virtual distance so flywheel compensates for robot moving
         // toward or away from the feed station during the shot.
-        double targetLauncherRPS = ShootingArcManager.calculateLauncherRPS(virtualDistance);
+        double targetLauncherRPS = ShootingArcManager.calculateLauncherRPS(virtualDistance)
+                * FeedFromCenter.kFeedFromCenterRpsScale;
         launcher.setCollectDutyCycle(targetLauncherRPS);
 
         // Record the timestamp the first time the flywheel is commanded this cycle.
@@ -266,15 +279,21 @@ public class FeedFromCenterCommand extends Command {
         // 0.5° deadband prevents constant profile resets from tiny pose jitter.
         final double kDeadbandDeg = 0.5;
 
+        final String turretLimitStatus;
         if (turretAtLimit) {
             // PAST LIMIT — hold at current position
             launcher.setTurretPosition(launcher.getTurretPosition());
+            turretLimitStatus = "PAST LIMIT - STOPPED";
         } else if (targetOutOfRange) {
             // OUT OF RANGE — drive to nearest limit
             launcher.setTurretPosition(clampedRaw);
+            turretLimitStatus = String.format("Out of range (%.0f deg)", adjustedTurretAngle);
         } else if (Math.abs(turretError) > kDeadbandDeg) {
             // NORMAL — update Motion Magic target
             launcher.setTurretPosition(targetRawRotations);
+            turretLimitStatus = "OK";
+        } else {
+            turretLimitStatus = "OK (holding)";
         }
         // else: within deadband — hold last commanded position (no profile reset)
 
@@ -293,12 +312,15 @@ public class FeedFromCenterCommand extends Command {
                 || (actualRPS > 5.0 && Math.abs(actualRPS - targetRPS)
                         < Constants.ShootingArc.kLauncherVelocityTolerance);
 
+        boolean hoodAtTarget = launcher.isHoodAtTarget();
+        boolean readyToFire = launcherAtSpeed && hoodAtTarget && !turretAtLimit && !targetOutOfRange;
+
         // ── 10. Schedule / cancel LaunchSequenceOneCommand ────────────────────
-        if (launcherAtSpeed && !launchSequenceScheduled) {
+        if (readyToFire && !launchSequenceScheduled) {
             CommandScheduler.getInstance().schedule(launchSequenceOne);
             launchSequenceScheduled = true;
             isFiring = true;
-        } else if (!launcherAtSpeed && launchSequenceScheduled) {
+        } else if (!readyToFire && launchSequenceScheduled) {
             launchSequenceOne.cancel();
             launchSequenceScheduled = false;
             isFiring = false;
@@ -315,15 +337,21 @@ public class FeedFromCenterCommand extends Command {
             SmartDashboard.putNumber( DASH + "Virtual Dist (m)",    virtualDistance);
             SmartDashboard.putNumber( DASH + "Robot Speed (m/s)",   robotSpeed);
             SmartDashboard.putNumber( DASH + "Flight Time (s)",     flightTime);
-            SmartDashboard.putNumber( DASH + "Lead Offset (m)",     robotVelocity.times(flightTime).getNorm());
+            SmartDashboard.putNumber( DASH + "Lead Offset (m)",     leadOffset.getNorm());
+            SmartDashboard.putNumber( DASH + "Lead Gain",           FeedFromCenter.kFeedFromCenterMotionCompensationGain);
+            SmartDashboard.putNumber( DASH + "RPS Scale",           FeedFromCenter.kFeedFromCenterRpsScale);
             SmartDashboard.putNumber( DASH + "Turret Error (deg)",  turretError);
             SmartDashboard.putBoolean(DASH + "Turret Aimed",        turretAimed);
+            SmartDashboard.putString( DASH + "Turret Limit",        turretLimitStatus);
+            SmartDashboard.putBoolean(DASH + "Hood At Target",      hoodAtTarget);
             SmartDashboard.putBoolean(DASH + "At Speed",            launcherAtSpeed);
+            SmartDashboard.putBoolean(DASH + "Ready To Fire",       readyToFire);
             SmartDashboard.putBoolean(DASH + "Firing",              isFiring);
             SmartDashboard.putString( DASH + "Status",
                     isFiring           ? "FIRING"
                     : !launcherAtSpeed ? String.format("Spooling (%.1f s)", timeSpooling)
-                    : !turretAimed     ? "At Speed - Aiming"
+                    : (turretAtLimit || targetOutOfRange) ? "At Speed - Turret Wrap/Limit"
+                    : !hoodAtTarget    ? "At Speed - Adjusting Hood"
                                        : "At Speed - Firing");
         }
     }

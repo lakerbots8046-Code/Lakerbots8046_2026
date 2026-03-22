@@ -129,7 +129,7 @@ public class Constants {
          *
          * <p>Set to 0.0 to disable idle spinning entirely.
          */
-        public static final double kFlywheelIdleRPS = -15.0;
+        public static final double kFlywheelIdleRPS = -20.0; // -15
 
         /**
          * Toggle to enable or disable flywheel idling between shots.
@@ -142,7 +142,7 @@ public class Constants {
          * <p>Flip this value to quickly enable/disable idle spinning without touching
          * any other code.
          */
-        public static final boolean kFlywheelIdleEnabled = true; // set true to re-enable idling
+        public static final boolean kFlywheelIdleEnabled = false; // set true to re-enable idling
 
         public static double kSensorToMechanismRatio;
         public static double kHoodStowedPosition;
@@ -230,13 +230,13 @@ public class Constants {
         //   ≈ ±169.04°
         //
         // EXCEEDING THESE LIMITS WILL BREAK THE TURRET.
-        public static final double kPhysicalLimitRotations = 20.0; // raw motor rotations (from Tuner X) //18.0
+        public static final double kPhysicalLimitRotations = 22.0; // raw motor rotations (from Tuner X) //18.0
         public static final double kMinRotationDegrees = -(kPhysicalLimitRotations * 360.0 / kGearRatio); // ≈ -169.04°
         public static final double kMaxRotationDegrees =  (kPhysicalLimitRotations * 360.0 / kGearRatio); // ≈ +169.04°
 
         // Soft-stop buffer: turret is considered "near a limit" when within this many
         // degrees of the hard stop. Prevents the turret from slamming into the physical stop.
-        public static final double kNearLimitBuffer = 5.0; // degrees of buffer before hard stop
+        public static final double kNearLimitBuffer = 2.0; // degrees of buffer before hard stop 5.0
 
         // ── Turret zero calibration offset ────────────────────────────────────
         //
@@ -312,7 +312,7 @@ public class Constants {
 
         // kWrapAroundThreshold kept for API compatibility — wrap-around is DISABLED.
         // With ±169° range the turret does not need to wrap around.
-        public static final double kWrapAroundThreshold = 177.0; // unused
+        public static final double kWrapAroundThreshold = 185.0; // unused
         
         // AprilTag Tracking
         public static final double kTrackingP = 20.0; // Proportional gain for tracking
@@ -447,7 +447,7 @@ public class Constants {
          * 0.0 rot = 68° from horizontal (steepest), 11.5 rot = 28° (flattest).
          * TUNE ON ROBOT.
          */
-        public static final double kHoodPosition = 3.0;
+        public static final double kHoodPosition = 5.0; // 4.5
 
         // ── Target depth offset ───────────────────────────────────────────────
         /**
@@ -455,7 +455,7 @@ public class Constants {
          * in the direction from the robot toward the midpoint.
          * "A few feet behind" the midpoint = 0.6096 m (2 ft). TUNE ON ROBOT.
          */
-        public static final double kFeedTargetDepthMeters = 1.5; // 2 ft
+        public static final double kFeedTargetDepthMeters = 2.0; // 1.5
 
         // ── Velocity compensation ─────────────────────────────────────────────
         /**
@@ -469,7 +469,27 @@ public class Constants {
          * ShootingArcManager physics comments). TUNE ON ROBOT if shots consistently
          * lead or lag the target while the robot is moving.
          */
-        public static final double kBallExitSpeedPerRPS = 0.18617; // m/s per RPS
+        public static final double kBallExitSpeedPerRPS = 0.196; // m/s per RPS
+
+        /**
+         * Feed-from-center-specific motion lead gain.
+         *
+         * <p>Scales the velocity-compensation lead offset used by
+         * FeedFromCenterCommand:
+         * {@code virtualTarget = target - (robotVelocity * flightTime * gain)}.
+         *
+         * <p>Increase above 1.0 if shots still trail robot motion.
+         * Decrease below 1.0 if shots over-lead.
+         */
+        public static final double kFeedFromCenterMotionCompensationGain = 2.0; // 1.2
+
+        /**
+         * Feed-from-center flywheel RPS scale factor.
+         *
+         * <p>Multiplies the calculated launcher RPS only for FeedFromCenter shots.
+         * Use values above 1.0 to increase shot energy when balls land short.
+         */
+        public static final double kFeedFromCenterRpsScale = 1.30;
 
         // ── Red alliance feed-station tag pairs ───────────────────────────────
         /** Red alliance feed station — one side (tags 1 and 3). */
@@ -571,15 +591,15 @@ public class Constants {
 
         // v10: -5 RPS again — still overshooting after v9 reduction.
         public static final double[][] kLauncherRPSLookup = {
-            {1.0,  -40.0},  // was -50.0, 43.0, 42.0
-            {1.5,  -40.0},  // was -50.5, 43.5, 42.0
-            {2.0,  -40.0},  // was -53.0, 46.0, 42.0, 40
-            {2.5,  -41.5},  // was -55.5, 48.5, 47.5, 43
+            {1.0,  -36.0},  // was -50.0, 43.0, 42.0
+            {1.5,  -36.0},  // was -50.5, 43.5, 42.0
+            {2.0,  -36.0},  // was -53.0, 46.0, 42.0, 40
+            {2.5,  -38.0},  // was -55.5, 48.5, 47.5, 43, 41.5, 38 , 41.5
             {3.0,  -42.5},  // was -58.5, 51.5, 50.0, 45, 43
            // {3.175, -51.0},  // added intermediate point at 3.175 m (Tower Shot) 49.0, 51.0
-            {3.5,  -46.0},  // was -61.5, 54.5, 48.5, 46.5
-            {4.0,  -48.0},  // was -74.5, 67.5, 55.5, 53.5
-            {4.5,  -54.0},   // was -80.5, 73.5, 56.0, 54.0
+            {3.5,  -45.0},  // was -61.5, 54.5, 48.5, 46.5, 46.0
+            {4.0,  -46.0},  // was -74.5, 67.5, 55.5, 53.5, 48
+            {4.5,  -49.0},   // was -80.5, 73.5, 56.0, 54.0
             {5.0,  -58.0}   // was -58, 60
         };
 
@@ -633,7 +653,7 @@ public class Constants {
             {2.0,  0.0},   // TESTED: hood position 0
             {2.5,  0.0},   // TESTED: hood position 0
             {3.0,  0.5},   // TESTED: hood position 0 0  
-            {3.5,  2.25},   // TESTED: hood position 1 1,               0.75   
+            {3.5,  1.0},   // TESTED: hood position 1 1, 2              0.75   , 2.25
             {4.0,  2.5},   // extrapolated (+1 rot per 0.5m)1           2.0
             {4.5,  3.0},    // extrapolated (+1 rot per 0.5m) 2  3.5
             {5.0,  3.875}    // was 4.0
@@ -662,7 +682,7 @@ public class Constants {
         public static final Transform3d kRobotToCamBF =
                 new Transform3d(
                         new Translation3d(
-                                Units.inchesToMeters(-12.941), // Backward (negative X = behind robot center)
+                                Units.inchesToMeters(-40.0), // Backward (negative X = behind robot center) // -12.941
                                 Units.inchesToMeters(-7.0625),  // Right side (negative Y = right in WPILib)
                                 Units.inchesToMeters(10.612)   // Up (positive Z, measured from floor)
                         ),
@@ -688,7 +708,7 @@ public class Constants {
         public static final Transform3d kRobotToCamFF =
                 new Transform3d(
                         new Translation3d(
-                                Units.inchesToMeters(-7.069),   // Backward (negative X = behind robot center)
+                                Units.inchesToMeters(15),   // Backward (negative X = behind robot center) // -7.069
                                 Units.inchesToMeters(11.75),    // Left side (positive Y = left in WPILib)
                                 Units.inchesToMeters(20.4)      // Up (positive Z, measured from ground)
                         ),
@@ -705,7 +725,7 @@ public class Constants {
                 new Transform3d(
                         new Translation3d(
                                 Units.inchesToMeters(-1.938),   // Backward (negative X)
-                                Units.inchesToMeters(40.0),   // Left (positive Y) 13.746
+                                Units.inchesToMeters(40.0),   // Left (positive Y) 13.746, 40
                                 Units.inchesToMeters(9.92)      // Up (positive Z)
                         ),
                         new Rotation3d(
@@ -720,7 +740,7 @@ public class Constants {
                 new Transform3d(
                         new Translation3d(
                                 Units.inchesToMeters(-3.0625),  // Backward (negative X)
-                                Units.inchesToMeters(-50.0),  // Right (negative Y)//-13.746?
+                                Units.inchesToMeters(-40.0),  // Right (negative Y)//-13.746?, -50
                                 Units.inchesToMeters(9.571)     // Up (positive Z)
                         ),
                         new Rotation3d(
@@ -792,6 +812,15 @@ public class Constants {
         public static final double kDistanceScaleFactor = 0.1;
 
         /**
+         * AprilTag IDs to ignore for vision pose fusion.
+         *
+         * <p>If any of these IDs are used in a camera's pose estimate, that full
+         * measurement is rejected before being added to the drivetrain pose estimator.
+         * Useful for temporarily excluding problematic tags during bring-up/tuning.
+         */
+        public static final int[] kIgnoredPoseTagIds = {13, 14, 16};
+
+        /**
          * Maximum acceptable pose ambiguity for a single-tag detection (range 0.0–1.0).
          *
          * <p>PhotonVision's {@code getPoseAmbiguity()} returns a ratio of how similar the
@@ -805,7 +834,7 @@ public class Constants {
          *
          * <p>0.3 is the widely-recommended FRC threshold (PhotonVision docs).
          */
-        public static final double kMaxAmbiguity = 1.0;
+        public static final double kMaxAmbiguity = 0.3;
         
         // AprilTag driving parameters
         public static final double kTargetDistanceMeters = 1.524; // Target distance from tag (5 feet = 1.524 meters)

@@ -554,6 +554,7 @@ public Command AutoIntakeDeployCollect3secs() {
    */
   public Command dumpAndReturn() {
     return Commands.sequence(
+        Commands.runOnce(() -> setRollersVelocity(IntakeConstants.kRollersIntakeVelocity), this),
         goToPivotPosition(-1),                                                                      // lift to dump position and wait until there // -0.75                        // run rollers for 0.5 seconds to dump game piece //0.25
         Commands.waitSeconds(0.25),                                                         // hold at dump position for 0.5 s //0.5
         Commands.runOnce(() -> setPivotPosition(IntakeConstants.kPivotDeployCollectPosition), this) // return to collect position

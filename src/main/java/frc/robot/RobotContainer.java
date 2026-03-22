@@ -13,6 +13,7 @@ import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
+import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
@@ -102,6 +103,16 @@ public class RobotContainer {
     /** Throttle counter for FMS info puts (updated every 5 calls ≈ 100 ms). */
     private int fmsInfoCounter = 0;
 
+    // ── Tower tag hold state to survive brief vision dropouts ────────────────
+    /** Last valid alliance-matching tower tag seen by any camera. */
+    private int lastSeenTowerTagId = -1;
+    /** FPGA timestamp (s) when {@link #lastSeenTowerTagId} was last updated. */
+    private double lastSeenTowerTagTimestampSec = -1.0;
+    /** Human-readable source for telemetry: Visible / Held / AllianceFallback. */
+    private String towerTagSource = "AllianceFallback";
+    /** How long to hold a recently seen tag before alliance fallback (seconds). */
+    private static final double kTowerTagHoldSeconds = 0.75;
+
     public RobotContainer() {
         registerNamedCommands();
         configureBindings();
@@ -124,6 +135,15 @@ public class RobotContainer {
         // false to use manual D-pad control (1° per tap via Motion Magic).
         // Eventually this will be mapped to an Xbox controller button.
         SmartDashboard.putBoolean("Turret/Auto Aim Enabled", true);
+
+        // LED master toggle for Elastic/SmartDashboard:
+        // true  = LEDs run normal subsystem animations/state logic
+        // false = LEDs forced OFF (black)
+        SmartDashboard.putBoolean("LED/Enabled", true);
+
+        // Pre-seed ShootOnMove dashboard keys so they are visible in Elastic
+        // even when the ShootOnMove command is not currently running.
+        ShootOnMoveCommand.seedDashboardKeys();
 /* 
         // ================= INTAKE COLLECT testing buttons =================
         SmartDashboard.putData("Run Intake Collect Positive Voltage", intake.setIntakeRollersVoltage(2));
@@ -251,6 +271,7 @@ public class RobotContainer {
             "centerDepotClimb",
            // "leftNeutralFeed",
             "leftNeutralScore",
+            "leftNeutralBumpScore",
             //"rightNeutralFeed",
             "rightNeutralScore",
             //"rightOutpostScore",
@@ -330,12 +351,8 @@ public class RobotContainer {
                 launcher.launchFromTowerLauncher()
             )
         );
-        operatorController.a().whileTrue(
-            Commands.parallel(
-                spindexer.launchFromTower(),
-                launcher.launchFromTowerLauncher()
-            )
-        );
+        // Operator A: while held, run intake outtake (spit balls out of intake).
+        operatorController.a().whileTrue(intake.runOuttake());
         joystick.b().whileTrue(drivetrain.applyRequest(() ->
             point.withModuleDirection(new Rotation2d(-joystick.getLeftY(), -joystick.getLeftX()))
         ));
@@ -586,26 +603,22 @@ public class RobotContainer {
         SmartDashboard.putNumber("ShootFromPoint/Turret Target (deg)",    targetAngle);
         SmartDashboard.putNumber("ShootFromPoint/Turret Position (deg)",  currentTurretDeg);
 
-        // ── Always-on turret tracking in alliance zone (turret only) ─────────
-        // Track only when alliance is known and robot is in-zone for that alliance.
-        // Out of zone (or alliance unknown) -> return turret to zero.
+        // ── Always-on turret tracking from pose (turret only) ────────────────
+        // Always track based on robot pose regardless of field zone.
+        // If alliance is unknown, retain existing fallback behavior (red primary tag).
         var alliance = DriverStation.getAlliance();
         boolean allianceKnown = alliance.isPresent();
         int allianceTagId = allianceKnown && alliance.get() == Alliance.Blue
                 ? Constants.ShootingArc.kBluePrimaryTagId
                 : Constants.ShootingArc.kRedPrimaryTagId;
 
-        boolean inAllianceZone = allianceKnown
-                && ShootingArcManager.isInShootingZone(robotPose, allianceTagId);
-
         var allianceTower = ShootingArcManager.getTowerCenter(robotPose, allianceTagId);
         double targetTrackAngleDeg = ShootingArcManager.calculateTurretAngle(robotPose, allianceTower);
-        double targetTrackRaw = targetTrackAngleDeg * Constants.TurretConstants.kRotationsPerDegree;
-        targetTrackRaw = Math.max(-Constants.TurretConstants.kPhysicalLimitRotations,
-                         Math.min( Constants.TurretConstants.kPhysicalLimitRotations, targetTrackRaw));
+        double desiredRaw = targetTrackAngleDeg * Constants.TurretConstants.kRotationsPerDegree;
+        desiredRaw = Math.max(-Constants.TurretConstants.kPhysicalLimitRotations,
+                     Math.min( Constants.TurretConstants.kPhysicalLimitRotations, desiredRaw));
 
         double currentRaw = launcher.getTurretPosition();
-        double desiredRaw = inAllianceZone ? targetTrackRaw : 0.0;
 
         // Previous (rollback) deadband: 0.01 raw rotations.
         // Smaller deadband improves continuous follow while still filtering micro-jitter.
@@ -613,7 +626,17 @@ public class RobotContainer {
             launcher.setTurretPosition(desiredRaw);
         }
 
-        SmartDashboard.putBoolean("Turret/Alliance Zone Tracking Enabled", inAllianceZone);
+        // Kept for dashboard compatibility; now always true because tracking is always active.
+        SmartDashboard.putBoolean("Turret/Alliance Zone Tracking Enabled", true);
+        SmartDashboard.putBoolean("Turret/Always Pose Tracking Enabled", true);
+
+        // Tag source diagnostics for dropout troubleshooting near walls.
+        double heldAge = (lastSeenTowerTagTimestampSec > 0.0)
+                ? Math.max(0.0, Timer.getFPGATimestamp() - lastSeenTowerTagTimestampSec)
+                : -1.0;
+        SmartDashboard.putString("Tower/Tag Source", towerTagSource);
+        SmartDashboard.putNumber("Tower/Held Tag Age (s)", round(heldAge, 3));
+        SmartDashboard.putNumber("Tower/Hold Timeout (s)", kTowerTagHoldSeconds);
     }
 
     /**
@@ -649,11 +672,97 @@ public class RobotContainer {
             shiftTime = Math.max(0.0, 135.0 - matchTime);
         }
 
+        String gameMessage = DriverStation.getGameSpecificMessage();
+        char activeHubChar = (gameMessage != null && !gameMessage.isEmpty())
+                ? Character.toUpperCase(gameMessage.charAt(0))
+                : '\0';
+
+        // Official 2026 game data chars are R/B only.
+        boolean activeHubRed = activeHubChar == 'R';
+        boolean activeHubBlue = activeHubChar == 'B';
+        String activeHub = activeHubRed ? "Red" : (activeHubBlue ? "Blue" : "Unknown");
+
+        String displayActiveHub = activeHub;
+        String currentShift = "N/A";
+        boolean shiftEndingSoon = false;
+
+        // We can only compute shift ownership if we have valid R/B game data.
+        boolean hasValidGameData = activeHubRed || activeHubBlue;
+        boolean redInactiveFirst = activeHubRed; // R means red goes inactive first.
+
+        if (DriverStation.isAutonomousEnabled()) {
+            currentShift = "Auto";
+            displayActiveHub = "Both";
+        } else if (DriverStation.isTeleopEnabled()) {
+            // 2026 timing windows from WPILib example:
+            // >130 transition, >105 shift1, >80 shift2, >55 shift3, >30 shift4, else endgame.
+            if (matchTime > 130.0) {
+                currentShift = "Transition";
+                displayActiveHub = "Both";
+                // 5-second pre-shift warning before Shift 1 starts at 130s.
+                shiftEndingSoon = matchTime <= 135.0;
+            } else if (matchTime > 105.0) {
+                currentShift = "Shift 1";
+                displayActiveHub = hasValidGameData ? (redInactiveFirst ? "Blue" : "Red") : "Unknown";
+                shiftEndingSoon = hasValidGameData && matchTime <= 110.0;
+            } else if (matchTime > 80.0) {
+                currentShift = "Shift 2";
+                displayActiveHub = hasValidGameData ? (redInactiveFirst ? "Red" : "Blue") : "Unknown";
+                shiftEndingSoon = hasValidGameData && matchTime <= 85.0;
+            } else if (matchTime > 55.0) {
+                currentShift = "Shift 3";
+                displayActiveHub = hasValidGameData ? (redInactiveFirst ? "Blue" : "Red") : "Unknown";
+                shiftEndingSoon = hasValidGameData && matchTime <= 60.0;
+            } else if (matchTime > 30.0) {
+                currentShift = "Shift 4";
+                displayActiveHub = hasValidGameData ? (redInactiveFirst ? "Red" : "Blue") : "Unknown";
+                shiftEndingSoon = hasValidGameData && matchTime <= 35.0;
+            } else {
+                currentShift = "Endgame";
+                displayActiveHub = "Both";
+            }
+        } else {
+            currentShift = "Disabled";
+            displayActiveHub = "Unknown";
+        }
+
+        // Explicit fallback behavior:
+        if (!hasValidGameData && DriverStation.isTeleopEnabled()) {
+            displayActiveHub = "Unknown";
+            shiftEndingSoon = false;
+        }
+
+        // Dashboard booleans should light for the specific hub OR Both.
+        // (Derive strictly from the final display hub used by LEDs/Elastic.)
+        boolean displayHubRed = "Red".equalsIgnoreCase(displayActiveHub) || "Both".equalsIgnoreCase(displayActiveHub);
+        boolean displayHubBlue = "Blue".equalsIgnoreCase(displayActiveHub) || "Both".equalsIgnoreCase(displayActiveHub);
+
+        // Single source-of-truth for LEDs:
+        // true  => my alliance hub is active (or Both)
+        // false => opponent hub is active or unknown
+        boolean myHubActive = "Both".equalsIgnoreCase(displayActiveHub)
+                || (isRed && "Red".equalsIgnoreCase(displayActiveHub))
+                || (isBlue && "Blue".equalsIgnoreCase(displayActiveHub));
+
         SmartDashboard.putString("FMS/Alliance", allianceStr);
         SmartDashboard.putBoolean("FMS/Alliance Is Red", isRed);
         SmartDashboard.putBoolean("FMS/Alliance Is Blue", isBlue);
         SmartDashboard.putNumber("FMS/Match Time (s)", matchTime);
         SmartDashboard.putNumber("FMS/Shift Time (s)", round(shiftTime, 2));
+
+        // Raw FMS game-data view
+        SmartDashboard.putString("FMS/Active Hub Raw", activeHub);
+        SmartDashboard.putBoolean("FMS/Active Hub Raw Is Red", activeHubRed);
+        SmartDashboard.putBoolean("FMS/Active Hub Raw Is Blue", activeHubBlue);
+        SmartDashboard.putString("FMS/Game Specific Message Raw", gameMessage == null ? "" : gameMessage);
+
+        // Display value (use this single key for your one colored widget)
+        SmartDashboard.putString("FMS/Current Shift", currentShift);
+        SmartDashboard.putBoolean("FMS/Shift Ending Soon", shiftEndingSoon);
+        SmartDashboard.putString("FMS/Active Hub", displayActiveHub);
+        SmartDashboard.putBoolean("FMS/Active Hub Is Red", displayHubRed);
+        SmartDashboard.putBoolean("FMS/Active Hub Is Blue", displayHubBlue);
+        SmartDashboard.putBoolean("FMS/My Hub Active", myHubActive);
     }
 
     /**
@@ -704,7 +813,18 @@ public class RobotContainer {
                     return amb >= 0.0 && amb > Constants.Vision.kMaxAmbiguity;
                 });
 
-            if (tooAmbiguousBF) {
+            boolean usesIgnoredTagBF = estimatedPose.targetsUsed.stream()
+                .anyMatch(t -> {
+                    int id = t.getFiducialId();
+                    for (int ignoredId : Constants.Vision.kIgnoredPoseTagIds) {
+                        if (id == ignoredId) return true;
+                    }
+                    return false;
+                });
+
+            if (usesIgnoredTagBF) {
+                bfStatus = "Rejected (Ignored Tag)";
+            } else if (tooAmbiguousBF) {
                 bfStatus = "Rejected (High Ambiguity)";
             } else {
                 Pose2d pose2d = estimatedPose.estimatedPose.toPose2d();
@@ -772,7 +892,18 @@ public class RobotContainer {
                     return amb >= 0.0 && amb > Constants.Vision.kMaxAmbiguity;
                 });
 
-            if (tooAmbiguousFF) {
+            boolean usesIgnoredTagFF = estimatedPose.targetsUsed.stream()
+                .anyMatch(t -> {
+                    int id = t.getFiducialId();
+                    for (int ignoredId : Constants.Vision.kIgnoredPoseTagIds) {
+                        if (id == ignoredId) return true;
+                    }
+                    return false;
+                });
+
+            if (usesIgnoredTagFF) {
+                ffStatus = "Rejected (Ignored Tag)";
+            } else if (tooAmbiguousFF) {
                 ffStatus = "Rejected (High Ambiguity)";
             } else {
                 Pose2d pose2d = estimatedPose.estimatedPose.toPose2d();
@@ -816,7 +947,18 @@ public class RobotContainer {
                     return amb >= 0.0 && amb > Constants.Vision.kMaxAmbiguity;
                 });
 
-            if (tooAmbiguousLeft) {
+            boolean usesIgnoredTagLeft = estimatedPose.targetsUsed.stream()
+                .anyMatch(t -> {
+                    int id = t.getFiducialId();
+                    for (int ignoredId : Constants.Vision.kIgnoredPoseTagIds) {
+                        if (id == ignoredId) return true;
+                    }
+                    return false;
+                });
+
+            if (usesIgnoredTagLeft) {
+                leftStatus = "Rejected (Ignored Tag)";
+            } else if (tooAmbiguousLeft) {
                 leftStatus = "Rejected (High Ambiguity)";
             } else {
                 Pose2d pose2d = estimatedPose.estimatedPose.toPose2d();
@@ -858,7 +1000,18 @@ public class RobotContainer {
                     return amb >= 0.0 && amb > Constants.Vision.kMaxAmbiguity;
                 });
 
-            if (tooAmbiguousRight) {
+            boolean usesIgnoredTagRight = estimatedPose.targetsUsed.stream()
+                .anyMatch(t -> {
+                    int id = t.getFiducialId();
+                    for (int ignoredId : Constants.Vision.kIgnoredPoseTagIds) {
+                        if (id == ignoredId) return true;
+                    }
+                    return false;
+                });
+
+            if (usesIgnoredTagRight) {
+                rightStatus = "Rejected (Ignored Tag)";
+            } else if (tooAmbiguousRight) {
                 rightStatus = "Rejected (High Ambiguity)";
             } else {
                 Pose2d pose2d = estimatedPose.estimatedPose.toPose2d();
@@ -1120,12 +1273,29 @@ public class RobotContainer {
      * </ol>
      */
     private int getActiveTowerTagId() {
-        // 1. Prefer a tag that is currently visible
-        int visibleTag = getVisibleTowerTag();
-        if (visibleTag > 0) return visibleTag;
+        double now = Timer.getFPGATimestamp();
 
-        // 2. Fall back to alliance-based selection
+        // 1) Prefer a currently visible alliance-matching tower tag.
+        int visibleTag = getVisibleTowerTag();
+        if (visibleTag > 0) {
+            lastSeenTowerTagId = visibleTag;
+            lastSeenTowerTagTimestampSec = now;
+            towerTagSource = "Visible";
+            return visibleTag;
+        }
+
+        // 2) If vision briefly drops out, hold the most recently seen tag.
+        if (lastSeenTowerTagId > 0 && lastSeenTowerTagTimestampSec > 0.0) {
+            double age = now - lastSeenTowerTagTimestampSec;
+            if (age <= kTowerTagHoldSeconds) {
+                towerTagSource = "Held";
+                return lastSeenTowerTagId;
+            }
+        }
+
+        // 3) Fall back to alliance-based primary tag.
         var alliance = DriverStation.getAlliance();
+        towerTagSource = "AllianceFallback";
         if (alliance.isPresent() && alliance.get() == Alliance.Blue) {
             return Constants.ShootingArc.kBluePrimaryTagId;
         }

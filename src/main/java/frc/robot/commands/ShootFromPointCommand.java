@@ -166,7 +166,7 @@ public class ShootFromPointCommand extends Command {
      * pose jitter that would otherwise cause the hood to oscillate.
      * 0.1 rot ≈ 0.35° of hood angle — well below the 0.2-rotation tolerance.
      */
-    private static final double kHoodDeadbandRotations = 0.1;
+    private static final double kHoodDeadbandRotations = 0.2;
 
     // ── Tag locking ───────────────────────────────────────────────────────────
     /**
@@ -271,7 +271,7 @@ public class ShootFromPointCommand extends Command {
         intake.setRollersVelocity(IntakeConstants.kRollersIntakeVelocity);
 
         // Activate yellow/black chase on the LEDs as soon as this command starts.
-        RobotContainer.leds.setRobotState(true);
+        // Shooting no longer overrides LED mode.
 
         SmartDashboard.putString( DASH + "Status",  "Initializing");
         SmartDashboard.putBoolean(DASH + "Firing",  false);
@@ -556,8 +556,7 @@ public class ShootFromPointCommand extends Command {
         // the rollers on its next loop. If it is not running, this is a no-op.
         intake.enableRollers();
 
-        // Return LEDs to passive blue/white chase.
-        RobotContainer.leds.setRobotState(false);
+        // Shooting no longer overrides LED mode.
 
         isFiring = false;
         SmartDashboard.putBoolean(DASH + "Firing",  false);

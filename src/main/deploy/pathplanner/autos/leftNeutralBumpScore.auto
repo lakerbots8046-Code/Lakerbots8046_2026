@@ -7,7 +7,7 @@
         {
           "type": "path",
           "data": {
-            "pathName": "leftNeutralScore_Part1"
+            "pathName": "leftNSv2_Part1"
           }
         },
         {
@@ -15,15 +15,28 @@
           "data": {
             "commands": [
               {
-                "type": "named",
+                "type": "path",
                 "data": {
-                  "name": "AutoIntakeDeployCollect"
+                  "pathName": "leftNSv2_Part2"
                 }
               },
               {
-                "type": "path",
+                "type": "sequential",
                 "data": {
-                  "pathName": "leftNeutralScore_Part2"
+                  "commands": [
+                    {
+                      "type": "wait",
+                      "data": {
+                        "waitTime": 0.1
+                      }
+                    },
+                    {
+                      "type": "named",
+                      "data": {
+                        "name": "AutoIntakeDeployCollect2Secs"
+                      }
+                    }
+                  ]
                 }
               }
             ]
@@ -32,13 +45,107 @@
         {
           "type": "path",
           "data": {
-            "pathName": "leftNeutralScore_Part3"
+            "pathName": "LNSB_Part3"
+          }
+        },
+        {
+          "type": "parallel",
+          "data": {
+            "commands": [
+              {
+                "type": "path",
+                "data": {
+                  "pathName": "LNSB_Part4"
+                }
+              },
+              {
+                "type": "deadline",
+                "data": {
+                  "commands": [
+                    {
+                      "type": "sequential",
+                      "data": {
+                        "commands": [
+                          {
+                            "type": "named",
+                            "data": {
+                              "name": "DumpAndReturn"
+                            }
+                          },
+                          {
+                            "type": "wait",
+                            "data": {
+                              "waitTime": 1.5
+                            }
+                          },
+                          {
+                            "type": "named",
+                            "data": {
+                              "name": "DumpAndReturn"
+                            }
+                          },
+                          {
+                            "type": "wait",
+                            "data": {
+                              "waitTime": 1.5
+                            }
+                          },
+                          {
+                            "type": "named",
+                            "data": {
+                              "name": "DumpAndReturn"
+                            }
+                          },
+                          {
+                            "type": "wait",
+                            "data": {
+                              "waitTime": 0.5
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "named",
+                      "data": {
+                        "name": "ShootFromPointCommand"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
           }
         },
         {
           "type": "path",
           "data": {
-            "pathName": "leftNeutralScore_Part4"
+            "pathName": "LNSB_Part5"
+          }
+        },
+        {
+          "type": "parallel",
+          "data": {
+            "commands": [
+              {
+                "type": "path",
+                "data": {
+                  "pathName": "LNSB_Part6"
+                }
+              },
+              {
+                "type": "named",
+                "data": {
+                  "name": "AutoIntakeDeployCollect2Secs"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "LNSB_Part7"
           }
         },
         {
@@ -49,12 +156,6 @@
                 "type": "sequential",
                 "data": {
                   "commands": [
-                    {
-                      "type": "wait",
-                      "data": {
-                        "waitTime": 4.0
-                      }
-                    },
                     {
                       "type": "named",
                       "data": {
@@ -76,19 +177,7 @@
                     {
                       "type": "wait",
                       "data": {
-                        "waitTime": 2.5
-                      }
-                    },
-                    {
-                      "type": "named",
-                      "data": {
-                        "name": "DumpAndReturn"
-                      }
-                    },
-                    {
-                      "type": "wait",
-                      "data": {
-                        "waitTime": 2.0
+                        "waitTime": 1.5
                       }
                     }
                   ]
@@ -98,76 +187,6 @@
                 "type": "named",
                 "data": {
                   "name": "ShootFromPointCommand"
-                }
-              }
-            ]
-          }
-        },
-        {
-          "type": "deadline",
-          "data": {
-            "commands": [
-              {
-                "type": "path",
-                "data": {
-                  "pathName": "LeftNeutralScore_Part5"
-                }
-              },
-              {
-                "type": "parallel",
-                "data": {
-                  "commands": [
-                    {
-                      "type": "sequential",
-                      "data": {
-                        "commands": [
-                          {
-                            "type": "wait",
-                            "data": {
-                              "waitTime": 1.0
-                            }
-                          },
-                          {
-                            "type": "named",
-                            "data": {
-                              "name": "DumpAndReturn"
-                            }
-                          },
-                          {
-                            "type": "wait",
-                            "data": {
-                              "waitTime": 1.0
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      "type": "named",
-                      "data": {
-                        "name": "ShootFromPointCommand"
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        },
-        {
-          "type": "parallel",
-          "data": {
-            "commands": [
-              {
-                "type": "named",
-                "data": {
-                  "name": "AutoIntakeDeployCollect"
-                }
-              },
-              {
-                "type": "path",
-                "data": {
-                  "pathName": "leftNeutralScore_Part6"
                 }
               }
             ]
