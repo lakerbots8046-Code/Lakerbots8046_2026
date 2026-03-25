@@ -1,14 +1,3 @@
-- [x] Retune hood Motion Magic and PID damping in Launcher subsystem
-- [x] Increase hood command deadband in ShootOnMoveCommand
-- [x] Align hood command deadband in ShootFromPointCommand
-- [x] Run Gradle build verification
-- [x] Mark TODO items complete
-- [x] Update FMS/practice game-data LED source logic in RobotContainer.updateFmsInfo()
-- [x] Validate dashboard keys consumed by LEDSubsystem remain unchanged
-- [x] Run Gradle build verification
-- [x] Mark TODO items complete
-- [x] Update FMS/Active Hub Is Red and FMS/Active Hub Is Blue booleans to include "Both"
-- [x] Update completion status
-- [ ] Align FMS shift/hub display logic to 2026 grid and alternation model
-- [ ] Align LED behavior/comments to: Both->GREEN, else myHubActive->GREEN, otherwise RED
-- [ ] Mark TODO completion for this update
+- [x] Update intake reverse speed constant to be equal/opposite of intake speed
+- [x] Rebind operator reverse intake button to velocity-controlled outtake command
+- [x] Run critical-path validation (compile-level and binding/constant verification)

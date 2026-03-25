@@ -7,7 +7,7 @@
         {
           "type": "path",
           "data": {
-            "pathName": "rightNeutralScore_Part1"
+            "pathName": "leftDoubleNeutral_Part1"
           }
         },
         {
@@ -17,7 +17,7 @@
               {
                 "type": "path",
                 "data": {
-                  "pathName": "rightNeutralScore_Part2"
+                  "pathName": "leftDoubleNeutral_Part2"
                 }
               },
               {
@@ -45,13 +45,13 @@
         {
           "type": "path",
           "data": {
-            "pathName": "rightNeutralScore_Part3"
+            "pathName": "leftDoubleNeutral_Part3"
           }
         },
         {
           "type": "path",
           "data": {
-            "pathName": "rightNeutralScore_Part4"
+            "pathName": "leftDoubleNeutral_Part4"
           }
         },
         {
@@ -71,7 +71,19 @@
                     {
                       "type": "wait",
                       "data": {
-                        "waitTime": 1.5
+                        "waitTime": 0.5
+                      }
+                    },
+                    {
+                      "type": "named",
+                      "data": {
+                        "name": "DumpAndReturn"
+                      }
+                    },
+                    {
+                      "type": "wait",
+                      "data": {
+                        "waitTime": 0.75
                       }
                     },
                     {
@@ -95,7 +107,7 @@
                     {
                       "type": "wait",
                       "data": {
-                        "waitTime": 1.3
+                        "waitTime": 1.0
                       }
                     }
                   ]
@@ -120,7 +132,7 @@
         {
           "type": "path",
           "data": {
-            "pathName": "rightNeutralScore_Part5"
+            "pathName": "leftDoubleNeutral_Part5"
           }
         },
         {
@@ -136,7 +148,7 @@
               {
                 "type": "path",
                 "data": {
-                  "pathName": "rightNeutralScore_Part6"
+                  "pathName": "leftDoubleNeutral_Part6"
                 }
               }
             ]
@@ -166,6 +178,24 @@
                       "type": "named",
                       "data": {
                         "name": "DumpAndReturn"
+                      }
+                    },
+                    {
+                      "type": "wait",
+                      "data": {
+                        "waitTime": 1.0
+                      }
+                    },
+                    {
+                      "type": "named",
+                      "data": {
+                        "name": "DumpAndReturn"
+                      }
+                    },
+                    {
+                      "type": "wait",
+                      "data": {
+                        "waitTime": 1.0
                       }
                     }
                   ]
@@ -191,6 +221,6 @@
     }
   },
   "resetOdom": true,
-  "folder": "Right",
+  "folder": "Left",
   "choreoAuto": false
 }

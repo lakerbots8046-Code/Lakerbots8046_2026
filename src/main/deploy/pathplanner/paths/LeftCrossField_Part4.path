@@ -8,8 +8,8 @@
       },
       "prevControl": null,
       "nextControl": {
-        "x": 6.788973509933775,
-        "y": 0.668990066225166
+        "x": 7.028551324503312,
+        "y": 0.47763245033112534
       },
       "isLocked": false,
       "linkedName": "LeftCrossField_Part2End"
@@ -21,7 +21,7 @@
       },
       "prevControl": {
         "x": 3.362284768211921,
-        "y": 0.414892384105961
+        "y": 0.4148923841059611
       },
       "nextControl": null,
       "isLocked": false,
@@ -50,7 +50,7 @@
     "rotation": 179.25594079711118
   },
   "reversed": false,
-  "folder": "LeftCrossField",
+  "folder": null,
   "idealStartingState": {
     "velocity": 1.5,
     "rotation": 179.79740813413554

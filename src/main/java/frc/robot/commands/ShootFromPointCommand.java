@@ -166,7 +166,7 @@ public class ShootFromPointCommand extends Command {
      * pose jitter that would otherwise cause the hood to oscillate.
      * 0.1 rot ≈ 0.35° of hood angle — well below the 0.2-rotation tolerance.
      */
-    private static final double kHoodDeadbandRotations = 0.2;
+    private static final double kHoodDeadbandRotations = 0.4; // 0.3
 
     // ── Tag locking ───────────────────────────────────────────────────────────
     /**

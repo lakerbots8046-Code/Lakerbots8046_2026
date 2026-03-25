@@ -142,7 +142,7 @@ public class Constants {
          * <p>Flip this value to quickly enable/disable idle spinning without touching
          * any other code.
          */
-        public static final boolean kFlywheelIdleEnabled = false; // set true to re-enable idling
+        public static final boolean kFlywheelIdleEnabled = true; // set true to re-enable idling
 
         public static double kSensorToMechanismRatio;
         public static double kHoodStowedPosition;
@@ -230,7 +230,7 @@ public class Constants {
         //   ≈ ±169.04°
         //
         // EXCEEDING THESE LIMITS WILL BREAK THE TURRET.
-        public static final double kPhysicalLimitRotations = 22.0; // raw motor rotations (from Tuner X) //18.0
+        public static final double kPhysicalLimitRotations = 25.0; // raw motor rotations (from Tuner X) //18.0, 22.0
         public static final double kMinRotationDegrees = -(kPhysicalLimitRotations * 360.0 / kGearRatio); // ≈ -169.04°
         public static final double kMaxRotationDegrees =  (kPhysicalLimitRotations * 360.0 / kGearRatio); // ≈ +169.04°
 
@@ -404,7 +404,7 @@ public class Constants {
         public static final double kIntakeVoltage = -9.0;
         // ── Roller velocity setpoints (RPS) ──────────────────────────────────
         public static final double kRollersIntakeVelocity = -100.0; // RPS — intake direction
-        public static final double kRollersOuttakeVelocity = -20.0; // RPS — outtake direction
+        public static final double kRollersOuttakeVelocity = -kRollersIntakeVelocity; // RPS — outtake direction (equal/opposite of intake)
         public static final double kRollersHoldVelocity = 5.0;      // RPS — slow hold
 
         // ── Roller current limits ─────────────────────────────────────────────

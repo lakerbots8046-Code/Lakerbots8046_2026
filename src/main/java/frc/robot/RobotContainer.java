@@ -191,8 +191,18 @@ public class RobotContainer {
         NamedCommands.registerCommand("AutoDeployIntake",
             new AutoDeployIntake(intake));
 
+        NamedCommands.registerCommand("ShootOnMoveCommand",
+            new ShootOnMoveCommand(
+                drivetrain,
+                launcher,
+                spindexer,
+                this::getActiveTowerTagId,
+                () -> -joystick.getLeftX()
+            )
+        );
+        
         NamedCommands.registerCommand("ShootFromPointCommand",
-             new ShootFromPointCommand(
+            new ShootFromPointCommand(
                 drivetrain,
                 launcher,
                 spindexer,
@@ -268,18 +278,28 @@ public class RobotContainer {
         // ── PathPlanner autos ─────────────────────────────────────────────────
         // Auto names must match the .auto file names in deploy/pathplanner/autos/
         String[] autoNames = {
-            "centerDepotClimb",
-           // "leftNeutralFeed",
-            "leftNeutralScore",
-            "leftNeutralBumpScore",
-            //"rightNeutralFeed",
-            "rightNeutralScore",
-            //"rightOutpostScore",
-            "rightNeutralCross",
-            "CrossField",
-            "CrossFieldLeft",
-            "CrossFieldBackInLeft",
-            "LeftNeutralScoreV2"
+        // CENTER AUTOS
+            "[CENTER] Depot + Climb",
+            
+        // RIGHT AUTOS
+            // "rightNeutralFeed",
+            "[RIGHT] Double Neutral",
+            // "rightOutpostScore",
+            // "rightNeutralCross",
+
+        // LEFT AUTOS
+            "[LEFT] Double Neutral",
+            "[LEFT] Cross Field",
+            // "leftNeutralFeed",
+            // "leftNeutralScore",
+            // "leftNeutralBumpScore",
+            // "LeftNeutralScoreV2",
+
+
+            // "CrossField",
+            // "CrossFieldLeft",
+            // "CrossFieldBackInLeft"
+            
         };
 
         for (String autoName : autoNames) {
@@ -384,7 +404,7 @@ public class RobotContainer {
         // Requires the intake subsystem — will interrupt intakeDeployCollect() while running.
         // Re-press right bumper after this command finishes to resume normal intake.
         joystick.leftBumper().onTrue(intake.dumpAndReturn());
-        operatorController.leftBumper().onTrue(intake.dumpAndReturn());
+        operatorController.leftBumper().whileTrue(intake.runOuttake());
 
         // Driver X: toggle intake rollers on/off independently of pivot.
         joystick.x().onTrue(intake.toggleRollers());

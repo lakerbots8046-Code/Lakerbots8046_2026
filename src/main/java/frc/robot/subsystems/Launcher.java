@@ -123,10 +123,10 @@ public class Launcher extends SubsystemBase {
     // producing NaN/Infinity positions and severe motor oscillation. DO NOT use it here.
     cfgTurret.Feedback.SensorToMechanismRatio = 1.0;
     
-    cfgTurret.SoftwareLimitSwitch.ForwardSoftLimitThreshold=18;
-    cfgTurret.SoftwareLimitSwitch.ForwardSoftLimitEnable=true;
-    cfgTurret.SoftwareLimitSwitch.ReverseSoftLimitThreshold=-18;
-    cfgTurret.SoftwareLimitSwitch.ReverseSoftLimitEnable=true;
+    cfgTurret.SoftwareLimitSwitch.ForwardSoftLimitThreshold = TurretConstants.kPhysicalLimitRotations;
+    cfgTurret.SoftwareLimitSwitch.ForwardSoftLimitEnable = true;
+    cfgTurret.SoftwareLimitSwitch.ReverseSoftLimitThreshold = -TurretConstants.kPhysicalLimitRotations;
+    cfgTurret.SoftwareLimitSwitch.ReverseSoftLimitEnable = true;
 
     // Configure Motion Magic cruise/accel/jerk in raw motor rotations per second
     MotionMagicConfigs mmTurret = cfgTurret.MotionMagic;
@@ -389,7 +389,7 @@ public class Launcher extends SubsystemBase {
 
   /**
    * Checks whether the turret is within its physical hard-stop limits.
-   * Physical limits: ±18 raw motor rotations (measured in Tuner X).
+   * Physical limits: ±kPhysicalLimitRotations raw motor rotations.
    *
    * @return true if within limits, false if past a hard stop
    */

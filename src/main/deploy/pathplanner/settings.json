@@ -3,20 +3,20 @@
   "robotLength": 0.8509,
   "holonomicMode": true,
   "pathFolders": [
+    "LNSBump",
     "LeftNSV2",
     "LeftScoreDepotClimb",
-    "LNSBump",
     "RightNeutralCross",
     "centerDepotClimb",
     "leftNeutralFeed",
     "leftNeutralScore",
     "rightNeutralFeed",
-    "rightNeutralScore",
+    "[RIGHT] Double Neutral",
     "rightOutpostScore"
   ],
   "autoFolders": [
-    "Left",
     "Center",
+    "Left",
     "Right"
   ],
   "defaultMaxVel": 3.0,

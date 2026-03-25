@@ -75,7 +75,7 @@
                           {
                             "type": "wait",
                             "data": {
-                              "waitTime": 1.5
+                              "waitTime": 0.5
                             }
                           },
                           {
@@ -87,7 +87,19 @@
                           {
                             "type": "wait",
                             "data": {
-                              "waitTime": 1.5
+                              "waitTime": 0.5
+                            }
+                          },
+                          {
+                            "type": "named",
+                            "data": {
+                              "name": "DumpAndReturn"
+                            }
+                          },
+                          {
+                            "type": "wait",
+                            "data": {
+                              "waitTime": 1.0
                             }
                           },
                           {
@@ -108,7 +120,7 @@
                     {
                       "type": "named",
                       "data": {
-                        "name": "ShootFromPointCommand"
+                        "name": "ShootOnMoveCommand"
                       }
                     }
                   ]
