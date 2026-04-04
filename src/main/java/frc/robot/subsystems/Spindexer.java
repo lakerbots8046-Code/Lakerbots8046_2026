@@ -19,6 +19,7 @@ import com.ctre.phoenix6.hardware.TalonFX;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import frc.robot.Constants.IntakeConstants;
 import frc.robot.Constants.SpindexerConstants;
 
 /**
@@ -203,9 +204,8 @@ public class Spindexer extends SubsystemBase {
    * @return Command that ejects game pieces
    */
   public Command runSpindexerOuttake() {
-    return Commands.run(() -> {
-      setSpindexerVelocity(SpindexerConstants.kSpindexerOuttakeVelocity);
-    }, this);
+    return Commands.run(() -> setSpindexerVelocity(60), this)
+        .finallyDo((interrupted) -> setSpindexerVelocity(0));
   }
   
   // ==================== FLAPPY WHEEL FEEDER VELOCITY CONTROL METHODS ====================
@@ -241,6 +241,14 @@ public class Spindexer extends SubsystemBase {
       flappyWheelFeederMotor.set(speed);
     }, this);
   }
+
+
+ /* public Command unjamSpindexer() {
+    return Commands.run(() -> {
+      
+    }
+  }
+*/
 
   /**
    * Command to run flappy wheel (Stars) at intake velocity (velocity closed-loop).

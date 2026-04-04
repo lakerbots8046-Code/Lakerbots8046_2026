@@ -18,6 +18,7 @@ import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.RobotModeTriggers;
@@ -120,7 +121,7 @@ public class RobotContainer {
         // Hood default command: retract to position 0 (22° / stowed) whenever no
         // shooting command is active. WPILib automatically resumes this command
         // whenever ShootOnMoveCommand or ShootFromPointCommand ends.
-        launcher.setDefaultCommand(launcher.retractHood());
+        launcher.setDefaultCommand(launcher.retractHood(intake::isPivotAtHome));
         
         // Initialize autonomous chooser
         autoChooser = buildAutoChooser();
@@ -234,6 +235,9 @@ public class RobotContainer {
         NamedCommands.registerCommand("AutoIntakeDeployCollect8Secs",
             intake.AutoIntakeDeployCollect8secs());
 
+         NamedCommands.registerCommand("AutoIntakeDeployCollect6Secs",
+            intake.AutoIntakeDeployCollect6secs());
+
         NamedCommands.registerCommand("DumpAndReturn", 
             intake.dumpAndReturn());
 
@@ -243,8 +247,15 @@ public class RobotContainer {
         NamedCommands.registerCommand("ClimberPullDown", 
             new ClimberGoToSetpoint(climber, Climber.Setpoint.YButton));
 
-        NamedCommands.registerCommand("IntakeHome", 
-           intake.goToPivotPosition(Constants.IntakeConstants.kPivotHomePosition));
+        NamedCommands.registerCommand("IntakeHome",
+            Commands.sequence(
+                // Move turret to mechanical zero (raw rotations) first.
+                Commands.runOnce(() -> launcher.setTurretPosition(0.0)),
+                // Wait until turret is near zero before homing intake pivot.
+                Commands.waitUntil(() -> Math.abs(launcher.getTurretPosition()) <= 0.003).withTimeout(2.0),
+                // Then home the intake pivot.
+                intake.goToPivotPosition(Constants.IntakeConstants.kPivotHomePosition)
+            ).withName("IntakeHome"));
     
     }
     
@@ -334,7 +345,7 @@ public class RobotContainer {
                     .withVelocityY(0)
                     .withRotationalRate(0)
             )
-            .withTimeout(5.0),
+            .withTimeout(5.0), 
             // Finally idle for the rest of auton
             drivetrain.applyRequest(() -> idle)
         );
@@ -344,13 +355,36 @@ public class RobotContainer {
         // Note that X is defined as forward according to WPILib convention,
         // and Y is defined as to the left according to WPILib convention.
         drivetrain.setDefaultCommand(
-            // Drivetrain will execute this command periodically
-            // squareInput() is applied to translation axes for finer low-speed control
-            drivetrain.applyRequest(() ->
-                drive.withVelocityX(squareInput(-joystick.getLeftY()) * MaxSpeed) // Drive forward with squared negative Y (forward)
-                    .withVelocityY(squareInput(-joystick.getLeftX()) * MaxSpeed) // Drive left with squared negative X (left)
-                    .withRotationalRate((-joystick.getRightX()) * MaxAngularRate) // Drive counterclockwise with squared negative X (left)
-            )
+            // Drivetrain will execute this command periodically.
+            // When ShootOnMove is active, translation is gated to a constant speed
+            // (direction-only from joystick, no magnitude scaling).
+            drivetrain.applyRequest(() -> {
+                double inputY = -joystick.getLeftY(); // forward/back
+                double inputX = -joystick.getLeftX(); // left/right
+
+                double vx;
+                double vy;
+
+                if (ShootOnMoveCommand.isShootOnMoveActive()) {
+                    double deadband = Constants.ShootingArc.kShootOnMoveDriveDirectionDeadband;
+                    double maxShootOnMoveSpeed = Constants.ShootingArc.kShootOnMoveDriveMaxSpeedMps;
+
+                    double xCmd = Math.abs(inputY) > deadband ? inputY : 0.0;
+                    double yCmd = Math.abs(inputX) > deadband ? inputX : 0.0;
+
+                    // Scaled translation while ShootOnMove is active, capped by maxShootOnMoveSpeed.
+                    vx = xCmd * maxShootOnMoveSpeed;
+                    vy = yCmd * maxShootOnMoveSpeed;
+                } else {
+                    // Normal driver shaping outside ShootOnMove.
+                    vx = squareInput(inputY) * MaxSpeed;
+                    vy = squareInput(inputX) * MaxSpeed;
+                }
+
+                return drive.withVelocityX(vx)
+                    .withVelocityY(vy)
+                    .withRotationalRate((-joystick.getRightX()) * MaxAngularRate);
+            })
         );
 
         // Idle while the robot is disabled. This ensures the configured
@@ -371,8 +405,9 @@ public class RobotContainer {
                 launcher.launchFromTowerLauncher()
             )
         );
-        // Operator A: while held, run intake outtake (spit balls out of intake).
-        operatorController.a().whileTrue(intake.runOuttake());
+        // Operator A: while held, run spindexer outtake (dejam Spindexer).
+        operatorController.a().whileTrue(spindexer.runSpindexerOuttake());
+
         joystick.b().whileTrue(drivetrain.applyRequest(() ->
             point.withModuleDirection(new Rotation2d(-joystick.getLeftY(), -joystick.getLeftX()))
         ));
@@ -425,21 +460,7 @@ public class RobotContainer {
         //   Turret holds its current position.
         //   POV Left (270°) → tap moves turret 1° CCW via Motion Magic.
         //   POV Right (90°) → tap moves turret 1° CW  via Motion Magic.
-        joystick.leftTrigger(0.3).whileTrue(
-            new ShootFromPointCommand(
-                drivetrain,
-                launcher,
-                spindexer,
-                this::getActiveTowerTagId,
-                () -> {
-                    int pov = joystick.getHID().getPOV();
-                    if (pov == 270) return  1.0; // POV Left  → CCW
-                    if (pov == 90)  return -1.0; // POV Right → CW
-                    return 0.0;
-                },
-                intake
-            )
-        );
+        operatorController.rightTrigger(0.3).whileTrue(intake.runOuttake());
         operatorController.leftTrigger(0.3).whileTrue(
             new ShootFromPointCommand(
                 drivetrain,
@@ -465,7 +486,7 @@ public class RobotContainer {
 
 
         // Driver right trigger (hard press, 0.75+): Shoot on move.
-        joystick.rightTrigger(0.75).whileTrue(
+        joystick.leftTrigger(0.75).whileTrue(
             new ShootOnMoveCommand(
                 drivetrain,
                 launcher,
@@ -476,7 +497,7 @@ public class RobotContainer {
         );
 
         // Operator right trigger remains Feed from center.
-        operatorController.rightTrigger(0.75).whileTrue(
+        joystick.rightTrigger(0.75).whileTrue(
             new FeedFromCenterCommand(drivetrain, launcher, spindexer)
         );
 
@@ -559,7 +580,7 @@ public class RobotContainer {
      */
     public void updateTowerTagInfo() {
         towerTagCounter++;
-        if (towerTagCounter < 5) return;
+        if (towerTagCounter < 1) return;  // Reduced latency: 100ms→20ms (50Hz tracking updates)
         towerTagCounter = 0;
 
         int           tagId      = getActiveTowerTagId();
@@ -624,31 +645,68 @@ public class RobotContainer {
         SmartDashboard.putNumber("ShootFromPoint/Turret Position (deg)",  currentTurretDeg);
 
         // ── Always-on turret tracking from pose (turret only) ────────────────
-        // Always track based on robot pose regardless of field zone.
-        // If alliance is unknown, retain existing fallback behavior (red primary tag).
-        var alliance = DriverStation.getAlliance();
-        boolean allianceKnown = alliance.isPresent();
-        int allianceTagId = allianceKnown && alliance.get() == Alliance.Blue
-                ? Constants.ShootingArc.kBluePrimaryTagId
-                : Constants.ShootingArc.kRedPrimaryTagId;
+        // Disabled while intake is at home/stowed to avoid unnecessary turret motion.
+        boolean intakeAtHome = intake.isPivotAtHome();
 
-        var allianceTower = ShootingArcManager.getTowerCenter(robotPose, allianceTagId);
-        double targetTrackAngleDeg = ShootingArcManager.calculateTurretAngle(robotPose, allianceTower);
-        double desiredRaw = targetTrackAngleDeg * Constants.TurretConstants.kRotationsPerDegree;
-        desiredRaw = Math.max(-Constants.TurretConstants.kPhysicalLimitRotations,
-                     Math.min( Constants.TurretConstants.kPhysicalLimitRotations, desiredRaw));
-
-        double currentRaw = launcher.getTurretPosition();
-
-        // Previous (rollback) deadband: 0.01 raw rotations.
-        // Smaller deadband improves continuous follow while still filtering micro-jitter.
-        if (Math.abs(desiredRaw - currentRaw) > 0.005) {
-            launcher.setTurretPosition(desiredRaw);
-        }
-
-        // Kept for dashboard compatibility; now always true because tracking is always active.
+        // Kept for dashboard compatibility.
         SmartDashboard.putBoolean("Turret/Alliance Zone Tracking Enabled", true);
-        SmartDashboard.putBoolean("Turret/Always Pose Tracking Enabled", true);
+        SmartDashboard.putBoolean("Turret/Always Pose Tracking Enabled", !intakeAtHome);
+        SmartDashboard.putBoolean("Turret/Tracking Blocked By Intake Home", intakeAtHome);
+
+        Command intakeRequiringCommand = CommandScheduler.getInstance().requiring(intake);
+        boolean intakeHomeCommandRunning =
+                intakeRequiringCommand != null && "IntakeHome".equals(intakeRequiringCommand.getName());
+
+        // If FeedFromCenter is active, it must fully own turret aiming.
+        // Skip always-on tower tracking to avoid conflicting turret setpoints.
+        Command launcherRequiringCommand = CommandScheduler.getInstance().requiring(launcher);
+        boolean feedFromCenterActive =
+                launcherRequiringCommand != null
+                && launcherRequiringCommand.getClass().getSimpleName().equals("FeedFromCenterCommand");
+
+        if (feedFromCenterActive) {
+            SmartDashboard.putString("Turret/Tracking State", "Suppressed (FeedFromCenter Active)");
+        } else if (intakeHomeCommandRunning) {
+            // IntakeHome command is actively sequencing turret-first then intake-home.
+            // Suppress ALL always-on turret writes here so IntakeHome owns the setpoint flow.
+            SmartDashboard.putString("Turret/Tracking State", "IntakeHome Sequence Active");
+        } else if (intakeAtHome) {
+            // Intake is home/stowed: command turret to mechanical zero instead of tracking.
+            double zeroRaw = 0.0;
+            double currentRaw = launcher.getTurretPosition();
+
+            // Small deadband avoids spamming identical Motion Magic setpoints every loop.
+            if (Math.abs(zeroRaw - currentRaw) > 0.005) {
+                launcher.setTurretPosition(zeroRaw);
+                SmartDashboard.putString("Turret/Tracking State", "Homing to Zero (Intake Home)");
+            } else {
+                SmartDashboard.putString("Turret/Tracking State", "At Zero (Intake Home)");
+            }
+        } else {
+            // Track based on robot pose when intake is not home.
+            // If alliance is unknown, retain existing fallback behavior (red primary tag).
+            var alliance = DriverStation.getAlliance();
+            boolean allianceKnown = alliance.isPresent();
+            int allianceTagId = allianceKnown && alliance.get() == Alliance.Blue
+                    ? Constants.ShootingArc.kBluePrimaryTagId
+                    : Constants.ShootingArc.kRedPrimaryTagId;
+
+            var allianceTower = ShootingArcManager.getTowerCenter(robotPose, allianceTagId);
+            double targetTrackAngleDeg = ShootingArcManager.calculateTurretAngle(robotPose, allianceTower);
+            double desiredRaw = targetTrackAngleDeg * Constants.TurretConstants.kRotationsPerDegree;
+            desiredRaw = Math.max(-Constants.TurretConstants.kPhysicalLimitRotations,
+                        Math.min( Constants.TurretConstants.kPhysicalLimitRotations, desiredRaw));
+
+            double currentRaw = launcher.getTurretPosition();
+
+            // Deadband tuned to reduce command chatter/hunting while preserving responsiveness.
+            // 0.02 raw rotations ≈ 0.19 turret degrees.
+            if (Math.abs(desiredRaw - currentRaw) > 0.02) {
+                launcher.setTurretPosition(desiredRaw);
+            }
+
+            SmartDashboard.putString("Turret/Tracking State", "Active");
+        }
 
         // Tag source diagnostics for dropout troubleshooting near walls.
         double heldAge = (lastSeenTowerTagTimestampSec > 0.0)

@@ -11,7 +11,6 @@ import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import frc.robot.Constants;
 import frc.robot.Constants.TurretConstants;
-import frc.robot.RobotContainer;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.Launcher;
 import frc.robot.subsystems.Spindexer;
@@ -62,26 +61,72 @@ public class ShootOnMoveCommand extends Command {
     private int lockedTagId = -1;
     private int pendingTagId = -1;
     private int pendingTagCounter = 0;
-    private static final int TAG_SWITCH_STABILITY_LOOPS = 25;
+    private static final int TAG_SWITCH_STABILITY_LOOPS = 10;
 
     // ── State ─────────────────────────────────────────────────────────────────
     private boolean isFiring = false;
+    private static volatile boolean shootOnMoveActive = false;
 
     // ── Dashboard key prefix ──────────────────────────────────────────────────
     private static final String DASH = "ShootOnMove/";
 
-    // ── Lead compensation tuning ──────────────────────────────────────────────
-    private static final double kDefaultLeadCompGain = 2.6;
-    private static final double kDefaultWheelCircumferenceMeters = 0.319; // ~4" wheel fallback
-    private static final double kDefaultMuzzleSpeedScale = 0.75;
+    // ── Lead compensation state ───────────────────────────────────────────────
+    private Translation2d filteredRobotFieldVelocity = new Translation2d();
+
+    /**
+     * Selects the best turret target in raw rotations by considering equivalent
+     * wrapped angles (base, +360°, -360°) and choosing the in-range option with
+     * the smallest travel from current position.
+     *
+     * @param baseTargetRaw base target in raw motor rotations
+     * @param currentRaw current turret position in raw motor rotations
+     * @return best in-range target raw rotations, or nearest clamped base target if none in range
+     */
+    private double selectBestWrappedTurretTargetRaw(double baseTargetRaw, double currentRaw) {
+        double limit = TurretConstants.kPhysicalLimitRotations;
+
+        double[] candidates = new double[] {
+            baseTargetRaw,
+            baseTargetRaw + 360.0 * TurretConstants.kRotationsPerDegree,
+            baseTargetRaw - 360.0 * TurretConstants.kRotationsPerDegree
+        };
+
+        double best = Double.NaN;
+        double bestDelta = Double.POSITIVE_INFINITY;
+
+        for (double candidate : candidates) {
+            if (Math.abs(candidate) <= limit) {
+                double delta = Math.abs(candidate - currentRaw);
+                if (delta < bestDelta) {
+                    bestDelta = delta;
+                    best = candidate;
+                }
+            }
+        }
+
+        if (!Double.isNaN(best)) {
+            return best;
+        }
+
+        // Fallback if no equivalent candidate is physically reachable.
+        return Math.max(-limit, Math.min(limit, baseTargetRaw));
+    }
 
     /** Seeds all ShootOnMove dashboard keys so they are visible even when command is idle. */
     public static void seedDashboardKeys() {
-        SmartDashboard.putNumber(DASH + "Lead Gain", SmartDashboard.getNumber(DASH + "Lead Gain", kDefaultLeadCompGain));
+        SmartDashboard.putNumber(DASH + "Lead Gain", Constants.ShootingArc.kShootOnMoveLeadCompGain);
         SmartDashboard.putNumber(DASH + "Wheel Circumference (m)",
-                SmartDashboard.getNumber(DASH + "Wheel Circumference (m)", kDefaultWheelCircumferenceMeters));
+                Constants.ShootingArc.kShootOnMoveWheelCircumferenceMeters);
         SmartDashboard.putNumber(DASH + "Muzzle Speed Scale",
-                SmartDashboard.getNumber(DASH + "Muzzle Speed Scale", kDefaultMuzzleSpeedScale));
+                Constants.ShootingArc.kShootOnMoveMuzzleSpeedScale);
+        SmartDashboard.putNumber(DASH + "Latency Sec", Constants.ShootingArc.kShootOnMoveExtraLatencySec);
+        SmartDashboard.putNumber(DASH + "Lead Iterations", Constants.ShootingArc.kShootOnMoveLeadSolveIterations);
+        SmartDashboard.putNumber(DASH + "Velocity LPF Alpha", Constants.ShootingArc.kShootOnMoveVelocityLpfAlpha);
+        SmartDashboard.putNumber(DASH + "Lead Gain X", Constants.ShootingArc.kShootOnMoveLeadCompGainX);
+        SmartDashboard.putNumber(DASH + "Lead Gain Y", Constants.ShootingArc.kShootOnMoveLeadCompGainY);
+        SmartDashboard.putNumber(DASH + "Velocity Lookahead Sec", Constants.ShootingArc.kShootOnMoveVelocityLookaheadSec);
+        SmartDashboard.putNumber(DASH + "Max Lead Meters", Constants.ShootingArc.kShootOnMoveMaxLeadMeters);
+        SmartDashboard.putBoolean(DASH + "Invert Lead", SmartDashboard.getBoolean(DASH + "Invert Lead", false));
 
         SmartDashboard.putNumber(DASH + "Locked Tag ID", SmartDashboard.getNumber(DASH + "Locked Tag ID", -1));
         SmartDashboard.putNumber(DASH + "Tower Tag ID", SmartDashboard.getNumber(DASH + "Tower Tag ID", -1));
@@ -98,6 +143,12 @@ public class ShootOnMoveCommand extends Command {
         SmartDashboard.putNumber(DASH + "Flight Time (s)", SmartDashboard.getNumber(DASH + "Flight Time (s)", 0.0));
         SmartDashboard.putNumber(DASH + "Comp Dx (m)", SmartDashboard.getNumber(DASH + "Comp Dx (m)", 0.0));
         SmartDashboard.putNumber(DASH + "Comp Dy (m)", SmartDashboard.getNumber(DASH + "Comp Dy (m)", 0.0));
+        SmartDashboard.putNumber(DASH + "Lead X Applied (m)", SmartDashboard.getNumber(DASH + "Lead X Applied (m)", 0.0));
+        SmartDashboard.putNumber(DASH + "Lead Y Applied (m)", SmartDashboard.getNumber(DASH + "Lead Y Applied (m)", 0.0));
+        SmartDashboard.putNumber(DASH + "Lead Mag Applied (m)", SmartDashboard.getNumber(DASH + "Lead Mag Applied (m)", 0.0));
+        SmartDashboard.putNumber(DASH + "Lead Mag Raw (m)", SmartDashboard.getNumber(DASH + "Lead Mag Raw (m)", 0.0));
+        SmartDashboard.putBoolean(DASH + "Lead Clamped", SmartDashboard.getBoolean(DASH + "Lead Clamped", false));
+        SmartDashboard.putNumber(DASH + "Lead Time Used (s)", SmartDashboard.getNumber(DASH + "Lead Time Used (s)", 0.0));
 
         SmartDashboard.putNumber(DASH + "Turret Target Uncomp (deg)",
                 SmartDashboard.getNumber(DASH + "Turret Target Uncomp (deg)", 0.0));
@@ -123,6 +174,10 @@ public class ShootOnMoveCommand extends Command {
         SmartDashboard.putString(DASH + "Status", SmartDashboard.getString(DASH + "Status", "Idle"));
     }
 
+    public static boolean isShootOnMoveActive() {
+        return shootOnMoveActive;
+    }
+
     public ShootOnMoveCommand(
             CommandSwerveDrivetrain drivetrain,
             Launcher                launcher,
@@ -145,11 +200,13 @@ public class ShootOnMoveCommand extends Command {
 
     @Override
     public void initialize() {
+        shootOnMoveActive = true;
         isFiring = false;
         launchSequenceScheduled = false;
         dashboardCounter = 0;
         flywheelStartTimestamp = -1.0;
         lastCommandedHoodRotations = Double.MAX_VALUE;
+        filteredRobotFieldVelocity = new Translation2d();
 
         lockedTagId = towerTagIdSupplier.getAsInt();
         pendingTagId = -1;
@@ -190,7 +247,14 @@ public class ShootOnMoveCommand extends Command {
         Translation2d robotRelativeVelocity = new Translation2d(
                 drivetrain.getState().Speeds.vxMetersPerSecond,
                 drivetrain.getState().Speeds.vyMetersPerSecond);
-        Translation2d robotFieldVelocity = robotRelativeVelocity.rotateBy(robotPose.getRotation());
+        Translation2d measuredRobotFieldVelocity = robotRelativeVelocity.rotateBy(robotPose.getRotation());
+
+        // Low-pass filter field velocity for lead stability
+        double alpha = Constants.ShootingArc.kShootOnMoveVelocityLpfAlpha;
+        alpha = Math.max(0.0, Math.min(1.0, alpha));
+        filteredRobotFieldVelocity = filteredRobotFieldVelocity.times(1.0 - alpha)
+                .plus(measuredRobotFieldVelocity.times(alpha));
+        Translation2d robotFieldVelocity = filteredRobotFieldVelocity;
 
         Translation2d turretPos2d = ShootingArcManager.getTurretFieldPosition(robotPose).toTranslation2d();
         Translation2d towerPos2d  = towerCenter.toTranslation2d();
@@ -200,31 +264,71 @@ public class ShootOnMoveCommand extends Command {
         double verticalDelta      = towerCenter.getZ() - Constants.TurretConstants.kTurretOffsetZ;
         double directDistance     = Math.hypot(horizontalDistance, verticalDelta);
 
-        // First pass launcher settings from direct line-of-sight distance
-        double targetLauncherRPS = ShootingArcManager.calculateLauncherRPS(directDistance);
-        double targetHoodRotations = ShootingArcManager.calculateHoodAngle(directDistance);
+        // Constants-only compensation parameters
+        double leadGain = Constants.ShootingArc.kShootOnMoveLeadCompGain;
+        double leadGainX = Constants.ShootingArc.kShootOnMoveLeadCompGainX;
+        double leadGainY = Constants.ShootingArc.kShootOnMoveLeadCompGainY;
+        double wheelCircumferenceMeters = Constants.ShootingArc.kShootOnMoveWheelCircumferenceMeters;
+        double muzzleSpeedScale = Constants.ShootingArc.kShootOnMoveMuzzleSpeedScale;
+        double extraLatencySec = Math.max(0.0, Constants.ShootingArc.kShootOnMoveExtraLatencySec);
+        double velocityLookaheadSec = Math.max(0.0, Constants.ShootingArc.kShootOnMoveVelocityLookaheadSec);
+        double maxLeadMeters = Math.max(0.0, Constants.ShootingArc.kShootOnMoveMaxLeadMeters);
+        int leadIterations = Math.max(1, Constants.ShootingArc.kShootOnMoveLeadSolveIterations);
 
-        // Tunables for compensation magnitude
-        double leadGain = SmartDashboard.getNumber(DASH + "Lead Gain", kDefaultLeadCompGain);
-        double wheelCircumferenceMeters =
-                SmartDashboard.getNumber(DASH + "Wheel Circumference (m)", kDefaultWheelCircumferenceMeters);
-        double muzzleSpeedScale = SmartDashboard.getNumber(DASH + "Muzzle Speed Scale", kDefaultMuzzleSpeedScale);
+        // Iterative fixed-point lead solve
+        Translation2d compensatedToTower = toTower;
+        double distance = directDistance;
+        double targetLauncherRPS = ShootingArcManager.calculateLauncherRPS(distance);
+        double targetHoodRotations = ShootingArcManager.calculateHoodAngle(distance);
+        double shooterMps = 0.1;
+        double flightTimeSec = 0.0;
+        double leadTimeUsedSec = 0.0;
+        Translation2d rawLeadVector = new Translation2d();
+        Translation2d appliedLeadVector = new Translation2d();
+        boolean leadClamped = false;
+        boolean invertLead = SmartDashboard.getBoolean(DASH + "Invert Lead", false);
 
-        // Derive approximate projectile speed from launcher RPS and circumference, then scale.
-        double shooterMps = Math.max(
-                0.1,
-                Math.abs(targetLauncherRPS) * Math.max(0.01, wheelCircumferenceMeters) * Math.max(0.05, muzzleSpeedScale));
+        for (int i = 0; i < leadIterations; i++) {
+            targetLauncherRPS = ShootingArcManager.calculateLauncherRPS(distance);
 
-        double flightTimeSec = directDistance / shooterMps;
+            shooterMps = Math.max(
+                    0.1,
+                    Math.abs(targetLauncherRPS)
+                            * Math.max(0.01, wheelCircumferenceMeters)
+                            * Math.max(0.05, muzzleSpeedScale));
 
-        // Lead compensation: subtract scaled robot travel during shot flight from target vector
-        Translation2d compensatedToTower = toTower.minus(robotFieldVelocity.times(flightTimeSec * leadGain));
-        double compensatedHorizontalDistance = compensatedToTower.getNorm();
-        double distance = Math.hypot(compensatedHorizontalDistance, verticalDelta);
+            flightTimeSec = (distance / shooterMps) + extraLatencySec;
+            leadTimeUsedSec = flightTimeSec + velocityLookaheadSec;
 
-        // Optional second pass using compensated distance
-        targetLauncherRPS = ShootingArcManager.calculateLauncherRPS(distance);
-        targetHoodRotations = ShootingArcManager.calculateHoodAngle(distance);
+            // Global lead gain multiplies axis-specific gains so all three tuning knobs are effective.
+            double effectiveLeadGainX = leadGain * leadGainX;
+            double effectiveLeadGainY = leadGain * leadGainY;
+
+            Translation2d candidateLeadVector = new Translation2d(
+                    robotFieldVelocity.getX() * leadTimeUsedSec * effectiveLeadGainX,
+                    robotFieldVelocity.getY() * leadTimeUsedSec * effectiveLeadGainY);
+
+            double candidateLeadMag = candidateLeadVector.getNorm();
+            if (maxLeadMeters > 0.0 && candidateLeadMag > maxLeadMeters) {
+                leadClamped = true;
+                candidateLeadVector = candidateLeadVector.times(maxLeadMeters / candidateLeadMag);
+            } else {
+                leadClamped = false;
+            }
+
+            rawLeadVector = candidateLeadVector;
+            // Default behavior: aim opposite robot translation during shot flight.
+            // If robot is moving +X, target should be shifted -X so projectile inherits +X and lands on target.
+            appliedLeadVector = invertLead ? candidateLeadVector : candidateLeadVector.unaryMinus();
+            compensatedToTower = toTower.plus(appliedLeadVector);
+            double compensatedHorizontalDistance = compensatedToTower.getNorm();
+            distance = Math.hypot(compensatedHorizontalDistance, verticalDelta);
+        }
+
+        // Use uncompensated range for launcher/hood; lead is applied to turret yaw only.
+        // This avoids coupling translational lead into shot-energy/arc calculations.
+        targetLauncherRPS = ShootingArcManager.calculateLauncherRPS(directDistance);
+        targetHoodRotations = ShootingArcManager.calculateHoodAngle(directDistance);
 
         double rawUncompensatedFieldAngle = Math.atan2(toTower.getY(), toTower.getX());
         double rawCompensatedFieldAngle = Math.atan2(
@@ -234,10 +338,8 @@ public class ShootOnMoveCommand extends Command {
         double targetTurretAngleUncomp = Math.toDegrees(rawUncompensatedFieldAngle - robotHeadingRad);
         double targetTurretAngle = Math.toDegrees(rawCompensatedFieldAngle - robotHeadingRad);
 
-        while (targetTurretAngleUncomp > 180.0) targetTurretAngleUncomp -= 360.0;
-        while (targetTurretAngleUncomp < -180.0) targetTurretAngleUncomp += 360.0;
-        while (targetTurretAngle > 180.0) targetTurretAngle -= 360.0;
-        while (targetTurretAngle < -180.0) targetTurretAngle += 360.0;
+        // Keep raw field-relative solution (do not normalize to [-180, 180])
+        // so the turret can use the extended mechanical range.
 
         // ── 2. Launcher + hood ────────────────────────────────────────────────
         launcher.setCollectVelocity(targetLauncherRPS);
@@ -252,12 +354,13 @@ public class ShootOnMoveCommand extends Command {
         }
 
         // ── 3. Turret aiming and limits ───────────────────────────────────────
-        double currentTurretDeg = launcher.getTurretPositionDegrees();
-        double turretError = targetTurretAngle - currentTurretDeg;
-        while (turretError > 180.0) turretError -= 360.0;
-        while (turretError < -180.0) turretError += 360.0;
+        double baseTargetRaw = targetTurretAngle * TurretConstants.kRotationsPerDegree;
+        double currentTurretRaw = launcher.getTurretPosition();
+        double targetRawRotations = selectBestWrappedTurretTargetRaw(baseTargetRaw, currentTurretRaw);
 
-        double targetRawRotations = targetTurretAngle * TurretConstants.kRotationsPerDegree;
+        // Compute error in raw-rotation domain so aiming respects extended range.
+        double turretError = (targetRawRotations - currentTurretRaw)
+                / TurretConstants.kRotationsPerDegree;
 
         boolean turretAtLimit = !launcher.isTurretWithinLimits();
         boolean targetOutOfRange = Math.abs(targetRawRotations) > TurretConstants.kPhysicalLimitRotations;
@@ -328,22 +431,37 @@ public class ShootOnMoveCommand extends Command {
             SmartDashboard.putString(DASH + "Tag Alliance", tagAlliance);
             SmartDashboard.putBoolean(DASH + "In Shooting Zone", inZone);
             SmartDashboard.putNumber(DASH + "Distance (m)", distance);
+            SmartDashboard.putNumber(DASH + "Distance Uncomp (m)", directDistance);
 
             SmartDashboard.putNumber(DASH + "Robot Vx Robot (mps)", robotRelativeVelocity.getX());
             SmartDashboard.putNumber(DASH + "Robot Vy Robot (mps)", robotRelativeVelocity.getY());
             SmartDashboard.putNumber(DASH + "Robot Vx Field (mps)", robotFieldVelocity.getX());
             SmartDashboard.putNumber(DASH + "Robot Vy Field (mps)", robotFieldVelocity.getY());
             SmartDashboard.putNumber(DASH + "Lead Gain", leadGain);
+            SmartDashboard.putNumber(DASH + "Lead Gain X", leadGainX);
+            SmartDashboard.putNumber(DASH + "Lead Gain Y", leadGainY);
             SmartDashboard.putNumber(DASH + "Wheel Circumference (m)", wheelCircumferenceMeters);
             SmartDashboard.putNumber(DASH + "Muzzle Speed Scale", muzzleSpeedScale);
+            SmartDashboard.putNumber(DASH + "Latency Sec", extraLatencySec);
+            SmartDashboard.putNumber(DASH + "Velocity Lookahead Sec", velocityLookaheadSec);
+            SmartDashboard.putNumber(DASH + "Lead Iterations", leadIterations);
+            SmartDashboard.putNumber(DASH + "Velocity LPF Alpha", alpha);
+            SmartDashboard.putNumber(DASH + "Max Lead Meters", maxLeadMeters);
             SmartDashboard.putNumber(DASH + "Shooter Speed Estimate (mps)", shooterMps);
             SmartDashboard.putNumber(DASH + "Flight Time (s)", flightTimeSec);
+            SmartDashboard.putNumber(DASH + "Lead Time Used (s)", leadTimeUsedSec);
+            SmartDashboard.putBoolean(DASH + "Invert Lead", invertLead);
             SmartDashboard.putNumber(DASH + "Comp Dx (m)", compensatedToTower.getX());
             SmartDashboard.putNumber(DASH + "Comp Dy (m)", compensatedToTower.getY());
+            SmartDashboard.putNumber(DASH + "Lead X Raw (m)", rawLeadVector.getX());
+            SmartDashboard.putNumber(DASH + "Lead Y Raw (m)", rawLeadVector.getY());
+            SmartDashboard.putNumber(DASH + "Lead Mag Raw (m)", rawLeadVector.getNorm());
+            SmartDashboard.putNumber(DASH + "Lead X Applied (m)", appliedLeadVector.getX());
+            SmartDashboard.putNumber(DASH + "Lead Y Applied (m)", appliedLeadVector.getY());
+            SmartDashboard.putNumber(DASH + "Lead Mag Applied (m)", appliedLeadVector.getNorm());
+            SmartDashboard.putBoolean(DASH + "Lead Clamped", leadClamped);
 
             double leadDeltaDeg = targetTurretAngle - targetTurretAngleUncomp;
-            while (leadDeltaDeg > 180.0) leadDeltaDeg -= 360.0;
-            while (leadDeltaDeg < -180.0) leadDeltaDeg += 360.0;
 
             SmartDashboard.putNumber(DASH + "Turret Target Uncomp (deg)", targetTurretAngleUncomp);
             SmartDashboard.putNumber(DASH + "Turret Target Comp (deg)", targetTurretAngle);
@@ -374,6 +492,7 @@ public class ShootOnMoveCommand extends Command {
 
     @Override
     public void end(boolean interrupted) {
+        shootOnMoveActive = false;
         if (launchSequenceScheduled) {
             launchSequenceOne.cancel();
             launchSequenceScheduled = false;
@@ -404,11 +523,10 @@ public class ShootOnMoveCommand extends Command {
         double fieldAngle = Math.atan2(toTower.getY(), toTower.getX());
         double targetAngle = Math.toDegrees(fieldAngle - drivetrain.getState().Pose.getRotation().getRadians());
 
-        while (targetAngle > 180.0) targetAngle -= 360.0;
-        while (targetAngle < -180.0) targetAngle += 360.0;
-
-        double error = Math.abs(targetAngle - launcher.getTurretPositionDegrees());
-        return error < Constants.ShootingArc.kTurretAimToleranceDeg;
+        double targetRawRotations = targetAngle * TurretConstants.kRotationsPerDegree;
+        double errorDeg = Math.abs((targetRawRotations - launcher.getTurretPosition())
+                / TurretConstants.kRotationsPerDegree);
+        return errorDeg < Constants.ShootingArc.kTurretAimToleranceDeg;
     }
 
     /** Returns {@code true} if the robot is currently firing. */

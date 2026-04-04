@@ -77,7 +77,6 @@ public class FeedFromCenterCommand extends Command {
     /** Minimum change in hood target (rotations) required to re-send a setHoodPosition() command. */
     private static final double kHoodDeadbandRotations = 0.1;
 
-    // ── State ─────────────────────────────────────────────────────────────────
     private boolean isFiring = false;
 
     // ── Dashboard throttle ────────────────────────────────────────────────────
@@ -86,6 +85,9 @@ public class FeedFromCenterCommand extends Command {
 
     // ── Dashboard key prefix ──────────────────────────────────────────────────
     private static final String DASH = "FeedFromCenter/";
+
+    // ── Debug toggle key ───────────────────────────────────────────────────────
+    private static final String kDisableLeadCompKey = DASH + "Disable Lead Compensation";
 
     // =========================================================================
     // Constructor
@@ -130,8 +132,10 @@ public class FeedFromCenterCommand extends Command {
         dashboardCounter        = 0;
         flywheelStartTimestamp  = -1.0;
         lastCommandedHoodRotations = Double.MAX_VALUE; // force update on first execute()
+
         SmartDashboard.putString( DASH + "Status", "Initializing");
         SmartDashboard.putBoolean(DASH + "Firing",  false);
+        SmartDashboard.putBoolean(kDisableLeadCompKey, false);
     }
 
     @Override
@@ -140,49 +144,39 @@ public class FeedFromCenterCommand extends Command {
         var           robotPose = drivetrain.getState().Pose;
         Translation2d robotPos  = robotPose.getTranslation();
 
-        // ── 1. Determine alliance and select tag pairs ────────────────────────
+        // ── 1. Determine alliance and select fixed field target by robot Y ───
         var allianceOpt = DriverStation.getAlliance();
         boolean isRed   = !allianceOpt.isPresent() || allianceOpt.get() == Alliance.Red;
+        boolean isLowY  = robotPos.getY() < 4.0;
 
-        int[] pairA = isRed ? FeedFromCenter.kRedPairA  : FeedFromCenter.kBluePairA;
-        int[] pairB = isRed ? FeedFromCenter.kRedPairB  : FeedFromCenter.kBluePairB;
-
-        // ── 2. Compute tag-pair midpoints ─────────────────────────────────────
-        Translation2d midpointA = getTagMidpoint(pairA[0], pairA[1]);
-        Translation2d midpointB = getTagMidpoint(pairB[0], pairB[1]);
-
-        if (midpointA == null && midpointB == null) {
-            // No valid tag data — hold current state and report on dashboard
-            SmartDashboard.putString(DASH + "Status", "No tag data — holding");
-            return;
-        }
-
-        // ── 3. Offset each midpoint behind the wall ───────────────────────────
-        // The adjusted target is kFeedTargetDepthMeters further from the robot
-        // than the raw midpoint, placing the aim point inside the feed station.
-        Translation2d targetA = (midpointA != null) ? adjustTarget(robotPos, midpointA) : null;
-        Translation2d targetB = (midpointB != null) ? adjustTarget(robotPos, midpointB) : null;
-
-        // ── 4. Pick the closer adjusted target ───────────────────────────────
+        // Requested mapping:
+        // Red : Y<4 -> (15,2), Y>=4 -> (15,6)
+        // Blue: Y<4 -> (2,1),  Y>=4 -> (6,2)
         Translation2d target;
-        String        pairLabel;
-        if (targetA == null) {
-            target    = targetB;
-            pairLabel = isRed ? "Red B (4&6)" : "Blue B (20&22)";
-        } else if (targetB == null) {
-            target    = targetA;
-            pairLabel = isRed ? "Red A (1&3)" : "Blue A (17&19)";
-        } else {
-            double distA = robotPos.getDistance(targetA);
-            double distB = robotPos.getDistance(targetB);
-            if (distA <= distB) {
-                target    = targetA;
-                pairLabel = isRed ? "Red A (1&3)" : "Blue A (17&19)";
+        String pairLabel;
+        if (isRed) {
+            if (isLowY) {
+                target = new Translation2d(15.0, 2.0); // (15,2)
+                pairLabel = "Red Fixed (15,2)";
             } else {
-                target    = targetB;
-                pairLabel = isRed ? "Red B (4&6)" : "Blue B (20&22)";
+                target = new Translation2d(15.0, 6.0); // (15,6)
+                pairLabel = "Red Fixed (15,6)";
+            }
+        } else {
+            if (isLowY) {
+                target = new Translation2d(2.0, 1.0); // (2,1)
+                pairLabel = "Blue Fixed (2,1)";
+            } else {
+                target = new Translation2d(6.0, 2.0); // (6,2)
+                pairLabel = "Blue Fixed (6,2)";
             }
         }
+
+        // Preserve debug fields for dashboard compatibility.
+        Translation2d midpointA = null;
+        Translation2d midpointB = null;
+        Translation2d targetA   = null;
+        Translation2d targetB   = null;
 
         // ── 5. Distance to target (for initial flywheel bootstrap) ────────────
         double distance = robotPos.getDistance(target);
@@ -209,28 +203,43 @@ public class FeedFromCenterCommand extends Command {
                        + chassisSpeeds.vyMetersPerSecond * Math.cos(heading);
         Translation2d robotVelocity = new Translation2d(fieldVx, fieldVy);
 
-        // Iterative refinement: distance -> RPS -> exit speed -> flight time -> lead
-        // This converges compensation better than a single pass.
-        double virtualDistance = distance;
+        // Velocity lead compensation is toggleable:
+        // - ON  => compensate while moving (better shot consistency on the move)
+        // - OFF => aim exact fixed ground coordinate (X,Y,Z=0)
         double flightTime = 0.0;
-        final int kLeadIterations = 3;
+        Translation2d leadOffset = new Translation2d();
+        Translation2d virtualTarget = target;
+        double virtualDistance = distance;
+        double robotSpeed = robotVelocity.getNorm(); // for dashboard
 
-        for (int i = 0; i < kLeadIterations; i++) {
-            double iterRPS = ShootingArcManager.calculateLauncherRPS(virtualDistance);
-            double iterExitSpeed = FeedFromCenter.kBallExitSpeedPerRPS * Math.abs(iterRPS);
-            flightTime = (iterExitSpeed > 0.1) ? virtualDistance / iterExitSpeed : 0.0;
+        boolean disableLeadComp = !FeedFromCenter.kUseMotionCompensation
+                || SmartDashboard.getBoolean(kDisableLeadCompKey, false);
 
-            Translation2d iterLeadOffset = robotVelocity
+        if (!disableLeadComp) {
+            final int kLeadIterations = 3;
+            for (int i = 0; i < kLeadIterations; i++) {
+                double iterRPS = ShootingArcManager.calculateLauncherRPS(virtualDistance);
+                double iterExitSpeed = FeedFromCenter.kBallExitSpeedPerRPS * Math.abs(iterRPS);
+                flightTime = (iterExitSpeed > 0.1) ? virtualDistance / iterExitSpeed : 0.0;
+
+                Translation2d iterLeadOffset = robotVelocity
+                        .times(flightTime * FeedFromCenter.kFeedFromCenterMotionCompensationGain);
+                Translation2d iterVirtualTarget = target.minus(iterLeadOffset);
+                virtualDistance = robotPos.getDistance(iterVirtualTarget);
+            }
+
+            leadOffset = robotVelocity
                     .times(flightTime * FeedFromCenter.kFeedFromCenterMotionCompensationGain);
-            Translation2d iterVirtualTarget = target.minus(iterLeadOffset);
-            virtualDistance = robotPos.getDistance(iterVirtualTarget);
+            virtualTarget = target.minus(leadOffset);
+            virtualDistance = robotPos.getDistance(virtualTarget);
+        } else {
+            leadOffset = new Translation2d();
+            virtualTarget = target;
+            virtualDistance = distance;
+            flightTime = 0.0;
         }
 
-        Translation2d leadOffset = robotVelocity
-                .times(flightTime * FeedFromCenter.kFeedFromCenterMotionCompensationGain);
-        Translation2d virtualTarget = target.minus(leadOffset);
-        virtualDistance = robotPos.getDistance(virtualTarget);
-        double robotSpeed = robotVelocity.getNorm(); // for dashboard
+        SmartDashboard.putBoolean(kDisableLeadCompKey, disableLeadComp);
 
         // ── 6. Spin flywheel open-loop (DutyCycleOut) ─────────────────────────
         // Uses virtual distance so flywheel compensates for robot moving
@@ -244,8 +253,9 @@ public class FeedFromCenterCommand extends Command {
             flywheelStartTimestamp = Timer.getFPGATimestamp();
         }
 
-        // ── 7. Set hood to fixed feed position (with deadband) ────────────────
-        double hoodTarget = FeedFromCenter.kHoodPosition;
+        // ── 7. Set hood to feed position based on distance (with deadband) ────
+        // Use distance-interpolated hood target for smoother feed consistency across range.
+        double hoodTarget = interpolateHoodPosition(distance);
         if (Math.abs(hoodTarget - lastCommandedHoodRotations) > kHoodDeadbandRotations) {
             launcher.setHoodPosition(hoodTarget);
             lastCommandedHoodRotations = hoodTarget;
@@ -299,7 +309,7 @@ public class FeedFromCenterCommand extends Command {
 
         // ── 9. Evaluate fire conditions ───────────────────────────────────────
         boolean turretAimed = !turretAtLimit && !targetOutOfRange
-                && Math.abs(turretError) < Constants.ShootingArc.kTurretAimToleranceDeg;
+                && Math.abs(turretError) < Constants.FeedFromCenter.kTurretAimToleranceDeg;
 
         double actualRPS    = Math.abs(launcher.getCollectVelocity());
         double targetRPS    = Math.abs(targetLauncherRPS);
@@ -310,19 +320,23 @@ public class FeedFromCenterCommand extends Command {
         boolean launcherAtSpeed =
                 (timeSpooling >= FLYWHEEL_SPOOL_TIME_SECONDS)
                 || (actualRPS > 5.0 && Math.abs(actualRPS - targetRPS)
-                        < Constants.ShootingArc.kLauncherVelocityTolerance);
+                        < FeedFromCenter.kLauncherVelocityToleranceRps);
 
         boolean hoodAtTarget = launcher.isHoodAtTarget();
-        boolean readyToFire = launcherAtSpeed && hoodAtTarget && !turretAtLimit && !targetOutOfRange;
+        boolean readyToFire = launcherAtSpeed && turretAimed && hoodAtTarget;
 
-        // ── 10. Schedule / cancel LaunchSequenceOneCommand ────────────────────
-        if (readyToFire && !launchSequenceScheduled) {
-            CommandScheduler.getInstance().schedule(launchSequenceOne);
-            launchSequenceScheduled = true;
+        // ── 10. Trigger/cancel feed sequence directly (pre-state-machine behavior) ───
+        if (readyToFire) {
+            if (!launchSequenceScheduled) {
+                CommandScheduler.getInstance().schedule(launchSequenceOne);
+                launchSequenceScheduled = true;
+            }
             isFiring = true;
-        } else if (!readyToFire && launchSequenceScheduled) {
-            launchSequenceOne.cancel();
-            launchSequenceScheduled = false;
+        } else {
+            if (launchSequenceScheduled) {
+                launchSequenceOne.cancel();
+                launchSequenceScheduled = false;
+            }
             isFiring = false;
         }
 
@@ -335,6 +349,28 @@ public class FeedFromCenterCommand extends Command {
             SmartDashboard.putString( DASH + "Active Pair",         pairLabel);
             SmartDashboard.putNumber( DASH + "Distance (m)",        distance);
             SmartDashboard.putNumber( DASH + "Virtual Dist (m)",    virtualDistance);
+
+            SmartDashboard.putBoolean(DASH + "Lead Disabled",       disableLeadComp);
+
+            SmartDashboard.putBoolean(DASH + "MidpointA Valid",     midpointA != null);
+            SmartDashboard.putBoolean(DASH + "MidpointB Valid",     midpointB != null);
+            SmartDashboard.putBoolean(DASH + "TargetA Valid",       targetA != null);
+            SmartDashboard.putBoolean(DASH + "TargetB Valid",       targetB != null);
+
+            SmartDashboard.putNumber( DASH + "MidpointA X (m)",     midpointA != null ? midpointA.getX() : -1.0);
+            SmartDashboard.putNumber( DASH + "MidpointA Y (m)",     midpointA != null ? midpointA.getY() : -1.0);
+            SmartDashboard.putNumber( DASH + "MidpointB X (m)",     midpointB != null ? midpointB.getX() : -1.0);
+            SmartDashboard.putNumber( DASH + "MidpointB Y (m)",     midpointB != null ? midpointB.getY() : -1.0);
+
+            SmartDashboard.putNumber( DASH + "TargetA X (m)",       targetA != null ? targetA.getX() : -1.0);
+            SmartDashboard.putNumber( DASH + "TargetA Y (m)",       targetA != null ? targetA.getY() : -1.0);
+            SmartDashboard.putNumber( DASH + "TargetB X (m)",       targetB != null ? targetB.getX() : -1.0);
+            SmartDashboard.putNumber( DASH + "TargetB Y (m)",       targetB != null ? targetB.getY() : -1.0);
+
+            SmartDashboard.putNumber( DASH + "Selected Target X (m)", target.getX());
+            SmartDashboard.putNumber( DASH + "Selected Target Y (m)", target.getY());
+            SmartDashboard.putNumber( DASH + "Virtual Target X (m)",  virtualTarget.getX());
+            SmartDashboard.putNumber( DASH + "Virtual Target Y (m)",  virtualTarget.getY());
             SmartDashboard.putNumber( DASH + "Robot Speed (m/s)",   robotSpeed);
             SmartDashboard.putNumber( DASH + "Flight Time (s)",     flightTime);
             SmartDashboard.putNumber( DASH + "Lead Offset (m)",     leadOffset.getNorm());
@@ -352,7 +388,7 @@ public class FeedFromCenterCommand extends Command {
                     : !launcherAtSpeed ? String.format("Spooling (%.1f s)", timeSpooling)
                     : (turretAtLimit || targetOutOfRange) ? "At Speed - Turret Wrap/Limit"
                     : !hoodAtTarget    ? "At Speed - Adjusting Hood"
-                                       : "At Speed - Firing");
+                                       : "At Speed - Ready");
         }
     }
 
@@ -409,19 +445,77 @@ public class FeedFromCenterCommand extends Command {
     }
 
     /**
-     * Offsets the midpoint by {@link FeedFromCenter#kFeedTargetDepthMeters} in the
-     * direction from the robot toward the midpoint — placing the aiming target
-     * "a few feet behind" the tag-pair midpoint (deeper into the feed station).
+     * Offsets the midpoint by {@link FeedFromCenter#kFeedTargetDepthMeters} toward the
+     * alliance feed zone interior using a fixed field-axis direction:
+     * <ul>
+     *   <li>Red alliance: +X from midpoint</li>
+     *   <li>Blue alliance: -X from midpoint</li>
+     * </ul>
+     * This avoids direction flips that can occur when using robot-relative vectors.
      *
-     * @param robotPos Robot position on the field
+     * @param robotPos Robot position on the field (unused; kept for call-site compatibility)
      * @param midpoint Raw tag-pair midpoint
      * @return Adjusted target Translation2d
      */
     private Translation2d adjustTarget(Translation2d robotPos, Translation2d midpoint) {
-        Translation2d toMidpoint = midpoint.minus(robotPos);
-        double dist = toMidpoint.getNorm();
-        if (dist < 0.01) return midpoint; // robot is at midpoint — no offset
-        Translation2d unitDir = toMidpoint.div(dist);
-        return midpoint.plus(unitDir.times(FeedFromCenter.kFeedTargetDepthMeters));
+        // Push target "behind" the wall midpoint toward the alliance feed zone, not based on robot side.
+        // Using robot->midpoint can flip direction when approaching from different field positions.
+        // Field layout here is symmetric around Y=4.021 m:
+        //   Red feed station is at larger X than the midpoint -> push +X
+        //   Blue feed station is at smaller X than the midpoint -> push -X
+        // This keeps feed-from-center aiming consistent and prevents drifting toward field-center/hub side.
+        var allianceOpt = DriverStation.getAlliance();
+        boolean isRed = !allianceOpt.isPresent() || allianceOpt.get() == Alliance.Red;
+
+        double xOffset = isRed
+                ? FeedFromCenter.kFeedTargetDepthMeters
+                : -FeedFromCenter.kFeedTargetDepthMeters;
+
+        return midpoint.plus(new Translation2d(xOffset, 0.0));
+    }
+
+    /**
+     * Returns hood position in motor rotations using distance-based interpolation
+     * from ShootingArc hood lookup, with FeedFromCenter near/far fallback bounds.
+     */
+    private double interpolateHoodPosition(double distanceMeters) {
+        double[][] table = Constants.ShootingArc.kHoodAngleLookup;
+        if (table == null || table.length == 0) {
+        double fallback = (distanceMeters < FeedFromCenter.kHoodDistanceThresholdMeters)
+                ? FeedFromCenter.kHoodPositionNear
+                : FeedFromCenter.kHoodPositionFar;
+        if (distanceMeters >= FeedFromCenter.kFarHoodDistanceMeters) {
+            fallback += FeedFromCenter.kFarHoodExtraRotations;
+        }
+        return fallback;
+        }
+
+        if (distanceMeters <= table[0][0]) return table[0][1];
+        if (distanceMeters >= table[table.length - 1][0]) {
+            double far = table[table.length - 1][1];
+            if (distanceMeters >= FeedFromCenter.kFarHoodDistanceMeters) {
+                far += FeedFromCenter.kFarHoodExtraRotations;
+            }
+            return far;
+        }
+
+        for (int i = 0; i < table.length - 1; i++) {
+            double x0 = table[i][0];
+            double y0 = table[i][1];
+            double x1 = table[i + 1][0];
+            double y1 = table[i + 1][1];
+            if (distanceMeters >= x0 && distanceMeters <= x1) {
+                double t = (distanceMeters - x0) / (x1 - x0);
+                double hood = y0 + (y1 - y0) * t;
+                if (distanceMeters >= FeedFromCenter.kFarHoodDistanceMeters) {
+                    hood += FeedFromCenter.kFarHoodExtraRotations;
+                }
+                return hood;
+            }
+        }
+
+        return (distanceMeters < FeedFromCenter.kHoodDistanceThresholdMeters)
+                ? FeedFromCenter.kHoodPositionNear
+                : FeedFromCenter.kHoodPositionFar;
     }
 }

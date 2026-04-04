@@ -202,6 +202,51 @@ public class ShootFromPointCommand extends Command {
     // ── Dashboard key prefix ──────────────────────────────────────────────────
     private static final String DASH = "ShootFromPoint/";
 
+    /**
+     * Wrap an absolute turret target angle into the robot's physical command window.
+     *
+     * <p>Physical range is ±200° from zero. Equivalent angles are separated by 360°.
+     * We choose the equivalent command that:
+     * <ol>
+     *   <li>lies within [-200°, +200°], and</li>
+     *   <li>requires the smallest movement from the current turret angle.</li>
+     * </ol>
+     *
+     * @param baseTargetDeg desired turret angle (degrees), can be outside ±200
+     * @param currentDeg current turret angle (degrees)
+     * @return wrapped target in degrees, always within [-200, +200]
+     */
+    private double selectBestWrappedTurretTargetDeg(double baseTargetDeg, double currentDeg) {
+        double minDeg = TurretConstants.kMinRotationDegrees;
+        double maxDeg = TurretConstants.kMaxRotationDegrees;
+
+        double[] candidates = new double[] {
+            baseTargetDeg,
+            baseTargetDeg + 360.0,
+            baseTargetDeg - 360.0
+        };
+
+        double best = Double.NaN;
+        double bestDelta = Double.POSITIVE_INFINITY;
+
+        for (double candidate : candidates) {
+            if (candidate >= minDeg && candidate <= maxDeg) {
+                double delta = Math.abs(candidate - currentDeg);
+                if (delta < bestDelta) {
+                    bestDelta = delta;
+                    best = candidate;
+                }
+            }
+        }
+
+        if (!Double.isNaN(best)) {
+            return best;
+        }
+
+        // If no equivalent lies in-range (should be rare), clamp.
+        return Math.max(minDeg, Math.min(maxDeg, baseTargetDeg));
+    }
+
     // =========================================================================
     // Constructor
     // =========================================================================
@@ -381,27 +426,27 @@ public class ShootFromPointCommand extends Command {
                     Math.min(kPovNudgeMaxDegrees,
                             manualTurretOffset + povNudgeSupplier.getAsDouble() * kPovNudgeDegreesPerLoop));
 
-            // Apply cached zero-offset + manual POV nudge
+            // Apply cached zero-offset + manual POV nudge.
+            // Do NOT normalize to [-180, 180] so extended turret range can be used.
             double adjustedTurretAngle = rawTurretAngle - liveOffset + manualTurretOffset;
-            while (adjustedTurretAngle >  180.0) adjustedTurretAngle -= 360.0;
-            while (adjustedTurretAngle < -180.0) adjustedTurretAngle += 360.0;
             targetTurretAngle = adjustedTurretAngle;
 
-            targetRawRotations = targetTurretAngle * TurretConstants.kRotationsPerDegree;
-            targetOutOfRange   = Math.abs(targetRawRotations) > TurretConstants.kPhysicalLimitRotations;
-            double clampedRaw  = Math.max(-TurretConstants.kPhysicalLimitRotations,
-                                 Math.min( TurretConstants.kPhysicalLimitRotations, targetRawRotations));
+            // Wrap into the physical ±200° command window before converting to rotations.
+            double wrappedTargetDeg = selectBestWrappedTurretTargetDeg(targetTurretAngle, currentTurretDeg);
+            targetRawRotations = wrappedTargetDeg * TurretConstants.kRotationsPerDegree;
 
-            turretError = targetTurretAngle - currentTurretDeg;
-            while (turretError >  180.0) turretError -= 360.0;
-            while (turretError < -180.0) turretError += 360.0;
+            targetOutOfRange = wrappedTargetDeg < TurretConstants.kMinRotationDegrees
+                    || wrappedTargetDeg > TurretConstants.kMaxRotationDegrees;
+
+            turretError = wrappedTargetDeg - currentTurretDeg;
 
             // 0.5° deadband prevents constant profile resets from tiny pose jitter.
             final double kDeadbandDeg = 0.5;
             if (turretAtLimit) {
                 launcher.setTurretPosition(launcher.getTurretPosition());
             } else if (targetOutOfRange) {
-                launcher.setTurretPosition(clampedRaw);
+                launcher.setTurretPosition(Math.max(-TurretConstants.kPhysicalLimitRotations,
+                        Math.min(TurretConstants.kPhysicalLimitRotations, targetRawRotations)));
             } else if (Math.abs(turretError) > kDeadbandDeg) {
                 launcher.setTurretPosition(targetRawRotations);
             }
@@ -431,9 +476,10 @@ public class ShootFromPointCommand extends Command {
             targetTurretAngle  = manualTargetRotations / TurretConstants.kRotationsPerDegree;
             targetOutOfRange   = false; // already clamped above
 
-            turretError = targetTurretAngle - currentTurretDeg;
-            while (turretError >  180.0) turretError -= 360.0;
-            while (turretError < -180.0) turretError += 360.0;
+            // Manual mode target is already in raw-rotation domain and clamped.
+            // Compute error in the same domain to support extended range.
+            double currentTurretRaw = launcher.getTurretPosition();
+            turretError = (targetRawRotations - currentTurretRaw) / TurretConstants.kRotationsPerDegree;
 
             if (!turretAtLimit) {
                 launcher.setTurretPosition(manualTargetRotations);

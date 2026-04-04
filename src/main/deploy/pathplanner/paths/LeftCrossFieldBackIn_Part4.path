@@ -3,13 +3,13 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 8.334555160142349,
-        "y": 0.8556583629893237
+        "x": 7.882669039145908,
+        "y": 0.7373072360616835
       },
       "prevControl": null,
       "nextControl": {
-        "x": 7.231045226367515,
-        "y": 0.07158551530720514
+        "x": 6.779159105371074,
+        "y": -0.04676561162043513
       },
       "isLocked": false,
       "linkedName": "LeftCrossFieldBackIn_Part2End"

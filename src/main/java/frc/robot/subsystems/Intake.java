@@ -107,8 +107,8 @@ public class Intake extends SubsystemBase {
 
     //Configure Motion Magic
     MotionMagicConfigs mm = cfgPivot.MotionMagic;
-    mm.withMotionMagicCruiseVelocity(RotationsPerSecond.of(4.8))
-      .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(4.8))
+    mm.withMotionMagicCruiseVelocity(RotationsPerSecond.of(10.0)) //6.0
+      .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(10.0)) // 4.8
       .withMotionMagicJerk(RotationsPerSecondPerSecond.per(Second).of(0));
  
 
@@ -155,6 +155,19 @@ public class Intake extends SubsystemBase {
    */
   public double getPivotPosition() {
     return intakePivot.getPosition().getValueAsDouble();
+  }
+
+  /**
+   * Returns true when the intake pivot is at (or very near) the home/stowed position.
+   *
+   * <p>Uses the same position tolerance as other pivot-at-target checks so this
+   * behaves consistently with commanded Motion Magic targets.
+   *
+   * @return true if pivot is within tolerance of {@link IntakeConstants#kPivotHomePosition}
+   */
+  public boolean isPivotAtHome() {
+    return Math.abs(getPivotPosition() - IntakeConstants.kPivotHomePosition)
+        < IntakeConstants.kPivotPositionTolerance;
   }
 
   /**
@@ -291,8 +304,10 @@ public class Intake extends SubsystemBase {
    */
   public Command runOuttake() {
     return Commands.run(() -> {
+      rollersEnabled = true; // Ensure rollers are enabled so intakeDeployCollect() doesn't override this command
+      setRollersVelocity(IntakeConstants.kCollectStopVelocity);
       setRollersVelocity(IntakeConstants.kRollersOuttakeVelocity);
-    }, this);
+    }); // No subsystem requirement — does not touch or interrupt pivot control
   }
   
   /**
@@ -364,6 +379,20 @@ public Command AutoIntakeDeployCollect3secs() {
         }
           rollersEnabled = true;
         }, this)).withTimeout(8);
+  }
+
+  public Command AutoIntakeDeployCollect6secs() {
+    return Commands.runOnce(() -> rollersEnabled = true, this)
+      .andThen(Commands.run(() -> {
+        setPivotPosition(IntakeConstants.kPivotDeployCollectPosition);
+        if (rollersEnabled) {
+          //setIntakeRollersVoltage(IntakeConstants.kIntakeVoltage);
+          setRollersVelocity(IntakeConstants.kRollersIntakeVelocity);
+        } else {
+          stopRollers();
+        }
+          rollersEnabled = true;
+        }, this)).withTimeout(6);
   }
   /**
    * Command to deploy the intake pivot to -1.2 rotations (Motion Magic) and start
@@ -555,8 +584,8 @@ public Command AutoIntakeDeployCollect3secs() {
   public Command dumpAndReturn() {
     return Commands.sequence(
         Commands.runOnce(() -> setRollersVelocity(IntakeConstants.kRollersIntakeVelocity), this),
-        goToPivotPosition(-1),                                                                      // lift to dump position and wait until there // -0.75                        // run rollers for 0.5 seconds to dump game piece //0.25
-        Commands.waitSeconds(0.25),                                                         // hold at dump position for 0.5 s //0.5
+        goToPivotPosition(-1.2),                                                                      // lift to dump position and wait until there // -0.75                        // run rollers for 0.5 seconds to dump game piece //0.25
+        Commands.waitSeconds(0.15),                                                         // hold at dump position for 0.5 s //0.5, 0.25
         Commands.runOnce(() -> setPivotPosition(IntakeConstants.kPivotDeployCollectPosition), this) // return to collect position
     );
   }

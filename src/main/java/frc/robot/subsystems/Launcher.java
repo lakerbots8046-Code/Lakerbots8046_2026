@@ -21,6 +21,8 @@ import com.ctre.phoenix6.configs.TalonFXConfiguration;
 import com.ctre.phoenix6.controls.MotionMagicVoltage;
 import com.ctre.phoenix6.hardware.TalonFX;
 
+import java.util.function.BooleanSupplier;
+
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
@@ -57,7 +59,7 @@ public class Launcher extends SubsystemBase {
     // raised to 10 rps, 10 rps/s on 3/14/26
     // Previous (rollback): new DynamicMotionMagicTorqueCurrentFOC(0.0, 10.0, 10.0).withSlot(1)
     private final DynamicMotionMagicTorqueCurrentFOC m_dynMMTorqueTurret =
-        new DynamicMotionMagicTorqueCurrentFOC(0.0, 90.0, 90.0).withSlot(1); //32 40
+        new DynamicMotionMagicTorqueCurrentFOC(0.0, 90.0, 90.0).withSlot(1); // Rebalanced for smoother tracking (reduced from 150.0)
     private final MotionMagicVoltage m_mmreqHood   = new MotionMagicVoltage(0);
 
     private final VelocityVoltage m_VelocityVoltage = new VelocityVoltage(0).withSlot(0);
@@ -131,8 +133,8 @@ public class Launcher extends SubsystemBase {
     // Configure Motion Magic cruise/accel/jerk in raw motor rotations per second
     MotionMagicConfigs mmTurret = cfgTurret.MotionMagic;
     //MotionMagicConfigs mmTurret = cfgTurret
-    mmTurret.withMotionMagicCruiseVelocity(RotationsPerSecond.of(60)) // 40.0
-      .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(60)) // 20.0
+    mmTurret.withMotionMagicCruiseVelocity(RotationsPerSecond.of(95)) // 40.0, 60, 80
+      .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(380)) // 20.0, 60, 80
       .withMotionMagicJerk(RotationsPerSecondPerSecond.per(Second).of(0));
 
     Slot0Configs slot0Turret = cfgTurret.Slot0;
@@ -166,9 +168,9 @@ public class Launcher extends SubsystemBase {
     slot1Turret.kV = 0.0;   // Velocity feedforward (A per rps) — start at 0; add if motor lags
     slot1Turret.kA = 0.0;   // Acceleration feedforward (A per rps/s) — not needed initially
     // Previous (rollback): kP=5.0, kD=0.1
-    slot1Turret.kP = 8.0;   // Increased for better tracking responsiveness
+    slot1Turret.kP = 9.0;   // Reduced to limit overshoot/hunting while tracking
     slot1Turret.kI = 0.0;   // No integral
-    slot1Turret.kD = 0.2;   // Increased damping for smoother follow
+    slot1Turret.kD = 0.3;   // Slightly increased damping for smoother settle
 
     // Peak torque current limits for turret — conservative for initial testing.
     // Raise toward 40–60 A once motion is confirmed safe and gains are tuned.
@@ -194,8 +196,8 @@ public class Launcher extends SubsystemBase {
     // v4: cruise=2,  accel=2  — very gentle; also fixed shared m_mmreq bug.
     // v5 (current): cruise=12, accel=6, jerk=0 — faster profile, jerk limiting disabled.
     MotionMagicConfigs mmHood = cfgHood.MotionMagic;
-    mmHood.withMotionMagicCruiseVelocity(RotationsPerSecond.of(8))
-      .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(4))
+    mmHood.withMotionMagicCruiseVelocity(RotationsPerSecond.of(30)) // 8.0, 20
+      .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(15)) // 4.0, 10
       .withMotionMagicJerk(RotationsPerSecondPerSecond.per(Second).of(0.0)); // 0 = jerk limiting disabled
 
     Slot0Configs slot0Hood = cfgHood.Slot0;
@@ -660,6 +662,20 @@ public class Launcher extends SubsystemBase {
    * @return Command that retracts the hood then brakes
    */
   public Command retractHood() {
+    return retractHood(() -> false);
+  }
+
+  /**
+   * Default command variant: retracts hood, then conditionally idles flywheel based on intake home state.
+   *
+   * <p>When {@code intakeAtHomeSupplier.getAsBoolean()} is true, flywheel is forced off even if
+   * {@link LauncherConstants#kFlywheelIdleEnabled} is enabled. This prevents idling while intake
+   * is near/at the home position.
+   *
+   * @param intakeAtHomeSupplier true when intake pivot is at/near home
+   * @return Command that retracts hood then runs conditional flywheel idle logic
+   */
+  public Command retractHood(BooleanSupplier intakeAtHomeSupplier) {
     return Commands.sequence(
         // Phase 1: command retract position once
         Commands.runOnce(() -> setHoodPosition(0.5), this),
@@ -670,10 +686,11 @@ public class Launcher extends SubsystemBase {
         // Phase 4: idle forever.
         // Toggle: set LauncherConstants.kFlywheelIdleEnabled = true to spin the flywheel
         // at kFlywheelIdleRPS between shots (reduces spool-up time).
-        // Set to false (current) to keep the flywheel fully stopped between shots.
+        // Additional gate: if intake is at home, force flywheel off.
         Commands.run(() -> {
-            // Flywheel idle behavior
-            if (LauncherConstants.kFlywheelIdleEnabled) {
+            boolean intakeAtHome = intakeAtHomeSupplier.getAsBoolean();
+
+            if (!intakeAtHome && LauncherConstants.kFlywheelIdleEnabled) {
                 setCollectVelocity(LauncherConstants.kFlywheelIdleRPS);
             } else {
                 stopLauncher();

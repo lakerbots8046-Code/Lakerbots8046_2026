@@ -116,7 +116,7 @@ public class Constants {
                     * kHoodMaxRotations;
         }
         /** Position tolerance for hood "at target" check (motor rotations). */
-        public static final double kHoodPositionToleranceRotations = 0.2;
+        public static final double kHoodPositionToleranceRotations = 0.6; // 0.2, 0.4
 
         /**
          * Flywheel idle speed (RPS) while the robot is enabled but not actively shooting.
@@ -217,26 +217,20 @@ public class Constants {
         public static final double kMinSpinSpeed = -1.0; // Minimum allowed speed (reverse)
         
         // Position Control
-        public static final double kPositionToleranceDegrees = 2.0; // Tolerance for angle checking
+        public static final double kPositionToleranceDegrees = 2.0; // Tolerance for angle checking, 2.0
 
         // ── Physical Rotation Limits (HARDWARE HARD STOPS — DO NOT EXCEED) ───
         //
-        // Tuner X reports ±18 raw motor rotations at the physical hard stops.
-        // Converted to mechanism degrees:
-        //   18 motor rotations / kRotationsPerDegree
-        //   = 18 * 360 / (115/3)
-        //   = 18 * 1080 / 115
-        //   = 19440 / 115
-        //   ≈ ±169.04°
-        //
-        // EXCEEDING THESE LIMITS WILL BREAK THE TURRET.
-        public static final double kPhysicalLimitRotations = 25.0; // raw motor rotations (from Tuner X) //18.0, 22.0
-        public static final double kMinRotationDegrees = -(kPhysicalLimitRotations * 360.0 / kGearRatio); // ≈ -169.04°
-        public static final double kMaxRotationDegrees =  (kPhysicalLimitRotations * 360.0 / kGearRatio); // ≈ +169.04°
+        // ±200° mechanical range (±21.3 raw motor rotations).
+        // EXCEEDING THESE LIMITS WILL DAMAGE THE TURRET.
+        // Turret WRAPS at limits: 200° → -160° (360°-200°), -200° → +160°.
+        public static final double kPhysicalLimitRotations = 22.0; // raw motor rotations (±200° exactly)
+        public static final double kMinRotationDegrees = -200.0;
+        public static final double kMaxRotationDegrees =  200.0;
 
         // Soft-stop buffer: turret is considered "near a limit" when within this many
         // degrees of the hard stop. Prevents the turret from slamming into the physical stop.
-        public static final double kNearLimitBuffer = 2.0; // degrees of buffer before hard stop 5.0
+        public static final double kNearLimitBuffer = 2.0; // degrees of buffer before hard stop
 
         // ── Turret zero calibration offset ────────────────────────────────────
         //
@@ -310,9 +304,12 @@ public class Constants {
         /** Turret pivot height above the floor (meters). Measured: 14 in from floor to pivot. */
         public static final double kTurretOffsetZ = Units.inchesToMeters(14.0); // 14 in = 0.3556 m
 
-        // kWrapAroundThreshold kept for API compatibility — wrap-around is DISABLED.
-        // With ±169° range the turret does not need to wrap around.
-        public static final double kWrapAroundThreshold = 185.0; // unused
+        // Wrapping threshold: trigger wrap if |target| exceeds this (degrees).
+        // Matches physical limits: turret wraps +180° ↔ -180°.
+        public static final double kWrapAroundThreshold = 185.0;
+        
+        // Wrapping tolerance: trigger wrap if shortest path > this many degrees
+        public static final double kWrapToleranceDegrees = 5.0;
         
         // AprilTag Tracking
         public static final double kTrackingP = 20.0; // Proportional gain for tracking
@@ -441,13 +438,35 @@ public class Constants {
      */
     public static class FeedFromCenter {
 
-        // ── Hood position ─────────────────────────────────────────────────────
+        // ── Hood position by distance ─────────────────────────────────────────
         /**
-         * Hood position (motor rotations) for feed-from-center shots.
-         * 0.0 rot = 68° from horizontal (steepest), 11.5 rot = 28° (flattest).
-         * TUNE ON ROBOT.
+         * Distance threshold (meters) from hub/feed target center used to switch
+         * feed-from-center hood setpoints.
+         * <p>
+         * If distance is below this threshold, use {@link #kHoodPositionNear}.
+         * If distance is greater than or equal to this threshold, use
+         * {@link #kHoodPositionFar}.
          */
-        public static final double kHoodPosition = 5.0; // 4.5
+        public static final double kHoodDistanceThresholdMeters = 7.0;
+
+        /**
+         * Hood position (motor rotations) for feed-from-center shots when
+         * distance is under {@link #kHoodDistanceThresholdMeters}.
+         * 0.0 rot = 68° from horizontal (steepest), 11.5 rot = 28° (flattest).
+         */
+        public static final double kHoodPositionNear = 6.0;
+
+        /**
+         * Hood position (motor rotations) for feed-from-center shots when
+         * distance is greater than or equal to
+         * {@link #kHoodDistanceThresholdMeters}.
+         * 0.0 rot = 68° from horizontal (steepest), 11.5 rot = 28° (flattest).
+         */
+        public static final double kHoodPositionFar = 7.0;
+        /** Extra hood flattening (rotations) applied only for long feed-from-center shots. */
+        public static final double kFarHoodExtraRotations = 0.0;
+        /** Distance threshold (m) to apply far-only hood extra rotations. */
+        public static final double kFarHoodDistanceMeters = 3.5;
 
         // ── Target depth offset ───────────────────────────────────────────────
         /**
@@ -455,7 +474,14 @@ public class Constants {
          * in the direction from the robot toward the midpoint.
          * "A few feet behind" the midpoint = 0.6096 m (2 ft). TUNE ON ROBOT.
          */
-        public static final double kFeedTargetDepthMeters = 2.0; // 1.5
+        public static final double kFeedTargetDepthMeters = 2.0; // 1.5, 2.0
+
+        /**
+         * Turret aim tolerance (degrees) for FeedFromCenter firing readiness.
+         * Set to 2x ShootOnMove/ShootingArc tolerance so FeedFromCenter can fire
+         * with a wider acceptable turret error band.
+         */
+        public static final double kTurretAimToleranceDeg = 50.0;
 
         // ── Velocity compensation ─────────────────────────────────────────────
         /**
@@ -481,7 +507,14 @@ public class Constants {
          * <p>Increase above 1.0 if shots still trail robot motion.
          * Decrease below 1.0 if shots over-lead.
          */
-        public static final double kFeedFromCenterMotionCompensationGain = 2.0; // 1.2
+        public static final double kFeedFromCenterMotionCompensationGain = 3.0; // 1.2, 2
+
+        /**
+         * Enables translational motion compensation while aiming fixed FeedFromCenter targets.
+         * When true, turret aims at a velocity-lead virtual target.
+         * When false, turret aims at the exact fixed ground coordinate.
+         */
+        public static final boolean kUseMotionCompensation = true;
 
         /**
          * Feed-from-center flywheel RPS scale factor.
@@ -489,7 +522,33 @@ public class Constants {
          * <p>Multiplies the calculated launcher RPS only for FeedFromCenter shots.
          * Use values above 1.0 to increase shot energy when balls land short.
          */
-        public static final double kFeedFromCenterRpsScale = 1.30;
+        public static final double kFeedFromCenterRpsScale = 1.20;
+        /** Launcher at-speed tolerance (RPS) specifically for FeedFromCenter readiness gating. */
+        public static final double kLauncherVelocityToleranceRps = 10.0;
+
+        // ── Feed sequencing / readiness timing ────────────────────────────────
+        /** Time flywheel must remain in tolerance before feed starts (seconds). */
+        public static final double kReadyStableTimeSec = 0.0;
+        /** Max time allowed waiting for full ready conditions (seconds). */
+        public static final double kReadyTimeoutSec = 4.0;
+        /** Max time allowed while feed motors are running (seconds). */
+        public static final double kFeedingTimeoutSec = 2.0;
+
+        // ── Feed motor velocity targets for LaunchSequenceOne (RPS) ───────────
+        /** Spindexer feed velocity (CAN 4), negative = intake/feed direction. */
+        public static final double kFeedSpindexerRPS = -90.0;
+        /** Flappy wheel feed velocity (CAN 5), positive = intake/feed direction. */
+        public static final double kFeedFlappyWheelRPS = 90.0;
+        /** Feeder feed velocity (CAN 6), positive = intake/feed direction. */
+        public static final double kFeedFeederRPS = 90.0;
+
+        // ── Optional recovery pulse on timeout ────────────────────────────────
+        /** Enable one reverse pulse retry if feed phase times out. */
+        public static final boolean kEnableRecoveryPulse = true;
+        /** Reverse pulse duration before retrying feed (seconds). */
+        public static final double kRecoveryPulseDurationSec = 0.10;
+        /** Reverse pulse speed multiplier applied to feed speeds (0..1). */
+        public static final double kRecoveryPulseScale = 0.35;
 
         // ── Red alliance feed-station tag pairs ───────────────────────────────
         /** Red alliance feed station — one side (tags 1 and 3). */
@@ -539,9 +598,38 @@ public class Constants {
         /** Heading tolerance for "facing tower" check (degrees). */
         public static final double kRotationToleranceDeg = 5.0;
         /** Turret aim tolerance before firing is allowed (degrees). */
-        public static final double kTurretAimToleranceDeg = 4.0;
+        public static final double kTurretAimToleranceDeg = 15.0; // 4.0
         /** Launcher velocity tolerance before firing is allowed (RPS). */
         public static final double kLauncherVelocityTolerance = 5.0;
+
+        // ── Shoot-on-move lead compensation constants ─────────────────────────
+        /** Global multiplier for translational lead compensation (dimensionless). */
+        public static final double kShootOnMoveLeadCompGain = 1.0;
+        /** Shooter wheel circumference used to estimate projectile speed from RPS. */
+        public static final double kShootOnMoveWheelCircumferenceMeters = 0.319; // ~4" wheel
+        /** Empirical scale factor from wheel surface speed to effective muzzle speed. */
+        public static final double kShootOnMoveMuzzleSpeedScale = 0.75;
+        /** Additional control/system latency added to projectile flight time (seconds). */
+        public static final double kShootOnMoveExtraLatencySec = 0.10;
+        /** Number of fixed-point iterations for lead/intercept solve (>=1). */
+        public static final int kShootOnMoveLeadSolveIterations = 3;
+        /** LPF alpha for field-relative velocity used in lead solve (0..1). */
+        public static final double kShootOnMoveVelocityLpfAlpha = 0.25;
+
+        /** Axis-specific X gain for translational lead compensation (field X). */
+        public static final double kShootOnMoveLeadCompGainX = 1.0;
+        /** Axis-specific Y gain for translational lead compensation (field Y). */
+        public static final double kShootOnMoveLeadCompGainY = 1.0;
+        /** Extra lookahead time used for velocity lead application (seconds). */
+        public static final double kShootOnMoveVelocityLookaheadSec = 0.14;
+        /** Maximum magnitude of applied lead vector (meters). */
+        public static final double kShootOnMoveMaxLeadMeters = 1.5;
+
+        // ── Shoot-on-move drivetrain gating ───────────────────────────────────
+        /** Max drivetrain translation speed while ShootOnMove is active (m/s). */
+        public static final double kShootOnMoveDriveMaxSpeedMps = 1.0;
+        /** Joystick deadband for direction gating while ShootOnMove is active (unitless 0..1). */
+        public static final double kShootOnMoveDriveDirectionDeadband = 0.10;
 
         // ── Arc sliding ───────────────────────────────────────────────────────
         /** Speed at which the robot slides along the arc (m/s).
@@ -591,16 +679,16 @@ public class Constants {
 
         // v10: -5 RPS again — still overshooting after v9 reduction.
         public static final double[][] kLauncherRPSLookup = {
-            {1.0,  -36.0},  // was -50.0, 43.0, 42.0
-            {1.5,  -36.0},  // was -50.5, 43.5, 42.0
-            {2.0,  -36.0},  // was -53.0, 46.0, 42.0, 40
-            {2.5,  -38.0},  // was -55.5, 48.5, 47.5, 43, 41.5, 38 , 41.5
-            {3.0,  -42.5},  // was -58.5, 51.5, 50.0, 45, 43
-           // {3.175, -51.0},  // added intermediate point at 3.175 m (Tower Shot) 49.0, 51.0
-            {3.5,  -45.0},  // was -61.5, 54.5, 48.5, 46.5, 46.0
-            {4.0,  -46.0},  // was -74.5, 67.5, 55.5, 53.5, 48
-            {4.5,  -49.0},   // was -80.5, 73.5, 56.0, 54.0
-            {5.0,  -58.0}   // was -58, 60
+            {1.0,  -36.0},    // -36.0      // was -50.0, 43.0, 42.0
+            {1.5,  -36.0},    // -36.0      // was -50.5, 43.5, 42.0
+            {2.0,  -36.0},    // -36.0      // was -53.0, 46.0, 42.0, 40
+            {2.5,  -38.0},    // -38.0      // was -55.5, 48.5, 47.5, 43, 41.5, 38 , 41.5
+            {3.0,  -42.5},    // -42.5      // was -58.5, 51.5, 50.0, 45, 43
+           // {3.175, -51.0},       // added intermediate point at 3.175 m (Tower Shot) 49.0, 51.0
+            {3.5,  -45.0},    // -45.0      // was -61.5, 54.5, 48.5, 46.5, 46.0
+            {4.0,  -46.0},    // -46.0      // was -74.5, 67.5, 55.5, 53.5, 48
+            {4.5,  -49.0},    // -49.0      // was -80.5, 73.5, 56.0, 54.0
+            {5.0,  -58.0}     // -58.0      // was -58, 60
         };
 
         // ── Hood angle lookup table ───────────────────────────────────────────
@@ -648,15 +736,15 @@ public class Constants {
         //        1.0m, 1.5m: extrapolated at 0 (steepest, same as close-range tested).
         //        4.0m, 4.5m: extrapolated (+1 rot per 0.5m beyond 3.5m).
         public static final double[][] kHoodAngleLookup = {
-            {1.0,  0.0},   // extrapolated — steepest (68° from horizontal)
-            {1.5,  0.0},   // extrapolated
-            {2.0,  0.0},   // TESTED: hood position 0
-            {2.5,  0.0},   // TESTED: hood position 0
-            {3.0,  0.5},   // TESTED: hood position 0 0  
-            {3.5,  1.0},   // TESTED: hood position 1 1, 2              0.75   , 2.25
-            {4.0,  2.5},   // extrapolated (+1 rot per 0.5m)1           2.0
-            {4.5,  3.0},    // extrapolated (+1 rot per 0.5m) 2  3.5
-            {5.0,  3.875}    // was 4.0
+            {1.0,  0.0},    // 0.0    // extrapolated — steepest (68° from horizontal)
+            {1.5,  0.0},    // 0.0    // extrapolated
+            {2.0,  0.0},    // 0.0    // TESTED: hood position 0
+            {2.5,  0.0},    // 0.0    // TESTED: hood position 0
+            {3.0,  0.5},    // 0.5    // TESTED: hood position 0 0  
+            {3.5,  1.0},    // 1.0    // TESTED: hood position 1 1, 2              0.75   , 2.25
+            {4.0,  2.5},    // 2.5    // extrapolated (+1 rot per 0.5m)1           2.0
+            {4.5,  3.0},    // 3.0    // extrapolated (+1 rot per 0.5m) 2  3.5
+            {5.0,  3.875}   // 5.0    // was 4.0
         };
     }
     public static class Vision {
@@ -708,7 +796,7 @@ public class Constants {
         public static final Transform3d kRobotToCamFF =
                 new Transform3d(
                         new Translation3d(
-                                Units.inchesToMeters(15),   // Backward (negative X = behind robot center) // -7.069
+                                Units.inchesToMeters(30),   // Backward (negative X = behind robot center) // -7.069, 15, 30
                                 Units.inchesToMeters(11.75),    // Left side (positive Y = left in WPILib)
                                 Units.inchesToMeters(20.4)      // Up (positive Z, measured from ground)
                         ),
