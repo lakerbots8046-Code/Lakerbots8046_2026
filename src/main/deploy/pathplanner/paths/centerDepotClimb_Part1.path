@@ -3,13 +3,13 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 3.587342715231788,
-        "y": 6.053261589403974
+        "x": 3.600510083036774,
+        "y": 6.310569395017793
       },
       "prevControl": null,
       "nextControl": {
-        "x": 2.905474290963393,
-        "y": 6.014235361603277
+        "x": 2.9186416587683786,
+        "y": 6.2715431672170965
       },
       "isLocked": false,
       "linkedName": null
@@ -45,7 +45,7 @@
     "rotation": 172.11686068327023
   },
   "reversed": false,
-  "folder": "centerDepotClimb",
+  "folder": "[CENTER] Depot Climb",
   "idealStartingState": {
     "velocity": 0,
     "rotation": 180.0

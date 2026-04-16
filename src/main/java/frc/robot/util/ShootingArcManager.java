@@ -4,6 +4,7 @@ import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.geometry.Translation3d;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.Constants;
 
 /**
@@ -58,6 +59,119 @@ public class ShootingArcManager {
 
     // Private constructor — static utility class only
     private ShootingArcManager() {}
+
+    /** Seeds launch table entries on SmartDashboard/Elastic (flattened [x0,y0,x1,y1,...]). */
+    public static void seedTunableLookupTables() {
+        double[] launcherFlat = flattenTable(Constants.ShootingArc.kLauncherRPSLookup);
+        double[] hoodFlat = flattenTable(Constants.ShootingArc.kHoodAngleLookup);
+
+        SmartDashboard.putNumberArray(
+                Constants.ShootingArc.kLauncherRpsLookupDashboardKey,
+                launcherFlat);
+        SmartDashboard.putNumberArray(
+                Constants.ShootingArc.kHoodAngleLookupDashboardKey,
+                hoodFlat);
+
+        // Also seed CSV string forms for dashboards that edit text more reliably.
+        SmartDashboard.putString(
+                Constants.ShootingArc.kLauncherRpsLookupDashboardStringKey,
+                toCsv(launcherFlat));
+        SmartDashboard.putString(
+                Constants.ShootingArc.kHoodAngleLookupDashboardStringKey,
+                toCsv(hoodFlat));
+    }
+
+    private static double[] flattenTable(double[][] table) {
+        if (table == null || table.length == 0) return new double[0];
+        double[] flat = new double[table.length * 2];
+        int idx = 0;
+        for (double[] pair : table) {
+            if (pair == null || pair.length < 2) continue;
+            flat[idx++] = pair[0];
+            flat[idx++] = pair[1];
+        }
+        if (idx == flat.length) return flat;
+        double[] trimmed = new double[idx];
+        System.arraycopy(flat, 0, trimmed, 0, idx);
+        return trimmed;
+    }
+
+    private static double[][] getTunableTable(String numberArrayKey, String csvKey, double[][] fallback) {
+        double[] flatFallback = flattenTable(fallback);
+        double[] flat = SmartDashboard.getNumberArray(numberArrayKey, flatFallback);
+
+        double[][] parsedNumberArray = parseFlatTable(flat);
+        if (parsedNumberArray != null) {
+            return parsedNumberArray;
+        }
+
+        String csv = SmartDashboard.getString(csvKey, "");
+        double[][] parsedCsv = parseCsvTable(csv);
+        if (parsedCsv != null) {
+            return parsedCsv;
+        }
+
+        return fallback;
+    }
+
+    private static double[][] parseFlatTable(double[] flat) {
+        if (flat == null || flat.length < 4 || (flat.length % 2) != 0) {
+            return null;
+        }
+
+        int n = flat.length / 2;
+        double[][] parsed = new double[n][2];
+
+        for (int i = 0; i < n; i++) {
+            double x = flat[2 * i];
+            double y = flat[2 * i + 1];
+
+            if (!Double.isFinite(x) || !Double.isFinite(y)) {
+                return null;
+            }
+
+            if (i > 0 && x <= parsed[i - 1][0]) {
+                return null;
+            }
+
+            parsed[i][0] = x;
+            parsed[i][1] = y;
+        }
+
+        return parsed;
+    }
+
+    private static double[][] parseCsvTable(String csv) {
+        if (csv == null) return null;
+        String trimmed = csv.trim();
+        if (trimmed.isEmpty()) return null;
+
+        String[] parts = trimmed.split(",");
+        if (parts.length < 4 || (parts.length % 2) != 0) {
+            return null;
+        }
+
+        double[] flat = new double[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            try {
+                flat[i] = Double.parseDouble(parts[i].trim());
+            } catch (NumberFormatException ex) {
+                return null;
+            }
+        }
+
+        return parseFlatTable(flat);
+    }
+
+    private static String toCsv(double[] arr) {
+        if (arr == null || arr.length == 0) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < arr.length; i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(arr[i]);
+        }
+        return sb.toString();
+    }
 
     // =========================================================================
     // Tower position helpers
@@ -342,7 +456,11 @@ public class ShootingArcManager {
      * @return Target launcher velocity in rotations per second (RPS)
      */
     public static double calculateLauncherRPS(double distanceMeters) {
-        return interpolate(Constants.ShootingArc.kLauncherRPSLookup, distanceMeters);
+        double[][] table = getTunableTable(
+                Constants.ShootingArc.kLauncherRpsLookupDashboardKey,
+                Constants.ShootingArc.kLauncherRpsLookupDashboardStringKey,
+                Constants.ShootingArc.kLauncherRPSLookup);
+        return interpolate(table, distanceMeters);
     }
 
     /**
@@ -353,7 +471,11 @@ public class ShootingArcManager {
      * @return Target hood position in mechanism rotations
      */
     public static double calculateHoodAngle(double distanceMeters) {
-        return interpolate(Constants.ShootingArc.kHoodAngleLookup, distanceMeters);
+        double[][] table = getTunableTable(
+                Constants.ShootingArc.kHoodAngleLookupDashboardKey,
+                Constants.ShootingArc.kHoodAngleLookupDashboardStringKey,
+                Constants.ShootingArc.kHoodAngleLookup);
+        return interpolate(table, distanceMeters);
     }
 
     // =========================================================================

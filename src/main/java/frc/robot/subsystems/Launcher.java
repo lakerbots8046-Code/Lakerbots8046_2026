@@ -8,12 +8,9 @@ import static edu.wpi.first.units.Units.*;
 
 import com.ctre.phoenix6.StatusCode;
 import com.ctre.phoenix6.controls.NeutralOut;
-import com.ctre.phoenix6.controls.VelocityTorqueCurrentFOC;
 import com.ctre.phoenix6.controls.VelocityVoltage;
 import com.ctre.phoenix6.controls.DutyCycleOut;
 import com.ctre.phoenix6.controls.DynamicMotionMagicTorqueCurrentFOC;
-//import com.ctre.phoenix6.controls.MotionMagicTorqueCurrentFOC;
-//import com.ctre.phoenix6.configs.FeedbackConfigs;
 import com.ctre.phoenix6.configs.MotionMagicConfigs;
 import com.ctre.phoenix6.configs.Slot0Configs;
 import com.ctre.phoenix6.configs.Slot1Configs;
@@ -52,7 +49,6 @@ public class Launcher extends SubsystemBase {
     // between two motors means the last withPosition() call overwrites the previous
     // one, causing the hood to receive the turret's target (and vice versa) every loop.
     // Slot 0 — original MotionMagicVoltage (retained for reference / easy rollback)
-    private final MotionMagicVoltage m_mmreqTurret = new MotionMagicVoltage(0);
     // Slot 1 — DynamicMotionMagicTorqueCurrentFOC (active control mode)
     // Constructor: (Position rots, CruiseVelocity rps, Acceleration rps/s) — Jerk defaults to 0.0 (disabled).
     // Starting very slow: 2 rps cruise, 2 rps/s accel. Raise once motion is confirmed safe on the robot.
@@ -62,8 +58,7 @@ public class Launcher extends SubsystemBase {
         new DynamicMotionMagicTorqueCurrentFOC(0.0, 90.0, 90.0).withSlot(1); // Rebalanced for smoother tracking (reduced from 150.0)
     private final MotionMagicVoltage m_mmreqHood   = new MotionMagicVoltage(0);
 
-    private final VelocityVoltage m_VelocityVoltage = new VelocityVoltage(0).withSlot(0);
-    private final VelocityTorqueCurrentFOC m_velocityTorque = new VelocityTorqueCurrentFOC(0).withSlot(0);
+    private final VelocityVoltage m_velocityVoltage = new VelocityVoltage(0).withSlot(0);
     private final NeutralOut m_brake = new NeutralOut();
     private final DutyCycleOut m_dutyCycleOut = new DutyCycleOut(0);
 
@@ -152,17 +147,7 @@ public class Launcher extends SubsystemBase {
     // kD increased from 1.5 → 2.0 for more damping near the target position.
     slot0Turret.kD = 2.0;
 
-    // ── Slot 1: DynamicMotionMagicTorqueCurrentFOC ──────────────────────────
-    // Gains are in Amps (not Volts). Profile (cruise/accel/jerk) is set per-request
-    // in m_dynMMTorqueTurret above — no MotionMagic config block needed here.
-    //
-    // Starting values are intentionally very conservative (slow & low current).
-    // Tuning guide:
-    //   kS — increase if motor doesn't move at all (overcome static friction).
-    //   kP — increase if turret is slow to reach target; decrease if it overshoots.
-    //   kD — increase if turret oscillates near target.
-    //   Peak current — raise gradually once motion looks safe (max ~80 A for Kraken X60).
-    //   CruiseVelocity / Acceleration — raise in m_dynMMTorqueTurret once speed is confirmed safe.
+    // Slot 1 uses DynamicMotionMagicTorqueCurrentFOC gains in amps.
     Slot1Configs slot1Turret = cfgTurret.Slot1;
     slot1Turret.kS = 2.0;   // Static friction feedforward (A) — small kick to overcome stiction
     slot1Turret.kV = 0.0;   // Velocity feedforward (A per rps) — start at 0; add if motor lags
@@ -190,11 +175,6 @@ public class Launcher extends SubsystemBase {
     cfgHood.SoftwareLimitSwitch.ReverseSoftLimitThreshold = LauncherConstants.kHoodMinRotations; // 0.0 rot → 22°
 
     // Configure Motion Magic for hood position control.
-    // v1: cruise=15, accel=15 — hood slammed and rang.
-    // v2: cruise=8,  accel=8  — still oscillating.
-    // v3: cruise=4,  accel=4  — still oscillating.
-    // v4: cruise=2,  accel=2  — very gentle; also fixed shared m_mmreq bug.
-    // v5 (current): cruise=12, accel=6, jerk=0 — faster profile, jerk limiting disabled.
     MotionMagicConfigs mmHood = cfgHood.MotionMagic;
     mmHood.withMotionMagicCruiseVelocity(RotationsPerSecond.of(30)) // 8.0, 20
       .withMotionMagicAcceleration(RotationsPerSecondPerSecond.of(15)) // 4.0, 10
@@ -222,9 +202,7 @@ public class Launcher extends SubsystemBase {
    // ========================= TURRET POSITION CONTROL METHODS ========================= //
    
   public Command setTurretVoltage(double speed){
-    return Commands.run(() -> {
-      turretMotor.set(speed);
-    }, this);
+    return Commands.run(() -> turretMotor.set(speed), this);
   }
   
   /**
@@ -233,17 +211,12 @@ public class Launcher extends SubsystemBase {
    * <p>Profile: CruiseVelocity=2 rps, Acceleration=2 rps/s — intentionally very slow.
    * Increase these values in {@code m_dynMMTorqueTurret} once motion is confirmed safe.
    *
-   * <p>The original MotionMagicVoltage (Slot 0) config is retained in {@code m_mmreqTurret}
-   * and {@code cfgTurret.Slot0} for easy rollback — simply swap the setControl() call below.
-   *
    * @param mechRotations Target position in raw motor rotations
    */
   public void setTurretPosition(double mechRotations) {
     lastTurretAngle = mechRotations;
     // Slot 1 — DynamicMotionMagicTorqueCurrentFOC (active)
     turretMotor.setControl(m_dynMMTorqueTurret.withPosition(mechRotations));
-    // Slot 0 rollback (MotionMagicVoltage) — uncomment and comment line above to revert:
-    // turretMotor.setControl(m_mmreqTurret.withPosition(mechRotations).withSlot(0));
   }
   
   /**
@@ -332,8 +305,13 @@ public class Launcher extends SubsystemBase {
    * @param velocityRPS Velocity in rotations per second (negative = shooting direction)
    */
   public void setCollectVelocity(double velocityRPS) {
+    if (!isFlywheelEnabled()) {
+      lastLauncherVelocity = 0.0;
+      launcherMotor.setControl(m_brake);
+      return;
+    }
     lastLauncherVelocity = velocityRPS;
-    launcherMotor.setControl(m_VelocityVoltage.withVelocity(velocityRPS));
+    launcherMotor.setControl(m_velocityVoltage.withVelocity(velocityRPS));
   }
 
   /**
@@ -350,11 +328,24 @@ public class Launcher extends SubsystemBase {
    *                    Converted to duty cycle and clamped to [-1, 1].
    */
   public void setCollectDutyCycle(double velocityRPS) {
+    if (!isFlywheelEnabled()) {
+      lastLauncherVelocity = 0.0;
+      launcherMotor.setControl(m_brake);
+      return;
+    }
     lastLauncherVelocity = velocityRPS;
     // Kraken X60 free speed ≈ 100 RPS at 12 V → duty cycle = RPS / 100
     double dutyCycle = velocityRPS / 100.0;
     dutyCycle = Math.max(-1.0, Math.min(1.0, dutyCycle));
     launcherMotor.setControl(m_dutyCycleOut.withOutput(dutyCycle));
+  }
+
+  /**
+   * Dashboard master toggle for allowing flywheel commands.
+   * When false, velocity/duty requests are ignored and the launcher motor is braked.
+   */
+  private boolean isFlywheelEnabled() {
+    return SmartDashboard.getBoolean("Launcher/Flywheel Enabled", true);
   }
 
   /**
@@ -489,57 +480,13 @@ public class Launcher extends SubsystemBase {
   // ==================== COMMAND FACTORY METHODS ====================
   
   public Command setHoodVoltage(double speed){
-    return Commands.run(() -> {
-      hoodMotor.set(speed);
-    }, this);
+    return Commands.run(() -> hoodMotor.set(speed), this);
   }
 
-  /**
-   * Command to move pivot to stowed position
-   * @return Command that stows the intake
-   */
-  public Command stowIntake() {
-    return Commands.runOnce(() -> {
-      setHoodPosition(LauncherConstants.kHoodStowedPosition);
-    }, this);
-  }
+  public Command turretGoHome(){
+    return Commands.run(() -> setTurretPosition(0), this);}
   
-  /**
-   * Command to move pivot to collect position
-   * @return Command that extends intake for collecting
-   */
-  public Command extendForCollect() {
-    return Commands.runOnce(() -> {
-      setHoodPosition(LauncherConstants.kHoodCollectPosition);
-    }, this);
-  }
   
-  /**
-   * Command to move pivot to high scoring position
-   * @return Command that positions intake for high scoring
-   */
-  public Command positionForScoreHigh() {
-    return Commands.runOnce(() -> {
-      setHoodPosition(LauncherConstants.kHoodScoreHighPosition);
-    }, this);
-  }
-  
-  /**
-   * Command to move pivot to low scoring position
-   * @return Command that positions intake for low scoring
-   */
-  public Command positionForScoreLow() {
-    return Commands.runOnce(() -> {
-      setHoodPosition(LauncherConstants.kHoodScoreLowPosition);
-    }, this);
-  }
-  
-
-  public Command setLauncherVoltage(double speed){
-    return Commands.run(() -> {
-      launcherMotor.set(speed);
-    }, this);
-  }
 
   // ==================== LAUNCH FROM TOWER COMMAND ====================
 
@@ -592,9 +539,7 @@ public class Launcher extends SubsystemBase {
   }
   
   public Command stopLauncherSpin() {
-    return Commands.run(() -> {
-      stopLauncher();
-    }, this);
+    return Commands.runOnce(this::stopLauncher, this);
   }
 
   /**
@@ -627,40 +572,8 @@ public class Launcher extends SubsystemBase {
     }, this);
   }
  
-  /**
-   * Example command factory method.
-   *
-   * @return a command
-   */
-  public Command exampleMethodCommand() {
-    // Inline construction of command goes here.
-    // Subsystem::RunOnce implicitly requires `this` subsystem.
-    return runOnce(
-        () -> {
-          /* one-time action goes here */
-        });
-  }
 
-  /**
-   * Default command: retracts the hood to the stowed position then brakes.
-   *
-   * <p>Four-phase approach to avoid both "hood stays at shooting angle" and
-   * "motor oscillates/overheats":
-   * <ol>
-   *   <li>Phase 1 — send {@code setHoodPosition(0.5)} once via Motion Magic.
-   *       The hood moves from its current shooting angle back toward vertical.
-   *       (0.5 rot, not 0.0, to stay just above the reverse soft limit.)</li>
-   *   <li>Phase 2 — wait until the hood is within tolerance of 0.5 rot.</li>
-   *   <li>Phase 3 — switch to brake mode. The 93.25:1 gear ratio holds the
-   *       position without any motor output: zero current, zero oscillation.</li>
-   *   <li>Phase 4 — idle forever, holding the Launcher requirement.</li>
-   * </ol>
-   *
-   * <p>WPILib reschedules this command from the beginning whenever a shooting
-   * command ends, so the hood always retracts after each shot.
-   *
-   * @return Command that retracts the hood then brakes
-   */
+  /** Retracts hood to stow, brakes, then idles flywheel logic in default state. */
   public Command retractHood() {
     return retractHood(() -> false);
   }
@@ -702,16 +615,6 @@ public class Launcher extends SubsystemBase {
     ).withName("RetractHood");
   }
 
-  /**
-   * Returns true when turret is within a deadband of a target angle in degrees.
-   *
-   * @param targetDeg target angle in degrees
-   * @param deadbandDeg allowable absolute error in degrees
-   * @return true if within deadband
-   */
-  private boolean isTurretWithinDeadbandDegrees(double targetDeg, double deadbandDeg) {
-    return Math.abs(getTurretPositionDegrees() - targetDeg) <= deadbandDeg;
-  }
 
   /**
    * Command to go to a specific pivot position and wait until reached
@@ -737,33 +640,15 @@ public class Launcher extends SubsystemBase {
     m_mechanisms.update(hoodMotor.getPosition(), hoodMotor.getVelocity());
     m_mechanisms.update(turretMotor.getPosition(), turretMotor.getVelocity());
 
-    // Always-on flywheel status indicator for Elastic dashboard.
-    // Green = flywheel is within ±5 RPS of its commanded target.
-    // False when no velocity has been commanded (lastLauncherVelocity ≈ 0).
-    SmartDashboard.putBoolean("Launcher/Flywheel At Speed", isFlywheelAtSpeed());
+    // Keep flywheel toggle/status visible in Elastic.
+    boolean flywheelEnabled = isFlywheelEnabled();
+    SmartDashboard.putBoolean("Launcher/Flywheel Enabled", flywheelEnabled);
+    SmartDashboard.putString("Launcher/Flywheel State", flywheelEnabled ? "Enabled" : "Disabled");
 
-    //String prefix = LauncherConstants.kSmartDashboardPrefix;
-   /*
-   
-   SmartDashboard.putNumber(prefix + LauncherConstants.kTurretPositionKey, getTurretPosition());
-    SmartDashboard.putNumber(prefix + LauncherConstants.kTurretTargetKey, lastTurretAngle);
-    SmartDashboard.putNumber(prefix + LauncherConstants.kTurretErrorKey, getTurretError());
-    SmartDashboard.putBoolean(prefix + LauncherConstants.kTurretAtTargetKey, isTurretAtTarget());
-    SmartDashboard.putNumber(prefix + LauncherConstants.kHoodPositionKey, getHoodPosition());
-    SmartDashboard.putNumber(prefix + LauncherConstants.kHoodTargetKey, lastHoodAngle);
-    SmartDashboard.putNumber(prefix + LauncherConstants.kHoodErrorKey, getHoodError());
-    SmartDashboard.putBoolean(prefix + LauncherConstants.kHoodAtTargetKey, isHoodAtTarget());
-    SmartDashboard.putNumber(prefix + LauncherConstants.kCollectVelocityKey, getCollectVelocity());
-    SmartDashboard.putNumber(prefix + LauncherConstants.kCollectCurrentKey, getCollectCurrent());
-    SmartDashboard.putNumber(prefix + LauncherConstants.kPivotCurrentKey, getHoodCurrent());
-    SmartDashboard.putNumber(prefix + LauncherConstants.kTurretTempKey, getTurretTemperature());
-    SmartDashboard.putNumber(prefix + LauncherConstants.kHoodTempKey, getHoodTemperature());
-    SmartDashboard.putNumber(prefix + LauncherConstants.kCollectTempKey, getCollectTemperature());
-    SmartDashboard.putString(prefix + LauncherConstants.kStatusKey,
-        String.format("Hood: %.2f | Turret: %.2f | Launcher: %.1f RPS",
-            getHoodPosition(), getTurretPosition(), getCollectVelocity()));
-            
-            
-    */
+    // Always-on flywheel status indicator for Elastic dashboard.
+    // Green = flywheel is within tolerance of its commanded target.
+    // False when no velocity has been commanded (lastLauncherVelocity ≈ 0).
+    SmartDashboard.putBoolean("Launcher/Flywheel At Speed", flywheelEnabled && isFlywheelAtSpeed());
+
   }
 }

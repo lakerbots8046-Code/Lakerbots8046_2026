@@ -94,12 +94,8 @@ public class Constants {
         /** Maximum motor position (rotations). */
         public static final double kHoodMaxRotations = 11.5;
 
-        // ── IMPORTANT: Motor direction is INVERTED ────────────────────────────
-        // Confirmed on robot (measured physically):
-        //   0 rotations   = 22° from straight up = 68° from horizontal (steepest)
-        //   11.5 rotations = 62° from straight up = 28° from horizontal (flattest)
-        // Higher motor position = FLATTER shot (lower arc).
-        // Lower motor position  = STEEPER shot (higher arc).
+        // Motor direction is inverted:
+        // 0 rotations = 68° from horizontal (steepest), 11.5 rotations = 28° (flattest).
         /** Launch angle (degrees from horizontal) when motor is at kHoodMinRotations (0 rot). */
         public static final double kHoodMinAngleDeg = 68.0;   // 22° from vertical = steepest
         /** Launch angle (degrees from horizontal) when motor is at kHoodMaxRotations (11.5 rot). */
@@ -118,31 +114,10 @@ public class Constants {
         /** Position tolerance for hood "at target" check (motor rotations). */
         public static final double kHoodPositionToleranceRotations = 0.6; // 0.2, 0.4
 
-        /**
-         * Flywheel idle speed (RPS) while the robot is enabled but not actively shooting.
-         * Keeping the flywheel spinning at low speed reduces spool-up time when a shot
-         * is requested. Negative = shooting direction (same sign as kLauncherRPSLookup).
-         *
-         * <p>At -15 RPS the flywheel draws minimal current (~5-10% of stall) but already
-         * has meaningful rotational inertia. Increase toward -25 RPS for faster spool-up;
-         * decrease toward -5 RPS to reduce heat/noise during long idle periods.
-         *
-         * <p>Set to 0.0 to disable idle spinning entirely.
-         */
-        public static final double kFlywheelIdleRPS = -20.0; // -15
-
-        /**
-         * Toggle to enable or disable flywheel idling between shots.
-         *
-         * <p>When {@code true}  — the flywheel spins at {@link #kFlywheelIdleRPS} while
-         *    the robot is enabled but not actively shooting (reduces spool-up time).
-         * <p>When {@code false} — the flywheel is fully stopped between shots
-         *    (useful for testing or when idle noise/heat is undesirable).
-         *
-         * <p>Flip this value to quickly enable/disable idle spinning without touching
-         * any other code.
-         */
-        public static final boolean kFlywheelIdleEnabled = true; // set true to re-enable idling
+        /** Flywheel idle speed between shots (negative = shooting direction). */
+        public static final double kFlywheelIdleRPS = -20.0;
+        /** Enables flywheel idle behavior between shots. */
+        public static final boolean kFlywheelIdleEnabled = true;
 
         public static double kSensorToMechanismRatio;
         public static double kHoodStowedPosition;
@@ -232,57 +207,7 @@ public class Constants {
         // degrees of the hard stop. Prevents the turret from slamming into the physical stop.
         public static final double kNearLimitBuffer = 2.0; // degrees of buffer before hard stop
 
-        // ── Turret zero calibration offset ────────────────────────────────────
-        //
-        // The TalonFX encoder resets to 0 wherever the turret physically is at
-        // power-on. If the turret was NOT pointing along the robot's forward
-        // direction (+X) when powered on, every angle command will be off by
-        // that amount. This offset compensates for that physical misalignment.
-        //
-        // HOW TO TUNE:
-        //   1. Place the robot directly in front of the tower (robot facing tower).
-        //   2. Run ShootFromPointCommand (left trigger hard press).
-        //   3. Watch "ShootFromPoint/Turret Error (deg)" on the dashboard.
-        //   4. If the turret overshoots CCW (left), increase this value.
-        //      If the turret overshoots CW (right), decrease this value.
-        //   5. Repeat until front shots are centred, then verify side shots.
-        //
-        // Sign convention:
-        //   Positive = turret physical zero is CCW (left) of robot forward.
-        //   Negative = turret physical zero is CW  (right) of robot forward.
-        // ── Tuning history ────────────────────────────────────────────────────
-        // v0: 0.0  — shots consistently miss to the INSIDE EDGE of the hub from
-        //            both left and right sides.
-        // v1: 5.0  — still 3-5° CCW per driver feedback (inside edge, less severe).
-        // v2: 9.0  — (+4° from v1) — appeared to fix the issue.
-        //
-        // ROOT CAUSE FOUND: The "inside edge" error was NOT a physical turret
-        // misalignment. It was caused by ShootingArcManager.getTowerCenter() using
-        // the TAG FACE position (x=12.505) as the goal center instead of the actual
-        // goal center, which is 2 ft (0.6096 m) BEHIND the tag (x=11.895).
-        // This caused a ~9–10° CCW aiming error from every robot position.
-        // The previous non-zero offsets (5.0, 9.0) were compensating for this bug.
-        //
-        // FIXED IN: ShootingArcManager.java — GOAL_CENTER_DEPTH_METERS = 0.6096 m
-        //           now subtracted from the tag X coordinate in getTowerCenter().
-        //
-        // RESET TO: 0.0 — with the correct goal center, no offset should be needed.
-        //           If shots are still slightly off after deploying the hub-center fix,
-        //           tune this value using "ShootFromPoint/Turret Zero Offset (deg)"
-        //           on the dashboard (no redeploy needed), then update this constant.
-        //
-        // TUNING PROCEDURE (if still needed after hub-center fix):
-        //   1. Place robot directly in front of the tower (robot facing tower, ~2m away).
-        //   2. Hold left trigger hard (ShootFromPointCommand).
-        //   3. Watch "ShootFromPoint/Turret Error (deg)" on dashboard — should read ~0.
-        //   4. If shots miss to the INSIDE EDGE  → increase this value (+2° at a time).
-        //      If shots miss to the OUTSIDE EDGE → decrease this value (-2° at a time).
-        //   5. Verify from both left and right sides of the alliance zone.
-        // RESET TO 0.0 — the previous 6.0 was compensating for the wrong goal center
-        // calculation in getTowerCenter() (goal center was drifting with robot position).
-        // That bug is now fixed: getTowerCenter() uses a fixed -X offset from the primary
-        // tag. Re-tune this value on the robot using "ShootFromPoint/Turret Zero Offset (deg)"
-        // on the Elastic dashboard (no redeploy needed), then update this constant.
+        // Turret zero calibration offset in degrees; tune on robot if needed.
         public static final double kTurretZeroOffsetDegrees = 0.0;
 
         // ── Turret pivot offset from robot center ─────────────────────────────
@@ -420,22 +345,7 @@ public class Constants {
         public static final double kPivotBumpFactor = 0.01;
     }
     
-    /**
-     * Constants for the FeedFromCenter command.
-     *
-     * <p>The robot aims the turret at the midpoint between two feed-station AprilTags
-     * (offset a fixed depth behind the midpoint) and spins the flywheel to feed
-     * game pieces into the feed station.
-     *
-     * <p>Tag pairs (one pair per side of each alliance's feed station):
-     * <ul>
-     *   <li>Red  pair A: tags 1 &amp; 3</li>
-     *   <li>Red  pair B: tags 4 &amp; 6</li>
-     *   <li>Blue pair A: tags 17 &amp; 19</li>
-     *   <li>Blue pair B: tags 20 &amp; 22</li>
-     * </ul>
-     * The command automatically selects whichever pair is closer to the robot.
-     */
+    /** Constants for FeedFromCenter command behavior. */
     public static class FeedFromCenter {
 
         // ── Hood position by distance ─────────────────────────────────────────
@@ -467,6 +377,11 @@ public class Constants {
         public static final double kFarHoodExtraRotations = 0.0;
         /** Distance threshold (m) to apply far-only hood extra rotations. */
         public static final double kFarHoodDistanceMeters = 3.5;
+
+        /** Fixed offset (rotations) added to ALL FeedFromCenter hood positions. */
+        public static final double kFeedHoodOffsetRotations = 2.0;
+        /** Fixed offset (RPS) added to ALL FeedFromCenter launcher velocity targets. */
+        public static final double kFeedVelocityOffsetRps = -10.0; // 20.0
 
         // ── Target depth offset ───────────────────────────────────────────────
         /**
@@ -563,16 +478,7 @@ public class Constants {
         public static final int[] kBluePairB = {20, 22};
     }
 
-    /**
-     * Constants for the shoot-on-arc feature.
-     *
-     * The "shooting arc" is a circular arc of valid shooting positions around a tower.
-     * At any point on this arc the robot is at a known field position, the turret can
-     * aim at the tower, and the launcher can shoot the ball in.
-     *
-     * All distance-based lookup tables use linear interpolation.
-     * Values marked PLACEHOLDER must be tuned on the actual robot.
-     */
+    /** Constants for shooting-arc and shoot-on-move behavior. */
     public static class ShootingArc {
 
         // ── Primary tower tag IDs (center of tower opening) ──────────────────
@@ -598,36 +504,79 @@ public class Constants {
         /** Heading tolerance for "facing tower" check (degrees). */
         public static final double kRotationToleranceDeg = 5.0;
         /** Turret aim tolerance before firing is allowed (degrees). */
-        public static final double kTurretAimToleranceDeg = 15.0; // 4.0
+        public static final double kTurretAimToleranceDeg = 300.0; // 4.0, 18.0
         /** Launcher velocity tolerance before firing is allowed (RPS). */
         public static final double kLauncherVelocityTolerance = 5.0;
 
         // ── Shoot-on-move lead compensation constants ─────────────────────────
-        /** Global multiplier for translational lead compensation (dimensionless). */
-        public static final double kShootOnMoveLeadCompGain = 1.0;
+        /** Global multiplier magnitude for translational lead compensation (dimensionless). Direction is handled in ShootOnMoveCommand. */
+        public static final double kShootOnMoveLeadCompGain = 1.0; // 1.0
         /** Shooter wheel circumference used to estimate projectile speed from RPS. */
         public static final double kShootOnMoveWheelCircumferenceMeters = 0.319; // ~4" wheel
         /** Empirical scale factor from wheel surface speed to effective muzzle speed. */
         public static final double kShootOnMoveMuzzleSpeedScale = 0.75;
         /** Additional control/system latency added to projectile flight time (seconds). */
-        public static final double kShootOnMoveExtraLatencySec = 0.10;
+        public static final double kShootOnMoveExtraLatencySec = 0.20;
         /** Number of fixed-point iterations for lead/intercept solve (>=1). */
         public static final int kShootOnMoveLeadSolveIterations = 3;
         /** LPF alpha for field-relative velocity used in lead solve (0..1). */
         public static final double kShootOnMoveVelocityLpfAlpha = 0.25;
 
-        /** Axis-specific X gain for translational lead compensation (field X). */
-        public static final double kShootOnMoveLeadCompGainX = 1.0;
-        /** Axis-specific Y gain for translational lead compensation (field Y). */
-        public static final double kShootOnMoveLeadCompGainY = 1.0;
+        /** Axis-specific X gain magnitude for translational lead compensation (field X). Direction is handled in ShootOnMoveCommand. */
+        public static final double kShootOnMoveLeadCompGainX = 1.0; // 1.0
+        /** Axis-specific Y gain magnitude for translational lead compensation (field Y). Direction is handled in ShootOnMoveCommand. */
+        public static final double kShootOnMoveLeadCompGainY = 1.0; // 1.0
         /** Extra lookahead time used for velocity lead application (seconds). */
-        public static final double kShootOnMoveVelocityLookaheadSec = 0.14;
+        public static final double kShootOnMoveVelocityLookaheadSec = 0.24;
         /** Maximum magnitude of applied lead vector (meters). */
-        public static final double kShootOnMoveMaxLeadMeters = 1.5;
+        public static final double kShootOnMoveMaxLeadMeters = 2.5;
 
+        /** Max allowed future prediction horizon used by shoot-on-move (seconds). */
+        public static final double kShootOnMoveMaxPredictionSec = 0.60;
+        /** Max commanded turret target change rate while tracking (deg/sec). */
+        public static final double kShootOnMoveTurretSlewRateDegPerSec = 180.0;
+        /** Consecutive execute loops turret must remain within tolerance before firing. */
+        public static final int kShootOnMoveTurretSettleLoops = 4;
+
+        /** Base scale on radial (toward/away target) velocity contribution to prediction horizon. */
+        public static final double kShootOnMoveRadialCompScale = 0.45;
+        /** Radial scale used when robot is moving away from target (radial velocity > 0). */
+        public static final double kShootOnMoveRadialCompScaleAway = 0.65;
+        /** Radial scale used when robot is moving toward target (radial velocity < 0). */
+        public static final double kShootOnMoveRadialCompScaleToward = 0.25;
+        /** Scale on tangential (sideways) velocity contribution to prediction horizon. */
+        public static final double kShootOnMoveTangentialCompScale = 1.30;
+
+        /** Distance threshold (m) below which hood uses direct (uncompensated) distance for stability. */
+        public static final double kShootOnMoveHoodDirectDistanceThresholdMeters = 2.5;
+        /** If true, use direct distance for hood below threshold to avoid close-range hood jitter. */
+        public static final boolean kShootOnMoveUseDirectDistanceForHoodAtCloseRange = true;
+
+        /** Lateral speed (m/s) above which settle-loop requirement can be relaxed. */
+        public static final double kShootOnMoveLateralRelaxStartMps = 1.0;
+        /** Minimum settle loops allowed when moving laterally fast. */
+        public static final int kShootOnMoveTurretSettleLoopsMin = 2;
+
+        /** Enables distance->time-of-flight lookup for shoot-on-move lead solve. */
+        public static final boolean kShootOnMoveUseTofTable = true;
+        /**
+         * Distance (m) -> time-of-flight (s) table for translational lead.
+         * Tune on-robot from observed moving-shot error.
+         */
+        public static final double[][] kShootOnMoveTofLookup = {
+            {1.0, 0.16}, // 0.16
+            {1.5, 0.20}, // 0.20
+            {2.0, 0.24}, // 0.24
+            {2.5, 0.28}, // 0.28
+            {3.0, 0.33}, // 0.33
+            {3.5, 0.38}, // 0.38
+            {4.0, 0.44}, // 0.44
+            {4.5, 0.50}, // 0.50
+            {5.0, 0.57}  // 0.57
+        };
         // ── Shoot-on-move drivetrain gating ───────────────────────────────────
         /** Max drivetrain translation speed while ShootOnMove is active (m/s). */
-        public static final double kShootOnMoveDriveMaxSpeedMps = 1.0;
+        public static final double kShootOnMoveDriveMaxSpeedMps = 2.0; // 1.0
         /** Joystick deadband for direction gating while ShootOnMove is active (unitless 0..1). */
         public static final double kShootOnMoveDriveDirectionDeadband = 0.10;
 
@@ -655,86 +604,21 @@ public class Constants {
         /** Max angular acceleration during PathPlanner drive-to-arc (rad/s²). */
         public static final double kApproachMaxAngularAcceleration = Math.PI / 2.0;
 
-        // ── Launcher velocity lookup table ────────────────────────────────────
-        // Format: { {distance_m, velocity_RPS}, ... }  — sorted ascending by distance
-        // NEGATIVE values = correct flywheel spin direction.
-        // Kraken X60 free speed ≈ 100 RPS at 12V.
-        //
-        // RPS values are set ~10% ABOVE the ideal single-shot value to compensate for
-        // flywheel speed drop during rapid-fire (multiple balls in quick succession
-        // temporarily load the motor and reduce actual RPS by ~5-10%).
-        //
-        // Tuning history:
-        //   v1: -55 to -85 RPS — balls landing short.
-        //   v2: -65 to -95 RPS — +10 RPS across the board.
-        //   v3: 2.0m reduced to -70 RPS — was overshooting.
-        //   v4: +10% rapid-fire compensation; hood angles recalculated.
-        //   v5: -5 RPS across all distances — power reduced slightly per driver feedback.
-        //   v6: -10 RPS across all distances — too much velocity per driver feedback.
-        //   v7: PHYSICALLY TESTED on robot. Duty cycle values converted to RPS (DC × 100).
-        //       2.0m: DC -0.500 → -50.0 RPS  |  2.5m: DC -0.525 → -52.5 RPS
-        //       3.0m: DC -0.575 → -57.5 RPS  |  3.5m: DC -0.575 → -57.5 RPS
-        //       1.0m, 1.5m, 4.0m, 4.5m: extrapolated from tested trend.
-        //   v8: +5 RPS across all distances — shots landing a bit short.
-
-        // v10: -5 RPS again — still overshooting after v9 reduction.
+        // Launcher velocity lookup: {distance_m, velocity_RPS}
         public static final double[][] kLauncherRPSLookup = {
-            {1.0,  -36.0},    // -36.0      // was -50.0, 43.0, 42.0
-            {1.5,  -36.0},    // -36.0      // was -50.5, 43.5, 42.0
-            {2.0,  -36.0},    // -36.0      // was -53.0, 46.0, 42.0, 40
-            {2.5,  -38.0},    // -38.0      // was -55.5, 48.5, 47.5, 43, 41.5, 38 , 41.5
-            {3.0,  -42.5},    // -42.5      // was -58.5, 51.5, 50.0, 45, 43
-           // {3.175, -51.0},       // added intermediate point at 3.175 m (Tower Shot) 49.0, 51.0
-            {3.5,  -45.0},    // -45.0      // was -61.5, 54.5, 48.5, 46.5, 46.0
-            {4.0,  -46.0},    // -46.0      // was -74.5, 67.5, 55.5, 53.5, 48
-            {4.5,  -49.0},    // -49.0      // was -80.5, 73.5, 56.0, 54.0
-            {5.0,  -58.0}     // -58.0      // was -58, 60
+            {1.0,  -37.0},    // -36.0, 38.0      // was -50.0, 43.0, 42.0
+            {1.5,  -37.0},    // -36.0, 38.0      // was -50.5, 43.5, 42.0
+            {2.0,  -37.0},    // -36.0, 38.0      // was -53.0, 46.0, 42.0, 40
+            {2.5,  -42.0},    // -38.0, 42.0      // was -55.5, 48.5, 47.5, 43, 41.5, 38 , 41.5
+            {3.0,  -46.0},    // -42.5, 46.5      // was -58.5, 51.5, 50.0, 45, 43
+           // {3.175, -51.0},               // added intermediate point at 3.175 m (Tower Shot) 49.0, 51.0
+            {3.5,  -48.5},    // -45.0, 49.0      // was -61.5, 54.5, 48.5, 46.5, 46.0
+            {4.0,  -49.5},    // -46.0, 50.0      // was -74.5, 67.5, 55.5, 53.5, 48
+            {4.5,  -52.0},    // -49.0, 53.0      // was -80.5, 73.5, 56.0, 54.0
+            {5.0,  -60.0}     // -58.0, 60.0      // was -58, 60
         };
 
-        // ── Hood angle lookup table ───────────────────────────────────────────
-        // Format: { {distance_m, hood_motor_rotations}, ... }  — sorted ascending by distance
-        //
-        // MOTOR DIRECTION: 0 rot = ~85° (steep/vertical), 11.5 rot = ~5° (flat/horizontal)
-        // → LOW rotation values = steep angle = high arc trajectory
-        // → HIGH rotation values = flat angle  = low arc trajectory
-        //
-        // Physics: v_exit = 0.18617 * RPS (m/s)
-        //          target h = 1.372 m above launch point
-        //          Angle formula: θ = lower root of  g·x²·tan²θ - 2v²·x·tanθ + (2v²·h + g·x²) = 0
-        //
-        // TUNE ON ROBOT: decrease a value (steeper) if ball arcs too low / lands short;
-        //                increase a value (flatter) if ball arcs too high / overshoots.
-        //
-        // ── Physical angle limits (confirmed on robot) ────────────────────────
-        //   0.0 rot  = 68° from horizontal (22° from vertical) — steepest possible
-        //   11.5 rot = 28° from horizontal (62° from vertical) — flattest possible
-        //
-        // ── Physics (recalculated with correct angle range) ───────────────────
-        //   v_exit = 0.18617 × |RPS|  (m/s, Kraken X60)
-        //   target height above launch = 1.372 m  (6 ft goal − 1.5 ft launch height)
-        //   g = 9.81 m/s²
-        //
-        //   Quadratic in tan(θ):  a·t² − x·t + (h + a) = 0
-        //   where a = g·x²/(2·v²)
-        //   Lower root = low-arc (achievable); upper root always exceeds 68° limit.
-        //
-        //   Low-arc angles and rotation values (0 rot=68°, 11.5 rot=28°):
-        //     rotations = (68° − angle°) / 40° × 11.5
-        //
-        //   1.0 m  v=12.47 m/s  → 55.8°  → 3.51 rot
-        //   1.5 m  v=13.40 m/s  → 44.9°  → 6.64 rot
-        //   2.0 m  v=13.40 m/s  → 37.7°  → 8.71 rot
-        //   3.0 m  v=15.82 m/s  → 28.1°  → 11.47 rot  (near flat limit)
-        //   4.0 m  v=16.76 m/s  → 23.0°  → clamped to 28° → 11.5 rot
-        //   4.5 m  v=17.69 m/s  → 21.1°  → clamped to 28° → 11.5 rot
-        //
-        // Tuning history:
-        //   v1–v6: used wrong angle constants (85°/5°) — all angle comments were wrong.
-        //   v7–v9: iterative tuning — still too low.
-        //   v10: PHYSICALLY TESTED on robot. Hood positions confirmed working.
-        //        2.0m: hood=0  |  2.5m: hood=0  |  3.0m: hood=0  |  3.5m: hood=1
-        //        1.0m, 1.5m: extrapolated at 0 (steepest, same as close-range tested).
-        //        4.0m, 4.5m: extrapolated (+1 rot per 0.5m beyond 3.5m).
+        // Hood angle lookup: {distance_m, hood_motor_rotations}
         public static final double[][] kHoodAngleLookup = {
             {1.0,  0.0},    // 0.0    // extrapolated — steepest (68° from horizontal)
             {1.5,  0.0},    // 0.0    // extrapolated
@@ -744,8 +628,15 @@ public class Constants {
             {3.5,  1.0},    // 1.0    // TESTED: hood position 1 1, 2              0.75   , 2.25
             {4.0,  2.5},    // 2.5    // extrapolated (+1 rot per 0.5m)1           2.0
             {4.5,  3.0},    // 3.0    // extrapolated (+1 rot per 0.5m) 2  3.5
-            {5.0,  3.875}   // 5.0    // was 4.0
+            {5.0,  3.875}   // 3.875  // was 4.0
         };
+
+        // Elastic/SmartDashboard tunable table keys (flattened: [x0,y0,x1,y1,...])
+        public static final String kLauncherRpsLookupDashboardKey = "ShootingArc/LauncherRPSLookupFlat";
+        public static final String kHoodAngleLookupDashboardKey = "ShootingArc/HoodAngleLookupFlat";
+        // Optional string fallbacks for dashboards that only edit text fields.
+        public static final String kLauncherRpsLookupDashboardStringKey = "ShootingArc/LauncherRPSLookupCSV";
+        public static final String kHoodAngleLookupDashboardStringKey = "ShootingArc/HoodAngleLookupCSV";
     }
     public static class Vision {
         // Camera names — must match exactly what is configured in PhotonVision
@@ -906,7 +797,7 @@ public class Constants {
          * measurement is rejected before being added to the drivetrain pose estimator.
          * Useful for temporarily excluding problematic tags during bring-up/tuning.
          */
-        public static final int[] kIgnoredPoseTagIds = {13, 14, 16};
+        public static final int[] kIgnoredPoseTagIds = {};
 
         /**
          * Maximum acceptable pose ambiguity for a single-tag detection (range 0.0–1.0).
@@ -922,7 +813,25 @@ public class Constants {
          *
          * <p>0.3 is the widely-recommended FRC threshold (PhotonVision docs).
          */
-        public static final double kMaxAmbiguity = 0.3;
+        public static final double kMaxAmbiguity = 0.2;
+
+        /**
+         * Maximum allowed age (seconds) of a vision measurement when fusing into odometry.
+         * Older/stale frames are rejected to avoid delayed pose snaps.
+         */
+        public static final double kMaxVisionMeasurementAgeSec = 0.25;
+
+        /**
+         * Maximum allowed XY distance (meters) between current odometry pose and incoming
+         * vision pose before rejecting as an outlier.
+         */
+        public static final double kMaxVisionXYJumpMeters = 1.25;
+
+        /**
+         * Maximum allowed heading delta (degrees) between current odometry pose and incoming
+         * vision pose before rejecting as an outlier.
+         */
+        public static final double kMaxVisionHeadingJumpDeg = 35.0;
         
         // AprilTag driving parameters
         public static final double kTargetDistanceMeters = 1.524; // Target distance from tag (5 feet = 1.524 meters)

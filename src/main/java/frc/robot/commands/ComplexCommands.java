@@ -45,11 +45,24 @@ public class ComplexCommands extends SubsystemBase {
                 m_intake.setIntakePivotVoltage(-1),
                 m_intake.setIntakePivotVoltage(0));
         }
-
+        /* 
         public static Command shootSequence() {
             return Commands.sequence(
-                m_launcher.setLauncherVoltage(2));
+                m_launcher.setLauncherVoltage(2)
+                );
         }
+        */
+
+        public static Command playDefense() {
+            return Commands.sequence(
+                m_intake.setIntakeRollersVoltage(0),
+                m_launcher.turretGoHome(),
+                Commands.waitSeconds(1),
+                m_intake.stowIntake());
+                
+                
+        }
+        
 /* 
         public static Command buildShootFromPointCommand() {
             return Commands.parallel(

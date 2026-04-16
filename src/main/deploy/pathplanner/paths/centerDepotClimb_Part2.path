@@ -16,12 +16,12 @@
     },
     {
       "anchor": {
-        "x": 0.5599503311258278,
-        "y": 6.09682119205298
+        "x": 0.4157888493475689,
+        "y": 6.138422301304863
       },
       "prevControl": {
-        "x": 0.8099122203592113,
-        "y": 6.092456111197175
+        "x": 0.6657507385809524,
+        "y": 6.134057220449058
       },
       "nextControl": null,
       "isLocked": false,
@@ -42,10 +42,10 @@
   },
   "goalEndState": {
     "velocity": 0,
-    "rotation": 171.4692343900518
+    "rotation": 178.8291316031849
   },
   "reversed": false,
-  "folder": "centerDepotClimb",
+  "folder": "[CENTER] Depot Climb",
   "idealStartingState": {
     "velocity": 1.0,
     "rotation": 172.11686068327023

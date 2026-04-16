@@ -3,29 +3,29 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 1.642336892052195,
-        "y": 5.18085409252669
+        "x": 7.764317912218269,
+        "y": 7.494080664294188
       },
       "prevControl": null,
       "nextControl": {
-        "x": 2.642336892052195,
-        "y": 5.18085409252669
+        "x": 8.259240806642943,
+        "y": 6.8592882562277575
       },
       "isLocked": false,
-      "linkedName": "centerDepotClimb_Part3_End"
+      "linkedName": null
     },
     {
       "anchor": {
-        "x": 1.7176512455516018,
-        "y": 3.728362989323844
+        "x": 8.259240806642943,
+        "y": 4.104934756820878
       },
       "prevControl": {
-        "x": 2.51635434795652,
-        "y": 3.750142663535347
+        "x": 7.656725978647687,
+        "y": 4.0081020166073555
       },
       "nextControl": null,
       "isLocked": false,
-      "linkedName": "centerDepotClimb_Part4_End"
+      "linkedName": "centerDepotNeutral Part 5 End"
     }
   ],
   "rotationTargets": [],
@@ -41,14 +41,14 @@
     "unlimited": false
   },
   "goalEndState": {
-    "velocity": 0,
-    "rotation": 0.0
+    "velocity": 2.0,
+    "rotation": 1.3639275316029722
   },
   "reversed": false,
-  "folder": "[CENTER] Depot Climb",
+  "folder": "[CENTER] Depot Neutral",
   "idealStartingState": {
-    "velocity": 0,
-    "rotation": 180.0
+    "velocity": 2.0,
+    "rotation": -90.0
   },
   "useDefaultConstraints": true
 }

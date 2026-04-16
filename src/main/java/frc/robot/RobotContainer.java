@@ -39,6 +39,7 @@ import frc.robot.commands.ClimberGoToSetpoint;
 import frc.robot.commands.FeedFromCenterCommand;
 import frc.robot.commands.ShootFromPointCommand;
 import frc.robot.commands.ShootOnMoveCommand;
+import frc.robot.commands.ComplexCommands;
 import frc.robot.subsystems.LEDSubsystem;
 import frc.robot.util.ShootingArcManager;
 
@@ -142,9 +143,17 @@ public class RobotContainer {
         // false = LEDs forced OFF (black)
         SmartDashboard.putBoolean("LED/Enabled", true);
 
+        // Flywheel master toggle for Elastic/SmartDashboard:
+        // true  = flywheel commands are allowed to run normally
+        // false = all flywheel velocity/duty requests are ignored and motor is braked
+        SmartDashboard.putBoolean("Launcher/Flywheel Enabled", true);
+
         // Pre-seed ShootOnMove dashboard keys so they are visible in Elastic
         // even when the ShootOnMove command is not currently running.
         ShootOnMoveCommand.seedDashboardKeys();
+
+        // Seed tunable launch/hood lookup tables for Elastic Dashboard editing.
+        ShootingArcManager.seedTunableLookupTables();
 /* 
         // ================= INTAKE COLLECT testing buttons =================
         SmartDashboard.putData("Run Intake Collect Positive Voltage", intake.setIntakeRollersVoltage(2));
@@ -197,6 +206,7 @@ public class RobotContainer {
                 drivetrain,
                 launcher,
                 spindexer,
+                intake,
                 this::getActiveTowerTagId,
                 () -> -joystick.getLeftX()
             )
@@ -291,6 +301,7 @@ public class RobotContainer {
         String[] autoNames = {
         // CENTER AUTOS
             "[CENTER] Depot + Climb",
+            "[CENTER] Depot + Neutral",
             
         // RIGHT AUTOS
             // "rightNeutralFeed",
@@ -431,7 +442,8 @@ public class RobotContainer {
         // Single press deploys pivot and starts rollers; command remains active
         // until interrupted by another intake command.
         joystick.rightBumper().onTrue(intake.intakeDeployCollect());
-        operatorController.rightBumper().toggleOnTrue(intake.intakeDeployCollect());
+        operatorController.rightBumper().onTrue(ComplexCommands.playDefense());
+        //operatorController.rightBumper().toggleOnTrue(intake.intakeDeployCollect()
 
         // Left bumper: Dump-and-return sequence.
         // Lifts the intake pivot to the dump position (-0.75 rot), holds for 0.5 s,
@@ -491,6 +503,7 @@ public class RobotContainer {
                 drivetrain,
                 launcher,
                 spindexer,
+                intake,
                 this::getActiveTowerTagId,
                 () -> -joystick.getLeftX()
             )
@@ -1318,6 +1331,7 @@ public class RobotContainer {
                 drivetrain,
                 launcher,    // turret (CAN 7) + flywheel (CAN 8) + hood (CAN 9)
                 spindexer,
+                intake,
                 this::getActiveTowerTagId,
                 () -> -joystick.getLeftX()   // negative = right stick = clockwise arc
             )

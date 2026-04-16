@@ -307,6 +307,9 @@ public class Intake extends SubsystemBase {
       rollersEnabled = true; // Ensure rollers are enabled so intakeDeployCollect() doesn't override this command
       setRollersVelocity(IntakeConstants.kCollectStopVelocity);
       setRollersVelocity(IntakeConstants.kRollersOuttakeVelocity);
+    }).finallyDo(() -> {
+      // When outtake trigger is released, allow normal intake behavior to resume immediately.
+      setRollersVelocity(IntakeConstants.kRollersIntakeVelocity);
     }); // No subsystem requirement — does not touch or interrupt pivot control
   }
   

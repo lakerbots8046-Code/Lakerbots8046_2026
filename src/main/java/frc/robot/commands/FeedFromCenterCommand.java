@@ -79,6 +79,18 @@ public class FeedFromCenterCommand extends Command {
 
     private boolean isFiring = false;
 
+    // ── Turret wrap / swing safety interlock ─────────────────────────────────
+    /** Previous measured turret angle in degrees (wrapped to [-180, 180]). */
+    private Double lastTurretAngleDeg = null;
+    /** FPGA timestamp until which feed is inhibited after unsafe swing/wrap event. */
+    private double inhibitFeedUntilTimestamp = 0.0;
+    /** Operator-selected holdoff after wrap/swing detection. */
+    private static final double TURRET_WRAP_HOLDOFF_SECONDS = 0.1;
+    /** If turret angular rate exceeds this, inhibit feed. */
+    private static final double TURRET_RATE_INHIBIT_DEG_PER_SEC = 540.0;
+    /** Near-boundary band to detect -180/180 wrap crossing events robustly. */
+    private static final double TURRET_WRAP_BAND_DEG = 170.0;
+
     // ── Dashboard throttle ────────────────────────────────────────────────────
     /** Counts execute() calls; telemetry is written every 5 calls (~100 ms). */
     private int dashboardCounter = 0;
@@ -132,6 +144,8 @@ public class FeedFromCenterCommand extends Command {
         dashboardCounter        = 0;
         flywheelStartTimestamp  = -1.0;
         lastCommandedHoodRotations = Double.MAX_VALUE; // force update on first execute()
+        lastTurretAngleDeg = null;
+        inhibitFeedUntilTimestamp = 0.0;
 
         SmartDashboard.putString( DASH + "Status", "Initializing");
         SmartDashboard.putBoolean(DASH + "Firing",  false);
@@ -156,19 +170,19 @@ public class FeedFromCenterCommand extends Command {
         String pairLabel;
         if (isRed) {
             if (isLowY) {
-                target = new Translation2d(15.0, 2.0); // (15,2)
+                target = new Translation2d(16.0, 2.0); // (15,2)
                 pairLabel = "Red Fixed (15,2)";
             } else {
-                target = new Translation2d(15.0, 6.0); // (15,6)
+                target = new Translation2d(16.0, 6.0); // (15,6)
                 pairLabel = "Red Fixed (15,6)";
             }
         } else {
             if (isLowY) {
-                target = new Translation2d(2.0, 1.0); // (2,1)
-                pairLabel = "Blue Fixed (2,1)";
+                target = new Translation2d(1.0, 2.0); // (2,2)
+                pairLabel = "Blue Fixed (2,2)";
             } else {
-                target = new Translation2d(6.0, 2.0); // (6,2)
-                pairLabel = "Blue Fixed (6,2)";
+                target = new Translation2d(1.0, 6.0); // (2,6)
+                pairLabel = "Blue Fixed (2,6)";
             }
         }
 
@@ -244,8 +258,34 @@ public class FeedFromCenterCommand extends Command {
         // ── 6. Spin flywheel open-loop (DutyCycleOut) ─────────────────────────
         // Uses virtual distance so flywheel compensates for robot moving
         // toward or away from the feed station during the shot.
-        double targetLauncherRPS = ShootingArcManager.calculateLauncherRPS(virtualDistance)
+        double baseLauncherRPS = ShootingArcManager.calculateLauncherRPS(virtualDistance)
                 * FeedFromCenter.kFeedFromCenterRpsScale;
+
+        // Radial velocity compensation:
+        // +radialVelocity => moving toward target (can reduce energy slightly)
+        // -radialVelocity => moving away/backward from target (needs more energy)
+        Translation2d toTarget = target.minus(robotPos);
+        double toTargetNorm = toTarget.getNorm();
+        double radialVelocity = 0.0;
+        if (toTargetNorm > 1e-6) {
+            Translation2d toTargetUnit = toTarget.div(toTargetNorm);
+            radialVelocity = robotVelocity.getX() * toTargetUnit.getX()
+                           + robotVelocity.getY() * toTargetUnit.getY();
+        }
+
+        // Tuneable linear scale with safety clamps.
+        final double kRadialCompGainPerMps = 0.10; // +10% RPS per 1 m/s retreat
+        final double kMinRpsMotionScale = 0.90;    // at most -10% when strongly approaching
+        final double kMaxRpsMotionScale = 1.30;    // at most +30% when strongly retreating
+        double rpsMotionScale = 1.0 - (kRadialCompGainPerMps * radialVelocity);
+        rpsMotionScale = Math.max(kMinRpsMotionScale, Math.min(kMaxRpsMotionScale, rpsMotionScale));
+
+        double targetLauncherRPS = baseLauncherRPS * rpsMotionScale;
+        double directionSign = Math.signum(targetLauncherRPS);
+        if (Math.abs(directionSign) < 1e-6) {
+            directionSign = -1.0; // default to shooting direction used by this robot
+        }
+        targetLauncherRPS += directionSign * FeedFromCenter.kFeedVelocityOffsetRps;
         launcher.setCollectDutyCycle(targetLauncherRPS);
 
         // Record the timestamp the first time the flywheel is commanded this cycle.
@@ -255,7 +295,7 @@ public class FeedFromCenterCommand extends Command {
 
         // ── 7. Set hood to feed position based on distance (with deadband) ────
         // Use distance-interpolated hood target for smoother feed consistency across range.
-        double hoodTarget = interpolateHoodPosition(distance);
+        double hoodTarget = interpolateHoodPosition(virtualDistance);
         if (Math.abs(hoodTarget - lastCommandedHoodRotations) > kHoodDeadbandRotations) {
             launcher.setHoodPosition(hoodTarget);
             lastCommandedHoodRotations = hoodTarget;
@@ -311,6 +351,42 @@ public class FeedFromCenterCommand extends Command {
         boolean turretAimed = !turretAtLimit && !targetOutOfRange
                 && Math.abs(turretError) < Constants.FeedFromCenter.kTurretAimToleranceDeg;
 
+        // ── Turret wrap/swing inhibit logic ───────────────────────────────────
+        double now = Timer.getFPGATimestamp();
+        boolean wrapCrossDetected = false;
+        boolean highTurretRateDetected = false;
+        double turretRateDegPerSec = 0.0;
+
+        if (lastTurretAngleDeg != null) {
+            double prev = lastTurretAngleDeg;
+            double curr = currentTurretDeg;
+
+            // Detect signed shortest angular delta in degrees (normalized to [-180, 180]).
+            double delta = curr - prev;
+            while (delta > 180.0) delta -= 360.0;
+            while (delta < -180.0) delta += 360.0;
+
+            // Approximate rate using nominal 20 ms loop period.
+            turretRateDegPerSec = delta / 0.02;
+
+            // Detect crossing near ±180 boundary (both samples near opposite ends).
+            wrapCrossDetected =
+                    (Math.abs(prev) > TURRET_WRAP_BAND_DEG)
+                    && (Math.abs(curr) > TURRET_WRAP_BAND_DEG)
+                    && (Math.signum(prev) != Math.signum(curr));
+
+            highTurretRateDetected = Math.abs(turretRateDegPerSec) > TURRET_RATE_INHIBIT_DEG_PER_SEC;
+
+            if (wrapCrossDetected || highTurretRateDetected) {
+                inhibitFeedUntilTimestamp = Math.max(
+                        inhibitFeedUntilTimestamp,
+                        now + TURRET_WRAP_HOLDOFF_SECONDS);
+            }
+        }
+
+        lastTurretAngleDeg = currentTurretDeg;
+        boolean turretSwingInhibitActive = now < inhibitFeedUntilTimestamp;
+
         double actualRPS    = Math.abs(launcher.getCollectVelocity());
         double targetRPS    = Math.abs(targetLauncherRPS);
         double timeSpooling = (flywheelStartTimestamp >= 0)
@@ -323,7 +399,7 @@ public class FeedFromCenterCommand extends Command {
                         < FeedFromCenter.kLauncherVelocityToleranceRps);
 
         boolean hoodAtTarget = launcher.isHoodAtTarget();
-        boolean readyToFire = launcherAtSpeed && turretAimed && hoodAtTarget;
+        boolean readyToFire = launcherAtSpeed && turretAimed && hoodAtTarget && !turretSwingInhibitActive;
 
         // ── 10. Trigger/cancel feed sequence directly (pre-state-machine behavior) ───
         if (readyToFire) {
@@ -376,9 +452,17 @@ public class FeedFromCenterCommand extends Command {
             SmartDashboard.putNumber( DASH + "Lead Offset (m)",     leadOffset.getNorm());
             SmartDashboard.putNumber( DASH + "Lead Gain",           FeedFromCenter.kFeedFromCenterMotionCompensationGain);
             SmartDashboard.putNumber( DASH + "RPS Scale",           FeedFromCenter.kFeedFromCenterRpsScale);
+            SmartDashboard.putNumber( DASH + "Radial Velocity (m/s)", radialVelocity);
+            SmartDashboard.putNumber( DASH + "RPS Motion Scale",      rpsMotionScale);
             SmartDashboard.putNumber( DASH + "Turret Error (deg)",  turretError);
             SmartDashboard.putBoolean(DASH + "Turret Aimed",        turretAimed);
             SmartDashboard.putString( DASH + "Turret Limit",        turretLimitStatus);
+            SmartDashboard.putNumber( DASH + "Turret Rate (deg/s)", turretRateDegPerSec);
+            SmartDashboard.putBoolean(DASH + "Wrap Cross Detected", wrapCrossDetected);
+            SmartDashboard.putBoolean(DASH + "High Rate Detected",  highTurretRateDetected);
+            SmartDashboard.putBoolean(DASH + "Swing Inhibit",       turretSwingInhibitActive);
+            SmartDashboard.putNumber( DASH + "Inhibit Time Left (s)",
+                    Math.max(0.0, inhibitFeedUntilTimestamp - now));
             SmartDashboard.putBoolean(DASH + "Hood At Target",      hoodAtTarget);
             SmartDashboard.putBoolean(DASH + "At Speed",            launcherAtSpeed);
             SmartDashboard.putBoolean(DASH + "Ready To Fire",       readyToFire);
@@ -387,6 +471,7 @@ public class FeedFromCenterCommand extends Command {
                     isFiring           ? "FIRING"
                     : !launcherAtSpeed ? String.format("Spooling (%.1f s)", timeSpooling)
                     : (turretAtLimit || targetOutOfRange) ? "At Speed - Turret Wrap/Limit"
+                    : turretSwingInhibitActive ? "At Speed - Turret Swing Inhibit"
                     : !hoodAtTarget    ? "At Speed - Adjusting Hood"
                                        : "At Speed - Ready");
         }
@@ -480,42 +565,46 @@ public class FeedFromCenterCommand extends Command {
      */
     private double interpolateHoodPosition(double distanceMeters) {
         double[][] table = Constants.ShootingArc.kHoodAngleLookup;
+        double hood;
+
         if (table == null || table.length == 0) {
-        double fallback = (distanceMeters < FeedFromCenter.kHoodDistanceThresholdMeters)
-                ? FeedFromCenter.kHoodPositionNear
-                : FeedFromCenter.kHoodPositionFar;
-        if (distanceMeters >= FeedFromCenter.kFarHoodDistanceMeters) {
-            fallback += FeedFromCenter.kFarHoodExtraRotations;
-        }
-        return fallback;
-        }
-
-        if (distanceMeters <= table[0][0]) return table[0][1];
-        if (distanceMeters >= table[table.length - 1][0]) {
-            double far = table[table.length - 1][1];
+            hood = (distanceMeters < FeedFromCenter.kHoodDistanceThresholdMeters)
+                    ? FeedFromCenter.kHoodPositionNear
+                    : FeedFromCenter.kHoodPositionFar;
             if (distanceMeters >= FeedFromCenter.kFarHoodDistanceMeters) {
-                far += FeedFromCenter.kFarHoodExtraRotations;
+                hood += FeedFromCenter.kFarHoodExtraRotations;
             }
-            return far;
+            return hood + FeedFromCenter.kFeedHoodOffsetRotations;
         }
 
-        for (int i = 0; i < table.length - 1; i++) {
-            double x0 = table[i][0];
-            double y0 = table[i][1];
-            double x1 = table[i + 1][0];
-            double y1 = table[i + 1][1];
-            if (distanceMeters >= x0 && distanceMeters <= x1) {
-                double t = (distanceMeters - x0) / (x1 - x0);
-                double hood = y0 + (y1 - y0) * t;
-                if (distanceMeters >= FeedFromCenter.kFarHoodDistanceMeters) {
-                    hood += FeedFromCenter.kFarHoodExtraRotations;
+        if (distanceMeters <= table[0][0]) {
+            hood = table[0][1];
+        } else if (distanceMeters >= table[table.length - 1][0]) {
+            hood = table[table.length - 1][1];
+            if (distanceMeters >= FeedFromCenter.kFarHoodDistanceMeters) {
+                hood += FeedFromCenter.kFarHoodExtraRotations;
+            }
+        } else {
+            hood = (distanceMeters < FeedFromCenter.kHoodDistanceThresholdMeters)
+                    ? FeedFromCenter.kHoodPositionNear
+                    : FeedFromCenter.kHoodPositionFar;
+
+            for (int i = 0; i < table.length - 1; i++) {
+                double x0 = table[i][0];
+                double y0 = table[i][1];
+                double x1 = table[i + 1][0];
+                double y1 = table[i + 1][1];
+                if (distanceMeters >= x0 && distanceMeters <= x1) {
+                    double t = (distanceMeters - x0) / (x1 - x0);
+                    hood = y0 + (y1 - y0) * t;
+                    if (distanceMeters >= FeedFromCenter.kFarHoodDistanceMeters) {
+                        hood += FeedFromCenter.kFarHoodExtraRotations;
+                    }
+                    break;
                 }
-                return hood;
             }
         }
 
-        return (distanceMeters < FeedFromCenter.kHoodDistanceThresholdMeters)
-                ? FeedFromCenter.kHoodPositionNear
-                : FeedFromCenter.kHoodPositionFar;
+        return hood + FeedFromCenter.kFeedHoodOffsetRotations;
     }
 }

@@ -3,25 +3,25 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 1.8897983392645323,
+        "x": 1.7176512455516018,
         "y": 3.728362989323844
       },
       "prevControl": null,
       "nextControl": {
-        "x": 2.1397982236849127,
-        "y": 3.728122594239656
+        "x": 1.9663766111958607,
+        "y": 3.7540190667993714
       },
       "isLocked": false,
       "linkedName": "centerDepotClimb_Part4_End"
     },
     {
       "anchor": {
-        "x": 1.221,
+        "x": 1.1,
         "y": 3.65
       },
       "prevControl": {
-        "x": 0.9566681757049849,
-        "y": 3.650117776917141
+        "x": 0.8522751329441521,
+        "y": 3.616348993445033
       },
       "nextControl": null,
       "isLocked": false,
@@ -45,7 +45,7 @@
     "rotation": 0.0
   },
   "reversed": false,
-  "folder": "centerDepotClimb",
+  "folder": "[CENTER] Depot Climb",
   "idealStartingState": {
     "velocity": 0,
     "rotation": 0.0

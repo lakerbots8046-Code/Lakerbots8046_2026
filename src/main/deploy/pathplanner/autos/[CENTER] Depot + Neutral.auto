@@ -5,153 +5,34 @@
     "data": {
       "commands": [
         {
-          "type": "path",
-          "data": {
-            "pathName": "rightNeutralScore_Part1"
-          }
-        },
-        {
           "type": "parallel",
           "data": {
             "commands": [
               {
                 "type": "path",
                 "data": {
-                  "pathName": "rightNeutralScore_Part2"
+                  "pathName": "centerDepotNeutral_Part1"
                 }
               },
-              {
-                "type": "sequential",
-                "data": {
-                  "commands": [
-                    {
-                      "type": "wait",
-                      "data": {
-                        "waitTime": 0.01
-                      }
-                    },
-                    {
-                      "type": "named",
-                      "data": {
-                        "name": "AutoIntakeDeployCollect2Secs"
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "rightNeutralScore_Part3"
-          }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "rightNeutralScore_Part4"
-          }
-        },
-        {
-          "type": "deadline",
-          "data": {
-            "commands": [
-              {
-                "type": "sequential",
-                "data": {
-                  "commands": [
-                    {
-                      "type": "named",
-                      "data": {
-                        "name": "DumpAndReturn"
-                      }
-                    },
-                    {
-                      "type": "wait",
-                      "data": {
-                        "waitTime": 0.75
-                      }
-                    },
-                    {
-                      "type": "named",
-                      "data": {
-                        "name": "DumpAndReturn"
-                      }
-                    },
-                    {
-                      "type": "wait",
-                      "data": {
-                        "waitTime": 0.75
-                      }
-                    },
-                    {
-                      "type": "named",
-                      "data": {
-                        "name": "DumpAndReturn"
-                      }
-                    },
-                    {
-                      "type": "wait",
-                      "data": {
-                        "waitTime": 1.0
-                      }
-                    },
-                    {
-                      "type": "named",
-                      "data": {
-                        "name": "DumpAndReturn"
-                      }
-                    },
-                    {
-                      "type": "wait",
-                      "data": {
-                        "waitTime": 1.0
-                      }
-                    }
-                  ]
-                }
-              },
-              {
-                "type": "parallel",
-                "data": {
-                  "commands": [
-                    {
-                      "type": "named",
-                      "data": {
-                        "name": "ShootFromPointCommand"
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "rightNeutralScore_Part5"
-          }
-        },
-        {
-          "type": "parallel",
-          "data": {
-            "commands": [
               {
                 "type": "named",
                 "data": {
                   "name": "AutoIntakeDeployCollect2Secs"
                 }
-              },
-              {
-                "type": "path",
-                "data": {
-                  "pathName": "rightNeutralScore_Part6"
-                }
               }
             ]
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "centerDepotNeutral_Part2"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "centerDepotNeutral_Part3"
           }
         },
         {
@@ -171,6 +52,18 @@
                     {
                       "type": "wait",
                       "data": {
+                        "waitTime": 0.5
+                      }
+                    },
+                    {
+                      "type": "named",
+                      "data": {
+                        "name": "DumpAndReturn"
+                      }
+                    },
+                    {
+                      "type": "wait",
+                      "data": {
                         "waitTime": 1.0
                       }
                     },
@@ -202,16 +95,73 @@
                 }
               },
               {
-                "type": "parallel",
+                "type": "named",
+                "data": {
+                  "name": "ShootFromPointCommand"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "deadline",
+          "data": {
+            "commands": [
+              {
+                "type": "path",
+                "data": {
+                  "pathName": "centerDepotNeutral_Part4"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "parallel",
+          "data": {
+            "commands": [
+              {
+                "type": "path",
+                "data": {
+                  "pathName": "centerDepotNeutral_Part5"
+                }
+              },
+              {
+                "type": "named",
+                "data": {
+                  "name": "AutoIntakeDeployCollect2Secs"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "parallel",
+          "data": {
+            "commands": [
+              {
+                "type": "sequential",
                 "data": {
                   "commands": [
                     {
-                      "type": "named",
+                      "type": "path",
                       "data": {
-                        "name": "ShootFromPointCommand"
+                        "pathName": "centerDepotNeutral_Part6"
+                      }
+                    },
+                    {
+                      "type": "path",
+                      "data": {
+                        "pathName": "centerDepotNeutral_Part7"
                       }
                     }
                   ]
+                }
+              },
+              {
+                "type": "named",
+                "data": {
+                  "name": "AutoIntakeDeployCollect2Secs"
                 }
               }
             ]
@@ -221,6 +171,6 @@
     }
   },
   "resetOdom": true,
-  "folder": "Right",
+  "folder": "Center",
   "choreoAuto": false
 }
