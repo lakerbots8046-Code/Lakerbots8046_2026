@@ -8,27 +8,32 @@
       },
       "prevControl": null,
       "nextControl": {
-        "x": 9.324400948991697,
-        "y": 3.8682325029655997
+        "x": 8.366832740213523,
+        "y": 2.9429418742585995
       },
       "isLocked": false,
       "linkedName": "centerDepotNeutral Part 5 End"
     },
     {
       "anchor": {
-        "x": 9.797805456702257,
-        "y": 4.018861209964412
+        "x": 8.291518386714117,
+        "y": 1.3290628706998815
       },
       "prevControl": {
-        "x": 9.130735468564653,
-        "y": 4.072657176749702
+        "x": 8.27000000000538,
+        "y": 3.5777342823250304
       },
       "nextControl": null,
       "isLocked": false,
       "linkedName": "centerDepotNeutral Part 6 End"
     }
   ],
-  "rotationTargets": [],
+  "rotationTargets": [
+    {
+      "waypointRelativePos": 0.8419182948490146,
+      "rotationDegrees": -90.0
+    }
+  ],
   "constraintZones": [],
   "pointTowardsZones": [],
   "eventMarkers": [],
@@ -42,13 +47,13 @@
   },
   "goalEndState": {
     "velocity": 0,
-    "rotation": 0.0
+    "rotation": -122.00538320808347
   },
   "reversed": false,
   "folder": "[CENTER] Depot Neutral",
   "idealStartingState": {
     "velocity": 3.0,
-    "rotation": 1.3639275316029722
+    "rotation": -90.0
   },
   "useDefaultConstraints": false
 }

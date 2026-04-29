@@ -3,32 +3,37 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 7.667425496688741,
-        "y": 1.9441390728476815
+        "x": 3.2533857615894046,
+        "y": 5.450687086092715
       },
       "prevControl": null,
       "nextControl": {
-        "x": 7.790844370860928,
-        "y": 1.261705298013244
+        "x": 4.197085040636071,
+        "y": 5.422967472883431
       },
       "isLocked": false,
-      "linkedName": "leftNeutralFeed_Part4End"
+      "linkedName": "centerBumpExit Part 3 End"
     },
     {
       "anchor": {
-        "x": 6.672814569536423,
-        "y": 0.884188741721855
+        "x": 5.990380794701987,
+        "y": 5.385347682119204
       },
       "prevControl": {
-        "x": 7.340728476821193,
-        "y": 1.043907284768211
+        "x": 5.677040581532704,
+        "y": 5.397491264616975
       },
       "nextControl": null,
       "isLocked": false,
-      "linkedName": null
+      "linkedName": "centerBumpExit Part 4 End"
     }
   ],
-  "rotationTargets": [],
+  "rotationTargets": [
+    {
+      "waypointRelativePos": 0.7929782082324456,
+      "rotationDegrees": -135.0
+    }
+  ],
   "constraintZones": [],
   "pointTowardsZones": [],
   "eventMarkers": [],
@@ -41,14 +46,14 @@
     "unlimited": false
   },
   "goalEndState": {
-    "velocity": 0,
-    "rotation": -33.86673915127397
+    "velocity": 2.0,
+    "rotation": -90.0
   },
   "reversed": false,
-  "folder": "leftNeutralFeed",
+  "folder": "[CENTER] Depot Neutral",
   "idealStartingState": {
     "velocity": 0,
-    "rotation": -90.82071414619561
+    "rotation": -141.34019174590998
   },
   "useDefaultConstraints": true
 }

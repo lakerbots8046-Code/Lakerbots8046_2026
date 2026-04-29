@@ -50,7 +50,7 @@
     "rotation": -100.0
   },
   "reversed": false,
-  "folder": null,
+  "folder": "[LEFT] Double Neutral",
   "idealStartingState": {
     "velocity": 5.0,
     "rotation": -90.0

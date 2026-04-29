@@ -6,14 +6,15 @@
     "LNSBump",
     "LeftNSV2",
     "LeftScoreDepotClimb",
-    "[CENTER] Depot Neutral",
     "RightNeutralCross",
     "[CENTER] Depot Climb",
+    "[CENTER] Depot Neutral",
+    "[LEFT] Double Neutral",
+    "[LEFT] Trench Delay",
     "[RIGHT] Double Neutral",
-    "leftNeutralFeed",
+    "[RIGHT] Trench Delay",
     "leftNeutralScore",
-    "rightNeutralFeed",
-    "rightOutpostScore"
+    "[RIGHT] Bump Delay"
   ],
   "autoFolders": [
     "Center",

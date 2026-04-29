@@ -57,10 +57,8 @@ public class ComplexCommands extends SubsystemBase {
             return Commands.sequence(
                 m_intake.setIntakeRollersVoltage(0),
                 m_launcher.turretGoHome(),
-                Commands.waitSeconds(1),
+                Commands.waitSeconds(2),
                 m_intake.stowIntake());
-                
-                
         }
         
 /* 

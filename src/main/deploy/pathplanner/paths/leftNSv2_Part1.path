@@ -16,12 +16,12 @@
     },
     {
       "anchor": {
-        "x": 5.583824503311258,
-        "y": 7.396349337748344
+        "x": 5.889,
+        "y": 5.607
       },
       "prevControl": {
-        "x": 5.333824503311258,
-        "y": 7.396349337748344
+        "x": 5.639,
+        "y": 5.607
       },
       "nextControl": null,
       "isLocked": false,
@@ -42,7 +42,7 @@
   },
   "goalEndState": {
     "velocity": 5.0,
-    "rotation": -90.0
+    "rotation": -45.0
   },
   "reversed": false,
   "folder": "LeftNSV2",

@@ -3,32 +3,37 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 7.667425496688741,
-        "y": 3.6574834437086086
+        "x": 3.558,
+        "y": 7.45
       },
       "prevControl": null,
       "nextControl": {
-        "x": 7.710985099337748,
-        "y": 2.619312913907285
+        "x": 6.336717513840274,
+        "y": 7.471500383391403
       },
       "isLocked": false,
-      "linkedName": "leftNeutralFeed_Part3End"
+      "linkedName": null
     },
     {
       "anchor": {
-        "x": 7.667425496688741,
-        "y": 1.9441390728476815
+        "x": 5.8607,
+        "y": 7.458
       },
       "prevControl": {
-        "x": 7.674685430463576,
-        "y": 3.1347682119205285
+        "x": 5.573666113831809,
+        "y": 7.426302815379095
       },
       "nextControl": null,
       "isLocked": false,
-      "linkedName": "leftNeutralFeed_Part4End"
+      "linkedName": "leftNeutralFeed_Part1End"
     }
   ],
-  "rotationTargets": [],
+  "rotationTargets": [
+    {
+      "waypointRelativePos": 0.2819089900110977,
+      "rotationDegrees": 0.0
+    }
+  ],
   "constraintZones": [],
   "pointTowardsZones": [],
   "eventMarkers": [],
@@ -41,14 +46,14 @@
     "unlimited": false
   },
   "goalEndState": {
-    "velocity": 0,
-    "rotation": -90.82071414619561
+    "velocity": 2.0,
+    "rotation": 0.0
   },
   "reversed": false,
-  "folder": "leftNeutralFeed",
+  "folder": "[LEFT] Trench Delay",
   "idealStartingState": {
     "velocity": 0,
-    "rotation": -90.79365979976228
+    "rotation": 0.0
   },
   "useDefaultConstraints": true
 }

@@ -3,13 +3,13 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 7.6892052980132455,
-        "y": 5.5305463576158935
+        "x": 6.607,
+        "y": 5.454
       },
       "prevControl": null,
       "nextControl": {
-        "x": 6.95737841043891,
-        "y": 5.116298932384341
+        "x": 5.8751731124256645,
+        "y": 5.039752574768447
       },
       "isLocked": false,
       "linkedName": "leftPart2End"
@@ -53,7 +53,7 @@
   "folder": "LNSBump",
   "idealStartingState": {
     "velocity": 4.0,
-    "rotation": -145.08059798754238
+    "rotation": -135.0
   },
   "useDefaultConstraints": false
 }

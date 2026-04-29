@@ -3,25 +3,25 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 6.041200331125827,
-        "y": 7.410869205298013
+        "x": 3.028,
+        "y": 5.505
       },
       "prevControl": null,
       "nextControl": {
-        "x": 3.747061258278145,
-        "y": 7.396349337748345
+        "x": 2.570951986754967,
+        "y": 4.85537251655629
       },
       "isLocked": false,
       "linkedName": "leftNeutralScorePart3_End"
     },
     {
       "anchor": {
-        "x": 3.1081870860927148,
-        "y": 7.222110927152317
+        "x": 2.796,
+        "y": 4.198
       },
       "prevControl": {
-        "x": 3.449403973509933,
-        "y": 7.447168874172184
+        "x": 3.137216887417218,
+        "y": 4.423057947019867
       },
       "nextControl": null,
       "isLocked": false,
@@ -47,13 +47,13 @@
   },
   "goalEndState": {
     "velocity": 1.0,
-    "rotation": 180.0
+    "rotation": -90.0
   },
   "reversed": false,
   "folder": "LeftScoreDepotClimb",
   "idealStartingState": {
     "velocity": 3.0,
-    "rotation": 0.0
+    "rotation": -135.0
   },
   "useDefaultConstraints": false
 }

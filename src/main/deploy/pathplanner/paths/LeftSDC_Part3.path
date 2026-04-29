@@ -3,41 +3,32 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 7.6892052980132455,
-        "y": 5.5305463576158935
+        "x": 6.607,
+        "y": 5.454
       },
       "prevControl": null,
       "nextControl": {
-        "x": 6.681583315657577,
-        "y": 5.190022084875051
+        "x": 5.782943382836415,
+        "y": 5.496629264542269
       },
       "isLocked": false,
       "linkedName": "leftPart2End"
     },
     {
       "anchor": {
-        "x": 6.041200331125827,
-        "y": 7.410869205298013
+        "x": 3.028,
+        "y": 5.505
       },
       "prevControl": {
-        "x": 7.137450331125827,
-        "y": 7.374569536423841
+        "x": 4.265969175773743,
+        "y": 5.491156029922397
       },
       "nextControl": null,
       "isLocked": false,
       "linkedName": "leftNeutralScorePart3_End"
     }
   ],
-  "rotationTargets": [
-    {
-      "waypointRelativePos": 0.33414043583535163,
-      "rotationDegrees": 135.0
-    },
-    {
-      "waypointRelativePos": 0.5,
-      "rotationDegrees": 135.0
-    }
-  ],
+  "rotationTargets": [],
   "constraintZones": [],
   "pointTowardsZones": [],
   "eventMarkers": [],
@@ -51,13 +42,13 @@
   },
   "goalEndState": {
     "velocity": 3.0,
-    "rotation": 0.0
+    "rotation": -135.0
   },
   "reversed": false,
   "folder": "LeftScoreDepotClimb",
   "idealStartingState": {
     "velocity": 2.0,
-    "rotation": -145.08059798754238
+    "rotation": -135.0
   },
   "useDefaultConstraints": true
 }

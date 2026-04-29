@@ -8,20 +8,20 @@
       },
       "prevControl": null,
       "nextControl": {
-        "x": 6.592955298013244,
-        "y": 7.669395695364238
+        "x": 5.409586092715232,
+        "y": 7.788385761589403
       },
       "isLocked": false,
       "linkedName": null
     },
     {
       "anchor": {
-        "x": 5.583824503311258,
-        "y": 7.396349337748344
+        "x": 5.889,
+        "y": 5.607
       },
       "prevControl": {
-        "x": 5.053849337748345,
-        "y": 7.410869205298013
+        "x": 6.709114238410596,
+        "y": 7.1132119205298014
       },
       "nextControl": null,
       "isLocked": false,
@@ -47,7 +47,7 @@
   },
   "goalEndState": {
     "velocity": 3.0,
-    "rotation": -90.0
+    "rotation": -45.0
   },
   "reversed": false,
   "folder": "LeftScoreDepotClimb",

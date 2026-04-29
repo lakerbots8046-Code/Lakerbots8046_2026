@@ -255,7 +255,7 @@ public class FeedFromCenterCommand extends Command {
 
         SmartDashboard.putBoolean(kDisableLeadCompKey, disableLeadComp);
 
-        // ── 6. Spin flywheel open-loop (DutyCycleOut) ─────────────────────────
+        // ── 6. Spin flywheel using velocity closed-loop (VelocityVoltage) ─────
         // Uses virtual distance so flywheel compensates for robot moving
         // toward or away from the feed station during the shot.
         double baseLauncherRPS = ShootingArcManager.calculateLauncherRPS(virtualDistance)
@@ -274,9 +274,9 @@ public class FeedFromCenterCommand extends Command {
         }
 
         // Tuneable linear scale with safety clamps.
-        final double kRadialCompGainPerMps = 0.10; // +10% RPS per 1 m/s retreat
+        final double kRadialCompGainPerMps = 0.30; // +30% RPS per 1 m/s retreat
         final double kMinRpsMotionScale = 0.90;    // at most -10% when strongly approaching
-        final double kMaxRpsMotionScale = 1.30;    // at most +30% when strongly retreating
+        final double kMaxRpsMotionScale = 2.00;    // at most +30% when strongly retreating
         double rpsMotionScale = 1.0 - (kRadialCompGainPerMps * radialVelocity);
         rpsMotionScale = Math.max(kMinRpsMotionScale, Math.min(kMaxRpsMotionScale, rpsMotionScale));
 
@@ -286,7 +286,11 @@ public class FeedFromCenterCommand extends Command {
             directionSign = -1.0; // default to shooting direction used by this robot
         }
         targetLauncherRPS += directionSign * FeedFromCenter.kFeedVelocityOffsetRps;
-        launcher.setCollectDutyCycle(targetLauncherRPS);
+        if (targetLauncherRPS > -0.95){
+            targetLauncherRPS = -0.95;
+        }
+
+        launcher.setCollectVelocity(targetLauncherRPS);
 
         // Record the timestamp the first time the flywheel is commanded this cycle.
         if (flywheelStartTimestamp < 0) {
@@ -295,7 +299,8 @@ public class FeedFromCenterCommand extends Command {
 
         // ── 7. Set hood to feed position based on distance (with deadband) ────
         // Use distance-interpolated hood target for smoother feed consistency across range.
-        double hoodTarget = interpolateHoodPosition(virtualDistance);
+        double hoodTarget = Constants.FeedFromCenter.kHoodFeedPosition;
+        //double hoodTarget = interpolateHoodPosition(virtualDistance);
         if (Math.abs(hoodTarget - lastCommandedHoodRotations) > kHoodDeadbandRotations) {
             launcher.setHoodPosition(hoodTarget);
             lastCommandedHoodRotations = hoodTarget;
@@ -569,7 +574,7 @@ public class FeedFromCenterCommand extends Command {
 
         if (table == null || table.length == 0) {
             hood = (distanceMeters < FeedFromCenter.kHoodDistanceThresholdMeters)
-                    ? FeedFromCenter.kHoodPositionNear
+                    ? FeedFromCenter.kHoodFeedPosition
                     : FeedFromCenter.kHoodPositionFar;
             if (distanceMeters >= FeedFromCenter.kFarHoodDistanceMeters) {
                 hood += FeedFromCenter.kFarHoodExtraRotations;
@@ -586,7 +591,7 @@ public class FeedFromCenterCommand extends Command {
             }
         } else {
             hood = (distanceMeters < FeedFromCenter.kHoodDistanceThresholdMeters)
-                    ? FeedFromCenter.kHoodPositionNear
+                    ? FeedFromCenter.kHoodFeedPosition
                     : FeedFromCenter.kHoodPositionFar;
 
             for (int i = 0; i < table.length - 1; i++) {

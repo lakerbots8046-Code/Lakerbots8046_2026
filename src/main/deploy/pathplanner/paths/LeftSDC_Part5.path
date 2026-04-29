@@ -3,13 +3,13 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 3.1081870860927148,
-        "y": 7.222110927152317
+        "x": 2.796,
+        "y": 4.198
       },
       "prevControl": null,
       "nextControl": {
-        "x": 1.336763245033112,
-        "y": 6.525157284768212
+        "x": 1.024576158940397,
+        "y": 3.5010463576158948
       },
       "isLocked": false,
       "linkedName": "leftNeutralScore_Part4_End"
@@ -53,7 +53,7 @@
   "folder": "LeftScoreDepotClimb",
   "idealStartingState": {
     "velocity": 0,
-    "rotation": 180.0
+    "rotation": -90.0
   },
   "useDefaultConstraints": false
 }

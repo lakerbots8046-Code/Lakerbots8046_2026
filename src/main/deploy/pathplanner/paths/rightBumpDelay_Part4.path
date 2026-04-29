@@ -3,29 +3,29 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 1.7176512455516018,
-        "y": 3.728362989323844
+        "x": 3.0283278145695363,
+        "y": 2.5467135761589397
       },
       "prevControl": null,
       "nextControl": {
-        "x": 1.9663766111958607,
-        "y": 3.7540190667993714
+        "x": 2.2845825330944973,
+        "y": 3.256726576034346
       },
       "isLocked": false,
-      "linkedName": "centerDepotClimb_Part4_End"
+      "linkedName": "rightOutpostScore_Part3End"
     },
     {
       "anchor": {
-        "x": 1.1,
-        "y": 3.65
+        "x": 2.7960099337748345,
+        "y": 3.853501655629138
       },
       "prevControl": {
-        "x": 0.8522751329441521,
-        "y": 3.616348993445033
+        "x": 3.051088011854911,
+        "y": 3.2921570909935216
       },
       "nextControl": null,
       "isLocked": false,
-      "linkedName": null
+      "linkedName": "rightTrenchDelay Part 5 End"
     }
   ],
   "rotationTargets": [],
@@ -42,13 +42,13 @@
   },
   "goalEndState": {
     "velocity": 0,
-    "rotation": -3.0000000000000004
+    "rotation": 90.0
   },
   "reversed": false,
-  "folder": "[CENTER] Depot Climb",
+  "folder": "[RIGHT] Bump Delay",
   "idealStartingState": {
-    "velocity": 0,
-    "rotation": 0.0
+    "velocity": 1.0,
+    "rotation": -135.0
   },
   "useDefaultConstraints": true
 }

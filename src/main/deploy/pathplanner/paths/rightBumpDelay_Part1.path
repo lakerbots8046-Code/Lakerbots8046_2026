@@ -3,29 +3,29 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 1.3295033112532608,
-        "y": 0.6736506622516549
+        "x": 3.384064569536424,
+        "y": 2.488634105960265
       },
       "prevControl": null,
       "nextControl": {
-        "x": 1.0864827591085142,
-        "y": 0.7323107955217261
+        "x": 4.4448400186942685,
+        "y": 2.4861187289154527
       },
       "isLocked": false,
-      "linkedName": "rightOutpostScore_Part2End"
+      "linkedName": null
     },
     {
       "anchor": {
-        "x": 0.7559685430413403,
-        "y": 0.6736506622516549
+        "x": 5.888741721854305,
+        "y": 2.4450745033112584
       },
       "prevControl": {
-        "x": 1.0028287010214845,
-        "y": 0.7131482875222738
+        "x": 5.21128380560329,
+        "y": 2.463782885176566
       },
       "nextControl": null,
       "isLocked": false,
-      "linkedName": "rightOutpostScore_Part3End"
+      "linkedName": "rightOutpostScore_Part1End"
     }
   ],
   "rotationTargets": [],
@@ -41,14 +41,14 @@
     "unlimited": false
   },
   "goalEndState": {
-    "velocity": 0,
-    "rotation": -179.57677957608573
+    "velocity": 0.0,
+    "rotation": 45.0
   },
   "reversed": false,
-  "folder": "rightOutpostScore",
+  "folder": "[RIGHT] Bump Delay",
   "idealStartingState": {
-    "velocity": 0,
-    "rotation": 180.0
+    "velocity": 0.0,
+    "rotation": 45.0
   },
   "useDefaultConstraints": true
 }

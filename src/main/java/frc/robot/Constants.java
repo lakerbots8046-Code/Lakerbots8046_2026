@@ -364,7 +364,7 @@ public class Constants {
          * distance is under {@link #kHoodDistanceThresholdMeters}.
          * 0.0 rot = 68° from horizontal (steepest), 11.5 rot = 28° (flattest).
          */
-        public static final double kHoodPositionNear = 6.0;
+        public static final double kHoodFeedPosition = 5.5;
 
         /**
          * Hood position (motor rotations) for feed-from-center shots when
@@ -381,7 +381,7 @@ public class Constants {
         /** Fixed offset (rotations) added to ALL FeedFromCenter hood positions. */
         public static final double kFeedHoodOffsetRotations = 2.0;
         /** Fixed offset (RPS) added to ALL FeedFromCenter launcher velocity targets. */
-        public static final double kFeedVelocityOffsetRps = -10.0; // 20.0
+        public static final double kFeedVelocityOffsetRps = 0.0; // 20.0
 
         // ── Target depth offset ───────────────────────────────────────────────
         /**
@@ -422,7 +422,7 @@ public class Constants {
          * <p>Increase above 1.0 if shots still trail robot motion.
          * Decrease below 1.0 if shots over-lead.
          */
-        public static final double kFeedFromCenterMotionCompensationGain = 3.0; // 1.2, 2
+        public static final double kFeedFromCenterMotionCompensationGain = 2.0; // 1.2, 2, 3, 5
 
         /**
          * Enables translational motion compensation while aiming fixed FeedFromCenter targets.
@@ -437,7 +437,7 @@ public class Constants {
          * <p>Multiplies the calculated launcher RPS only for FeedFromCenter shots.
          * Use values above 1.0 to increase shot energy when balls land short.
          */
-        public static final double kFeedFromCenterRpsScale = 1.20;
+        public static final double kFeedFromCenterRpsScale = 1.2; // 1.2, 1.6
         /** Launcher at-speed tolerance (RPS) specifically for FeedFromCenter readiness gating. */
         public static final double kLauncherVelocityToleranceRps = 10.0;
 
@@ -494,9 +494,9 @@ public class Constants {
          *  Reduced from 3.0 to 2.0 — one meter closer to the tower. */
         public static final double kPreferredShootingDistance = 2.0;
         /** Minimum valid shooting distance (meters). */
-        public static final double kMinShootingDistance = 1.0;
+        public static final double kMinShootingDistance = 0.0;
         /** Maximum valid shooting distance (meters). */
-        public static final double kMaxShootingDistance = 4.5;
+        public static final double kMaxShootingDistance = 6.0;
 
         // ── Tolerances ────────────────────────────────────────────────────────
         /** Position tolerance for "arrived at arc" check (meters). */
@@ -564,15 +564,15 @@ public class Constants {
          * Tune on-robot from observed moving-shot error.
          */
         public static final double[][] kShootOnMoveTofLookup = {
-            {1.0, 0.16}, // 0.16
-            {1.5, 0.20}, // 0.20
-            {2.0, 0.24}, // 0.24
-            {2.5, 0.28}, // 0.28
-            {3.0, 0.33}, // 0.33
-            {3.5, 0.38}, // 0.38
-            {4.0, 0.44}, // 0.44
-            {4.5, 0.50}, // 0.50
-            {5.0, 0.57}  // 0.57
+            {1.0, 0.313}, // 0.16
+            {1.5, 0.369}, // 0.20
+            {2.0, 0.426}, // 0.24
+            {2.5, 0.449}, // 0.28
+            {3.0, 0.473}, // 0.33
+            {3.5, 0.502}, // 0.38
+            {4.0, 0.538}, // 0.44
+            {4.5, 0.562}, // 0.50
+            {5.0, 0.548}  // 0.57
         };
         // ── Shoot-on-move drivetrain gating ───────────────────────────────────
         /** Max drivetrain translation speed while ShootOnMove is active (m/s). */

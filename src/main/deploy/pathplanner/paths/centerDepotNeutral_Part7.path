@@ -3,13 +3,13 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 9.797805456702257,
-        "y": 4.018861209964412
+        "x": 8.291518386714117,
+        "y": 1.3290628706998815
       },
       "prevControl": null,
       "nextControl": {
-        "x": 8.861755634638198,
-        "y": 4.094175563463818
+        "x": 7.355468564650058,
+        "y": 1.404377224199287
       },
       "isLocked": false,
       "linkedName": "centerDepotNeutral Part 6 End"
@@ -28,7 +28,12 @@
       "linkedName": null
     }
   ],
-  "rotationTargets": [],
+  "rotationTargets": [
+    {
+      "waypointRelativePos": 0.2380106571936066,
+      "rotationDegrees": 90.0
+    }
+  ],
   "constraintZones": [],
   "pointTowardsZones": [],
   "eventMarkers": [],
@@ -42,13 +47,13 @@
   },
   "goalEndState": {
     "velocity": 0.0,
-    "rotation": 3.3018656744350383
+    "rotation": 88.97696981133213
   },
   "reversed": false,
   "folder": "[CENTER] Depot Neutral",
   "idealStartingState": {
     "velocity": 2.0,
-    "rotation": 0.0
+    "rotation": -122.00538320808347
   },
   "useDefaultConstraints": true
 }

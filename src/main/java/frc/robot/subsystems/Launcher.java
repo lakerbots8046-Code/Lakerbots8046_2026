@@ -484,7 +484,11 @@ public class Launcher extends SubsystemBase {
   }
 
   public Command turretGoHome(){
-    return Commands.run(() -> setTurretPosition(0), this);}
+    return Commands.sequence(
+        Commands.runOnce(() -> setTurretPosition(0), this),
+        Commands.waitUntil(this::isTurretAtTarget).withTimeout(1.5)
+    );
+  }
   
   
 

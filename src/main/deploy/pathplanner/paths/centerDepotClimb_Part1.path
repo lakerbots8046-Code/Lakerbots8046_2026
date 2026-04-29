@@ -42,7 +42,7 @@
   },
   "goalEndState": {
     "velocity": 1.0,
-    "rotation": 172.11686068327023
+    "rotation": 180.0
   },
   "reversed": false,
   "folder": "[CENTER] Depot Climb",

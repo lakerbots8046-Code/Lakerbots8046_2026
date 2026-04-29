@@ -262,7 +262,7 @@ public class RobotContainer {
                 // Move turret to mechanical zero (raw rotations) first.
                 Commands.runOnce(() -> launcher.setTurretPosition(0.0)),
                 // Wait until turret is near zero before homing intake pivot.
-                Commands.waitUntil(() -> Math.abs(launcher.getTurretPosition()) <= 0.003).withTimeout(2.0),
+                Commands.waitUntil(() -> Math.abs(launcher.getTurretPosition()) <= 0.003).withTimeout(0.5),
                 // Then home the intake pivot.
                 intake.goToPivotPosition(Constants.IntakeConstants.kPivotHomePosition)
             ).withName("IntakeHome"));
@@ -301,17 +301,22 @@ public class RobotContainer {
         String[] autoNames = {
         // CENTER AUTOS
             "[CENTER] Depot + Climb",
-            "[CENTER] Depot + Neutral",
+            "[CENTER] Depot + Trench Exit",
+            "[CENTER] Depot + Bump Exit",
             
         // RIGHT AUTOS
             // "rightNeutralFeed",
             "[RIGHT] Double Neutral",
+            "[RIGHT] Trench Delay",
+            "[RIGHT] Bump Delay",
             // "rightOutpostScore",
             // "rightNeutralCross",
 
         // LEFT AUTOS
             "[LEFT] Double Neutral",
             "[LEFT] Cross Field",
+            "[LEFT] Trench Delay",
+            "[LEFT] Bump Delay",
             // "leftNeutralFeed",
             // "leftNeutralScore",
             // "leftNeutralBumpScore",

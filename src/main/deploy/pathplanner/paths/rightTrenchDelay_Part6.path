@@ -3,57 +3,57 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 5.889,
-        "y": 5.607
+        "x": 2.7960099337748345,
+        "y": 3.853501655629138
       },
       "prevControl": null,
       "nextControl": {
-        "x": 6.019420529797694,
-        "y": 2.4595943708609265
+        "x": 2.992028145695364,
+        "y": 3.6502235099337748
       },
       "isLocked": false,
-      "linkedName": "leftPart1End"
+      "linkedName": "rightTrenchDelay Part 5 End"
     },
     {
       "anchor": {
-        "x": 6.607,
-        "y": 5.454
+        "x": 1.213,
+        "y": 3.73
       },
       "prevControl": {
-        "x": 9.88896523178445,
-        "y": 4.804552980132449
+        "x": 1.4626965827814373,
+        "y": 3.7176867328757615
       },
       "nextControl": null,
       "isLocked": false,
-      "linkedName": "leftPart2End"
+      "linkedName": null
     }
   ],
   "rotationTargets": [
     {
-      "waypointRelativePos": 0.49733570159856744,
-      "rotationDegrees": 54.68226927715117
+      "waypointRelativePos": 0.5,
+      "rotationDegrees": 0.0
     }
   ],
   "constraintZones": [],
   "pointTowardsZones": [],
   "eventMarkers": [],
   "globalConstraints": {
-    "maxVelocity": 2.0,
-    "maxAcceleration": 2.0,
+    "maxVelocity": 1.0,
+    "maxAcceleration": 3.0,
     "maxAngularVelocity": 540.0,
     "maxAngularAcceleration": 720.0,
     "nominalVoltage": 12.0,
     "unlimited": false
   },
   "goalEndState": {
-    "velocity": 2.0,
-    "rotation": -135.0
+    "velocity": 0,
+    "rotation": 0.0
   },
   "reversed": false,
-  "folder": "LeftScoreDepotClimb",
+  "folder": "[RIGHT] Trench Delay",
   "idealStartingState": {
-    "velocity": 3.0,
-    "rotation": -45.0
+    "velocity": 0,
+    "rotation": 90.0
   },
   "useDefaultConstraints": false
 }
